@@ -1,0 +1,4 @@
+# Consistent line endings for text files; the font is binary
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.ttf binary

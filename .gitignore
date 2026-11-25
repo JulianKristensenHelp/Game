@@ -1,0 +1,17 @@
+# Leaderboard database (contains player names) – never commit
+server/data/
+
+# Local tool and editor settings
+.claude/
+.vscode/
+.idea/
+
+# Dependencies and logs (the project has no dependencies, but just in case)
+node_modules/
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini

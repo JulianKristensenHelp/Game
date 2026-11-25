@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#16202b">
+  <title>Har du prøvd å skru den av og på? – Help Desk Survivors</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%2316202b'/%3E%3Cpath d='M7 2h2v6H7zM4 4h2v2H4zM10 4h2v2h-2zM3 6h2v4H3zM11 6h2v4h-2zM4 10h2v2H4zM10 10h2v2h-2zM6 12h4v2H6z' fill='%2314b8a6'/%3E%3C/svg%3E">
+  <link rel="preload" href="fonts/kontorpiksel.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="css/stil.css">
+</head>
+<body>
+  <!-- Spillverdenen: 640 × 360 logiske piksler, skalert opp med skarpe piksler -->
+  <canvas id="spill" aria-label="Spillområde"></canvas>
+  <!-- HUD i full skjermoppløsning over spillet -->
+  <canvas id="hud" aria-hidden="true"></canvas>
+
+  <div id="hudknapper" hidden>
+    <button id="lydknapp" class="rund" aria-label="Lyd av/på"></button>
+    <button id="pauseknapp" class="rund" aria-label="Pause"></button>
+  </div>
+
+  <!-- Startskjerm -->
+  <div id="start" class="skjerm">
+    <div class="panel bred">
+      <header class="tittel">
+        <canvas id="logo" class="logo" width="16" height="16" aria-hidden="true"></canvas>
+        <h1>«Har du prøvd å skru den av og på?»</h1>
+        <p class="undertittel">Help Desk Survivors</p>
+      </header>
+      <p class="vakt">Dagens vakt: <strong id="vaktdato"></strong></p>
+      <button id="startknapp" class="stor primaer">Start vakt</button>
+      <p class="forklaring">
+        Gå med <kbd>WASD</kbd> eller piltaster (dra fingeren på mobil).<br>
+        Du hjelper automatisk – advokatene blir glade og legger igjen ticket-lapper.<br>
+        <strong>Plukk opp lappene før de forsvinner, og hent energidrikk på kartet!</strong>
+      </p>
+      <div class="kolonner">
+        <section>
+          <h2>Dagens toppliste</h2>
+          <div id="startliste" class="toppliste"><p class="dempet">Henter topplisten …</p></div>
+        </section>
+        <section>
+          <h2>Oppslagstavle</h2>
+          <p class="dempet liten">Våpen på nivå 8 + riktig passiv gir en kombinasjon. De du har funnet, henger her.</p>
+          <ul id="oppslagstavle" class="tavle"></ul>
+        </section>
+      </div>
+      <div class="knapperad">
+        <button id="startinnst" class="lenke">Innstillinger</button>
+        <button id="startlyd" class="lenke">Lyd er av</button>
+      </div>
+      <p id="snuhint" class="dempet liten snuhint">Tips: Snu telefonen for størst mulig spillområde.</p>
+    </div>
+  </div>
+
+  <!-- Karaktervalg -->
+  <div id="karaktervalg" class="skjerm" hidden>
+    <div class="panel bred">
+      <h2>Hvem tar vakta i dag?</h2>
+      <div id="karakterer" role="radiogroup" aria-label="Velg karakter"></div>
+      <p class="dempet liten">Velg med mus eller touch, piltaster eller <kbd>1</kbd>–<kbd>4</kbd>. <kbd>Enter</kbd> starter.</p>
+      <button id="karakterstart" class="stor primaer">Start vakt</button>
+      <button id="karaktertilbake" class="lenke">Tilbake</button>
+    </div>
+  </div>
+
+  <!-- Nivåopp -->
+  <div id="nivaaopp" class="skjerm" hidden>
+    <div class="panel bred gjennomsiktig">
+      <h2 class="nivaatittel">Nivå <span id="nyttnivaa">2</span>! Velg én oppgradering</h2>
+      <div id="kort"></div>
+      <p class="lys liten">Klikk, eller trykk <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></p>
+    </div>
+  </div>
+
+  <!-- Pause -->
+  <div id="pause" class="skjerm" hidden>
+    <div class="panel smal">
+      <h2>Pause</h2>
+      <button id="fortsettknapp" class="stor primaer">Fortsett</button>
+      <button id="pauselyd" class="stor">Lyd er av</button>
+      <button id="pauseinnst" class="stor">Innstillinger</button>
+      <button id="avsluttknapp" class="stor fare">Avslutt runden</button>
+    </div>
+  </div>
+
+  <!-- Innstillinger -->
+  <div id="innstillinger" class="skjerm" hidden>
+    <div class="panel middels">
+      <h2>Innstillinger</h2>
+      <section class="innst">
+        <h3>Lyd</h3>
+        <label class="rad"><span>Demp alt</span><input type="checkbox" id="i-demp" class="bryter"></label>
+        <label class="rad"><span>Hovedvolum <output id="o-volum"></output></span><input type="range" id="i-volum" min="0" max="100" step="5"></label>
+        <label class="rad"><span>Lydeffekter <output id="o-effekter"></output></span><input type="range" id="i-effekter" min="0" max="100" step="5"></label>
+        <p class="dempet liten">Spillet har bare lydeffekter, ingen musikk. Du hører en testlyd når du slipper en glidebryter.</p>
+      </section>
+      <section class="innst">
+        <h3>Skjerm</h3>
+        <label class="rad"><span>Fullskjerm</span><input type="checkbox" id="i-fullskjerm" class="bryter"></label>
+        <fieldset class="rad">
+          <legend>Spillstørrelse</legend>
+          <div class="valg" data-navn="spillStoerrelse">
+            <label><input type="radio" name="spillStoerrelse" value="tilpass"><span>Tilpass</span></label>
+            <label><input type="radio" name="spillStoerrelse" value="2"><span>2×</span></label>
+            <label><input type="radio" name="spillStoerrelse" value="3"><span>3×</span></label>
+            <label><input type="radio" name="spillStoerrelse" value="4"><span>4×</span></label>
+          </div>
+        </fieldset>
+        <fieldset class="rad">
+          <legend>UI-størrelse</legend>
+          <div class="valg" data-navn="ui">
+            <label><input type="radio" name="ui" value="auto"><span>Auto</span></label>
+            <label><input type="radio" name="ui" value="liten"><span>Liten</span></label>
+            <label><input type="radio" name="ui" value="middels"><span>Middels</span></label>
+            <label><input type="radio" name="ui" value="stor"><span>Stor</span></label>
+            <label><input type="radio" name="ui" value="ekstraStor"><span>Ekstra stor</span></label>
+          </div>
+        </fieldset>
+        <fieldset class="rad">
+          <legend>Minikart</legend>
+          <div class="valg" data-navn="minikart">
+            <label><input type="radio" name="minikart" value="av"><span>Av</span></label>
+            <label><input type="radio" name="minikart" value="liten"><span>Liten</span></label>
+            <label><input type="radio" name="minikart" value="stor"><span>Stor</span></label>
+          </div>
+        </fieldset>
+        <label class="rad"><span>Skjermristing</span><input type="checkbox" id="i-rist" class="bryter"></label>
+        <label class="rad"><span>Reduserte blinkeffekter</span><input type="checkbox" id="i-blink" class="bryter"></label>
+        <p class="dempet liten">Alle ser like stort område av kartet, uansett skjerm og spillstørrelse.</p>
+      </section>
+      <div class="knapperad">
+        <button id="innsttilbake" class="stor primaer">Tilbake</button>
+        <button id="innstnullstill" class="lenke">Tilbakestill til standard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slutt-skjerm -->
+  <div id="slutt" class="skjerm" hidden>
+    <div class="panel bred">
+      <div class="slutthode"><canvas id="sluttportrett" class="portrett" width="64" height="64" aria-hidden="true"></canvas><div><h1 class="slutttittel">Vakta er over</h1><p id="sluttkarakter" class="dempet"></p></div></div>
+      <div class="resultat">
+        <div><span id="sluttscore" class="storttall">0</span><small>poeng</small></div>
+        <div><span id="slutttid" class="storttall">00:00</span><small>overlevd tid</small></div>
+      </div>
+      <div class="kolonner">
+        <section>
+          <h2>Slik gikk vakta</h2>
+          <ul id="statistikk" class="statistikk"></ul>
+        </section>
+        <section>
+          <h2>Dagens toppliste</h2>
+          <form id="navneskjema" autocomplete="off">
+            <input id="navn" type="text" maxlength="20" placeholder="Navnet ditt" aria-label="Navnet ditt" required>
+            <button id="sendknapp" class="primaer" type="submit">Send inn</button>
+          </form>
+          <p id="sendstatus" class="dempet liten" aria-live="polite"></p>
+          <div id="sluttliste" class="toppliste"></div>
+        </section>
+      </div>
+      <button id="nyvaktknapp" class="stor primaer">Ny vakt</button>
+      <button id="tilstartknapp" class="lenke">Til startskjermen</button>
+    </div>
+  </div>
+
+  <!-- Debug (kun med ?debug i adressen) -->
+  <div id="debug" hidden>
+    <pre id="debuginfo"></pre>
+    <div class="debugknapper">
+      <button data-d="t60">+1 min</button>
+      <button data-d="t180">+3 min</button>
+      <button data-d="nivaa">Nivå opp</button>
+      <button data-d="nivaa10">Nivå ×10</button>
+      <button data-d="maks">Maks bygg</button>
+      <button data-d="komb">Kombiner</button>
+      <button data-d="udoed">Udødelig</button>
+      <button data-d="boss">Boss</button>
+      <button data-d="hastesak">Hastesak</button>
+      <button data-d="pc">Ny PC</button>
+      <button data-d="drikk">Drikk</button>
+      <button data-d="sverm">+100 advokater</button>
+      <button data-d="stress" class="viktig">Stresstest (5 min)</button>
+    </div>
+  </div>
+
+  <noscript><p style="color:#fff;padding:2rem">Spillet trenger JavaScript.</p></noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

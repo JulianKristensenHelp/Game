@@ -1,0 +1,8 @@
+KontorPiksel – pikselfont laget for «Har du prøvd å skru den av og på?» (Help Desk Survivors)
+
+Fonten er egenprodusert for dette prosjektet (glyfene står i js/pikselfont.js, fila lages av tools/lagfont.js).
+Den er gitt bort til fri bruk etter CC0 1.0 Universal (Public Domain Dedication):
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Du kan kopiere, endre, distribuere og bruke fonten, også kommersielt, uten å spørre om lov.
+Tegnsett: A–Z, a–z, Æ Ø Å æ ø å, É é, Ä Ö Ü ä ö ü, 0–9 og vanlige tegn (« » – … × · ★ m.fl.).
