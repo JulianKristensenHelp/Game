@@ -1,356 +1,358 @@
 // @ts-check
-// Menyene (HTML): start, nivåopp-kort, pause, innstillinger, toppliste, statistikk og oppslagstavle.
+// The menus (HTML): start, level-up cards, pause, settings, leaderboard, statistics and notice board.
 import { CONFIG } from './config.js';
-import { mmss, tall } from './verktoy.js';
-import { multTekst } from './score.js';
-import { vaapenNavn } from './vaapen.js';
-import { ikonElement } from './ikoner.js';
+import { mmss, formatNumber } from './utils.js';
+import { multText } from './score.js';
+import { weaponName } from './weapons.js';
+import { iconElement } from './icons.js';
 
 /** @returns {HTMLElement} */
 export const el = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
 
-const SKJERMER = ['start', 'karaktervalg', 'nivaaopp', 'pause', 'innstillinger', 'slutt'];
+const SCREENS = ['start', 'characterSelect', 'levelUp', 'pause', 'settings', 'gameOver'];
 
-/** Hvor portrettene hentes fra (settes av main.js). @type {(i: number) => HTMLCanvasElement} */
-let portrettKilde = () => document.createElement('canvas');
-export function settPortrettKilde(f) {
-  portrettKilde = f;
+/** Where the portraits come from (set by main.js). @type {(i: number) => HTMLCanvasElement} */
+let portraitSource = () => document.createElement('canvas');
+export function setPortraitSource(f) {
+  portraitSource = f;
 }
 
-/** Et lite lerret-element med portrettet til karakter nr. i. */
-export function portrettElement(i) {
+/** A small canvas element with the portrait of character no. i. */
+export function portraitElement(i) {
   const c = document.createElement('canvas');
   c.width = 64;
   c.height = 64;
-  c.className = 'portrett';
-  /** @type {CanvasRenderingContext2D} */ (c.getContext('2d')).drawImage(portrettKilde(i), 0, 0);
+  c.className = 'portrait';
+  /** @type {CanvasRenderingContext2D} */ (c.getContext('2d')).drawImage(portraitSource(i), 0, 0);
   return c;
 }
 
-/** Karakter nr. ut fra id-en som lagres i topplisten ('k1'–'k4'). */
-export function karakterIndeks(id) {
-  const i = CONFIG.karakterer.findIndex((k) => k.id === id);
+/** Character no. from the id stored in the leaderboard ('k1'–'k4'). */
+export function characterIndex(id) {
+  const i = CONFIG.characters.findIndex((k) => k.id === id);
   return i;
 }
 
-/** Viser én av skjermene (eller ingen). */
-export function visSkjerm(navn) {
-  for (const s of SKJERMER) el(s).hidden = s !== navn;
+/** Shows one of the screens (or none). */
+export function showScreen(name) {
+  for (const s of SCREENS) el(s).hidden = s !== name;
 }
 
-/** Lager et element med tekst (unngår innerHTML med brukerdata, f.eks. navn i topplisten). */
-function lag(tag, klasse, tekst) {
+/** Creates an element with text (avoids innerHTML with user data, e.g. names in the leaderboard). */
+function make(tag, cls, text) {
   const e = document.createElement(tag);
-  if (klasse) e.className = klasse;
-  if (tekst !== undefined) e.textContent = String(tekst);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = String(text);
   return e;
 }
 
-// ---------- Nivåopp ----------
+// ---------- Level-up ----------
 
-/** Viser oppgraderingskortene med store ikoner og stor tekst. */
-export function visKort(s, velg) {
-  el('nyttnivaa').textContent = String(s.nivaa);
-  const holder = el('kort');
+/** Shows the upgrade cards with large icons and large text. */
+export function showCards(s, choose) {
+  el('newLevel').textContent = String(s.level);
+  const holder = el('cards');
   holder.replaceChildren();
-  holder.className = s.kort.length === 1 ? 'en' : s.kort.length === 2 ? 'to' : '';
-  s.kort.forEach((k, i) => {
-    const b = lag('button', 'kort' + (k.fremhevet ? ' fremhevet' : ''));
-    b.append(lag('kbd', 'tast', i + 1), ikonElement(k.ikon), lag('span', 'navn', k.navn), lag('span', 'nivaa', k.nivaaTekst), lag('span', 'tekst', k.tekst));
-    b.addEventListener('click', () => velg(i));
+  holder.className = s.cards.length === 1 ? 'one' : s.cards.length === 2 ? 'two' : '';
+  s.cards.forEach((k, i) => {
+    const b = make('button', 'card' + (k.highlighted ? ' highlighted' : ''));
+    b.append(make('kbd', 'keyHint', i + 1), iconElement(k.icon), make('span', 'name', k.name), make('span', 'level', k.levelText), make('span', 'text', k.text));
+    b.addEventListener('click', () => choose(i));
     holder.append(b);
   });
 }
 
-// ---------- Toppliste ----------
+// ---------- Leaderboard ----------
 
 /**
- * Tegner topplisten. Spillerens egen rad fremheves, også utenfor topp 20.
+ * Draws the leaderboard. The player's own row is highlighted, also outside the top 20.
  * @param {HTMLElement} holder
- * @param {import('./toppliste.js').Toppliste | null} data null = utilgjengelig
- * @param {string} egetNavn
+ * @param {import('./leaderboard.js').Leaderboard | null} data null = unavailable
+ * @param {string} ownName
  */
-export function tegnToppliste(holder, data, egetNavn) {
+export function drawLeaderboard(holder, data, ownName) {
   holder.replaceChildren();
   if (!data) {
-    holder.append(lag('p', 'dempet', 'Topplisten er utilgjengelig akkurat nå. Du kan fortsatt spille – prøv igjen litt senere.'));
+    holder.append(make('p', 'muted', 'Topplisten er utilgjengelig akkurat nå. Du kan fortsatt spille – prøv igjen litt senere.'));
     return;
   }
-  if (data.topp.length === 0) {
-    holder.append(lag('p', 'dempet', 'Ingen har spilt i dag ennå. Bli den første på lista!'));
+  if (data.top.length === 0) {
+    holder.append(make('p', 'muted', 'Ingen har spilt i dag ennå. Bli den første på lista!'));
     return;
   }
-  const tabell = lag('table');
-  const hode = lag('tr');
-  hode.append(lag('th', '', '#'), lag('th', '', 'Navn'), lag('th', 'hoyre', 'Poeng'), lag('th', 'hoyre', 'Tid'));
-  tabell.append(hode);
-  const meg = egetNavn.trim().toLowerCase();
-  const rad = (r) => {
-    const tr = lag('tr', meg && r.navn.toLowerCase() === meg ? 'meg' : '');
-    const navn = lag('td', 'navn');
-    const ki = karakterIndeks(r.karakter);
-    if (ki >= 0) navn.append(portrettElement(ki));
-    navn.append(document.createTextNode(r.navn));
-    tr.append(lag('td', '', r.plass + '.'), navn, lag('td', 'hoyre', tall(r.score)), lag('td', 'hoyre', mmss(r.tid)));
-    tr.title = `${r.hjulpne} hjulpne advokater · høyeste multiplikator ${multTekst(r.maksMult)}`;
+  const tbl = make('table');
+  const head = make('tr');
+  head.append(make('th', '', '#'), make('th', '', 'Navn'), make('th', 'right', 'Poeng'), make('th', 'right', 'Tid'));
+  tbl.append(head);
+  const me = ownName.trim().toLowerCase();
+  const makeRow = (r) => {
+    const tr = make('tr', me && r.name.toLowerCase() === me ? 'me' : '');
+    const name = make('td', 'name');
+    const ki = characterIndex(r.character);
+    if (ki >= 0) name.append(portraitElement(ki));
+    name.append(document.createTextNode(r.name));
+    tr.append(make('td', '', r.spot + '.'), name, make('td', 'right', formatNumber(r.score)), make('td', 'right', mmss(r.time)));
+    tr.title = `${r.helped} hjulpne advokater · høyeste multiplikator ${multText(r.maxMult)}`;
     return tr;
   };
-  for (const r of data.topp) tabell.append(rad(r));
-  if (data.egen && data.egen.plass > data.topp.length) {
-    const skille = lag('tr', 'skille');
-    const td = lag('td', '', '…');
+  for (const r of data.top) tbl.append(makeRow(r));
+  if (data.own && data.own.spot > data.top.length) {
+    const divider = make('tr', 'divider');
+    const td = make('td', '', '…');
     td.colSpan = 4;
-    skille.append(td);
-    tabell.append(skille, rad(data.egen));
+    divider.append(td);
+    tbl.append(divider, makeRow(data.own));
   }
-  holder.append(tabell);
-  if (data.antall > data.topp.length) holder.append(lag('p', 'dempet liten', `${data.antall} har spilt i dag.`));
+  holder.append(tbl);
+  if (data.count > data.top.length) holder.append(make('p', 'muted small', `${data.count} har spilt i dag.`));
 }
 
-// ---------- Oppslagstavle ----------
+// ---------- Notice board ----------
 
-const TAVLE = 'hds_kombinasjoner';
+const BOARD_KEY = 'hds_kombinasjoner';
+/** Weapon ids saved by older versions, before the code was translated to English. */
+const LEGACY_WEAPON_IDS = { avpaa: 'powerCycle', passord: 'password', fjern: 'remote', mus: 'mouse', straale: 'beam' };
 
-/** @returns {string[]} våpen-id-ene til kombinasjoner spilleren har låst opp */
-export function hentKombinasjoner() {
+/** @returns {string[]} the weapon ids of the combinations the player has unlocked */
+export function loadCombinations() {
   try {
-    const v = JSON.parse(localStorage.getItem(TAVLE) || '[]');
-    return Array.isArray(v) ? v : [];
+    const v = JSON.parse(localStorage.getItem(BOARD_KEY) || '[]');
+    return Array.isArray(v) ? [...new Set(v.map((id) => LEGACY_WEAPON_IDS[id] ?? id))] : [];
   } catch {
     return [];
   }
 }
 
-/** Lagrer nye kombinasjoner (kalles når runden er over – aldri under spill). */
-export function lagreKombinasjoner(ider) {
-  const liste = hentKombinasjoner();
-  let endret = false;
-  for (const id of ider) if (!liste.includes(id)) {
-    liste.push(id);
-    endret = true;
+/** Saves new combinations (called when the round is over – never during play). */
+export function saveCombinations(ids) {
+  const list = loadCombinations();
+  let changed = false;
+  for (const id of ids) if (!list.includes(id)) {
+    list.push(id);
+    changed = true;
   }
-  if (!endret) return;
+  if (!changed) return;
   try {
-    localStorage.setItem(TAVLE, JSON.stringify(liste));
+    localStorage.setItem(BOARD_KEY, JSON.stringify(list));
   } catch {
-    /* ignorer */
+    /* ignore */
   }
 }
 
-export function tegnOppslagstavle() {
-  const holder = el('oppslagstavle');
+export function drawNoticeBoard() {
+  const holder = el('noticeBoard');
   holder.replaceChildren();
-  const funnet = hentKombinasjoner();
-  for (const [id, v] of Object.entries(CONFIG.vaapen)) {
-    const k = v.kombinasjon;
-    if (funnet.includes(id)) {
-      const li = lag('li');
-      const tekst = lag('div');
-      tekst.append(lag('span', '', k.navn), lag('small', '', `${v.navn} (nivå 8) + ${CONFIG.passiver[k.passiv].navn}`));
-      li.append(ikonElement('evo:' + id), tekst);
+  const found = loadCombinations();
+  for (const [id, v] of Object.entries(CONFIG.weapons)) {
+    const k = v.combination;
+    if (found.includes(id)) {
+      const li = make('li');
+      const text = make('div');
+      text.append(make('span', '', k.name), make('small', '', `${v.name} (nivå 8) + ${CONFIG.passives[k.passive].name}`));
+      li.append(iconElement('evo:' + id), text);
       holder.append(li);
     } else {
-      const li = lag('li', 'laast');
-      li.append(ikonElement('laas'), lag('span', '', 'Ikke oppdaget ennå'));
+      const li = make('li', 'locked');
+      li.append(iconElement('lock'), make('span', '', 'Ikke oppdaget ennå'));
       holder.append(li);
     }
   }
 }
 
-// ---------- Slutt-skjerm ----------
+// ---------- End screen ----------
 
-/** Morsom statistikk fra runden. */
-export function tegnStatistikk(s) {
-  const liste = el('statistikk');
-  liste.replaceChildren();
-  const linje = (t) => liste.append(lag('li', '', t));
+/** Fun statistics from the round. */
+export function drawStats(s) {
+  const list = el('stats');
+  list.replaceChildren();
+  const line = (t) => list.append(make('li', '', t));
   const st = s.stat;
-  linje(`Du hjalp ${tall(s.hjulpne)} advokater`);
+  line(`Du hjalp ${formatNumber(s.helped)} advokater`);
   const printer = st.perType.printer || 0;
-  if (printer > 0) linje(`${tall(printer)} av dem hadde printerproblemer`);
+  if (printer > 0) line(`${formatNumber(printer)} av dem hadde printerproblemer`);
   const senior = st.perType.senior || 0;
-  if (senior > 0) linje(`${tall(senior)} seniorpartnere fikk omsider logget inn`);
-  if (st.bosserTotalt > 0) linje(`Du hjalp ${st.bosserHjulpet} av ${st.bosserTotalt} bosser før fristen`);
-  const haste = st.perType.hastesak || 0;
-  if (haste > 0) linje(`Du rakk ${haste} ${haste === 1 ? 'hastesak' : 'hastesaker'}`);
-  if (st.blokkert > 0) linje(`Headsetet blokkerte ${st.blokkert} treff`);
-  if (st.drikker > 0) linje(`Du fant ${st.drikker} ${st.drikker === 1 ? 'energidrikk' : 'energidrikker'} på kartet`);
-  linje(`Høyeste multiplikator: ${multTekst(CONFIG.multiplikator.start + st.maksMultSteg * CONFIG.multiplikator.steg)}`);
-  let best = '', bestHjelp = 0;
-  for (const [id, h] of Object.entries(st.hjelpPerVaapen)) {
-    if (h > bestHjelp && CONFIG.vaapen[id]) {
-      bestHjelp = h;
+  if (senior > 0) line(`${formatNumber(senior)} seniorpartnere fikk omsider logget inn`);
+  if (st.bossesTotal > 0) line(`Du hjalp ${st.bossesHelped} av ${st.bossesTotal} bosser før fristen`);
+  const urgentSprite = st.perType.urgent || 0;
+  if (urgentSprite > 0) line(`Du rakk ${urgentSprite} ${urgentSprite === 1 ? 'hastesak' : 'hastesaker'}`);
+  if (st.blocked > 0) line(`Headsetet blokkerte ${st.blocked} treff`);
+  if (st.drinks > 0) line(`Du fant ${st.drinks} ${st.drinks === 1 ? 'energidrikk' : 'energidrikker'} på kartet`);
+  line(`Høyeste multiplikator: ${multText(CONFIG.multiplier.start + st.maxMultStep * CONFIG.multiplier.step)}`);
+  let best = '', bestHelp = 0;
+  for (const [id, h] of Object.entries(st.helpPerWeapon)) {
+    if (h > bestHelp && CONFIG.weapons[id]) {
+      bestHelp = h;
       best = id;
     }
   }
   if (best) {
-    const w = s.spiller.vaapen.find((x) => x.id === best);
-    linje(`Mest effektive våpen: ${w ? vaapenNavn(w) : CONFIG.vaapen[best].navn} (${tall(bestHjelp)} hjelp gitt)`);
+    const w = s.player.weapons.find((x) => x.id === best);
+    line(`Mest effektive våpen: ${w ? weaponName(w) : CONFIG.weapons[best].name} (${formatNumber(bestHelp)} hjelp gitt)`);
   }
-  if (st.kombinasjoner.length > 0) {
-    linje(`Kombinasjoner låst opp: ${st.kombinasjoner.map((id) => CONFIG.vaapen[id].kombinasjon.navn).join(', ')}`);
+  if (st.combinations.length > 0) {
+    line(`Kombinasjoner låst opp: ${st.combinations.map((id) => CONFIG.weapons[id].combination.name).join(', ')}`);
   } else {
-    linje('Ingen kombinasjoner denne vakta – våpen på nivå 8 + riktig passiv gir én');
+    line('Ingen kombinasjoner denne vakta – våpen på nivå 8 + riktig passiv gir én');
   }
-  const totalt = st.lapperPlukket + st.lapperTapt;
-  if (totalt > 0) linje(`Du rakk ${Math.round((st.lapperPlukket / totalt) * 100)} % av ticket-lappene (nivå ${s.nivaa})`);
+  const total = st.ticketsPicked + st.ticketsLost;
+  if (total > 0) line(`Du rakk ${Math.round((st.ticketsPicked / total) * 100)} % av ticket-lappene (nivå ${s.level})`);
 }
 
-// ---------- Karaktervalg ----------
+// ---------- Character select ----------
 
 /**
- * Viser de fire karakterene side om side: portrett, navn, tittel, startvåpen og bonus.
- * @param {number} valgt forhåndsvalgt karakter
- * @param {(i: number, start: boolean) => void} velg kalles ved valg (start = true betyr «start vakta nå»)
+ * Shows the four characters side by side: portrait, name, title, starting weapon and bonus.
+ * @param {number} selected preselected character
+ * @param {(i: number, start: boolean) => void} choose called on selection (start = true means «start vakta nå», "start the shift now")
  */
-export function visKaraktervalg(valgt, velg) {
-  const holder = el('karakterer');
+export function showCharacterSelect(selected, choose) {
+  const holder = el('characters');
   holder.replaceChildren();
-  CONFIG.karakterer.forEach((k, i) => {
-    const b = lag('button', 'karakter' + (i === valgt ? ' valgt' : ''));
+  CONFIG.characters.forEach((k, i) => {
+    const b = make('button', 'character' + (i === selected ? ' selected' : ''));
     b.setAttribute('role', 'radio');
-    b.setAttribute('aria-checked', String(i === valgt));
-    const vaapen = lag('span', 'vaapen');
-    vaapen.append(ikonElement(k.startVaapen), lag('span', '', CONFIG.vaapen[k.startVaapen].navn));
-    b.append(lag('kbd', '', i + 1), portrettElement(i), lag('span', 'navn', k.navn), lag('span', 'tittel', k.tittel), vaapen, lag('span', 'bonus', k.bonusTekst));
-    b.addEventListener('click', () => velg(i, true));
-    b.addEventListener('focus', () => velg(i, false));
+    b.setAttribute('aria-checked', String(i === selected));
+    const weapons = make('span', 'weapon');
+    weapons.append(iconElement(k.startWeapon), make('span', '', CONFIG.weapons[k.startWeapon].name));
+    b.append(make('kbd', '', i + 1), portraitElement(i), make('span', 'name', k.name), make('span', 'title', k.title), weapons, make('span', 'bonus', k.bonusText));
+    b.addEventListener('click', () => choose(i, true));
+    b.addEventListener('focus', () => choose(i, false));
     holder.append(b);
   });
 }
 
-/** Markerer valgt karakter uten å bygge kortene på nytt. */
-export function markerKarakter(valgt) {
-  el('karakterer').querySelectorAll('.karakter').forEach((b, i) => {
-    b.classList.toggle('valgt', i === valgt);
-    b.setAttribute('aria-checked', String(i === valgt));
+/** Marks the selected character without rebuilding the cards. */
+export function markCharacter(selected) {
+  el('characters').querySelectorAll('.character').forEach((b, i) => {
+    b.classList.toggle('selected', i === selected);
+    b.setAttribute('aria-checked', String(i === selected));
   });
 }
 
-// ---------- Forhåndsvisning av karakterene (?debug=karakterer) ----------
+// ---------- Character preview (?debug=characters) ----------
 
 /**
- * Viser de fire spillbare karakterene stort, til godkjenning: portrett, gangsyklus (animert), glad bilde,
- * og navn, tittel, startvåpen og bonus fra config.js.
- * @param {import('./figurer.js').Figurer} fig
+ * Shows the four playable characters large, for approval: portrait, walk cycle (animated), happy frame,
+ * and name, title, starting weapon and bonus from config.js.
+ * @param {import('./figures.js').Figures} fig
  */
-export function visKarakterForhaandsvisning(fig) {
-  const lag2 = (tag, stil, tekst) => {
+export function showCharacterPreview(fig) {
+  const make2 = (tag, style, text) => {
     const e = document.createElement(tag);
-    if (stil) e.style.cssText = stil;
-    if (tekst !== undefined) e.textContent = tekst;
+    if (style) e.style.cssText = style;
+    if (text !== undefined) e.textContent = text;
     return e;
   };
-  const rot = lag2('div', 'position:fixed;inset:0;z-index:50;overflow:auto;background:#16202b;color:#fff;padding:24px;font-family:var(--font)');
-  rot.append(lag2('h1', 'margin:0 0 4px;font-size:2em', 'Forhåndsvisning: de fire spillbare karakterene'));
-  rot.append(lag2('p', 'margin:0 0 20px;color:#c8d6e5', 'Til godkjenning. Navn og tittel fylles inn i js/config.js (CONFIG.karakterer). Utseendet justeres i js/figurer.js (SPILLERE).'));
-  const rad = lag2('div', 'display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px');
+  const root = make2('div', 'position:fixed;inset:0;z-index:50;overflow:auto;background:#16202b;color:#fff;padding:24px;font-family:var(--font)');
+  root.append(make2('h1', 'margin:0 0 4px;font-size:2em', 'Forhåndsvisning: de fire spillbare karakterene'));
+  root.append(make2('p', 'margin:0 0 20px;color:#c8d6e5', 'Til godkjenning. Navn og tittel fylles inn i js/config.js (CONFIG.karakterer). Utseendet justeres i js/figures.js (SPILLERE).'));
+  const grid = make2('div', 'display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px');
   /** @type {{c: HTMLCanvasElement, i: number}[]} */
-  const animerte = [];
-  CONFIG.karakterer.forEach((k, i) => {
-    const kort = lag2('div', 'background:#f4f1ea;color:#1d1626;padding:16px;box-shadow:0 0 0 4px #1d1626');
+  const animated = [];
+  CONFIG.characters.forEach((k, i) => {
+    const cardEl = make2('div', 'background:#f4f1ea;color:#1d1626;padding:16px;box-shadow:0 0 0 4px #1d1626');
     const p = document.createElement('canvas');
     p.width = 64;
     p.height = 64;
     p.style.cssText = 'width:256px;height:256px;image-rendering:pixelated;display:block;margin:0 auto 8px;background:#a9b8c8';
-    /** @type {CanvasRenderingContext2D} */ (p.getContext('2d')).drawImage(fig.portrett(i), 0, 0);
-    kort.append(p);
-    const figRad = lag2('div', 'display:flex;gap:8px;justify-content:center;margin-bottom:8px');
-    const ark = fig.ark('spiller', i);
-    for (const bilde of [-1, 8, 4]) {
+    /** @type {CanvasRenderingContext2D} */ (p.getContext('2d')).drawImage(fig.portrait(i), 0, 0);
+    cardEl.append(p);
+    const figRow = make2('div', 'display:flex;gap:8px;justify-content:center;margin-bottom:8px');
+    const sheet = fig.sheet('player', i);
+    for (const frame of [-1, 8, 4]) {
       const c = document.createElement('canvas');
-      c.width = ark.w;
-      c.height = ark.h;
+      c.width = sheet.w;
+      c.height = sheet.h;
       c.style.cssText = 'width:96px;height:96px;image-rendering:pixelated;background:#a9b8c8';
-      if (bilde >= 0) /** @type {CanvasRenderingContext2D} */ (c.getContext('2d')).drawImage(ark.lerret, bilde * ark.w, ark.sy, ark.w, ark.h, 0, 0, ark.w, ark.h);
-      else animerte.push({ c, i });
-      figRad.append(c);
+      if (frame >= 0) /** @type {CanvasRenderingContext2D} */ (c.getContext('2d')).drawImage(sheet.canvas, frame * sheet.w, sheet.sy, sheet.w, sheet.h, 0, 0, sheet.w, sheet.h);
+      else animated.push({ c, i });
+      figRow.append(c);
     }
-    kort.append(figRad);
-    kort.append(lag2('p', 'margin:0;font-size:0.8em;color:#5d6b7a;text-align:center', 'Gange (animert) · Glad · Blink ved treff'));
-    kort.append(lag2('h2', 'margin:12px 0 2px', `${i + 1}. ${k.navn}`));
-    kort.append(lag2('p', 'margin:0 0 6px;color:#5d6b7a', k.tittel));
-    kort.append(lag2('p', 'margin:0', `Startvåpen: ${CONFIG.vaapen[k.startVaapen].navn}`));
-    kort.append(lag2('p', 'margin:0', `Bonus: ${k.bonusTekst}`));
-    rad.append(kort);
+    cardEl.append(figRow);
+    cardEl.append(make2('p', 'margin:0;font-size:0.8em;color:#5d6b7a;text-align:center', 'Gange (animert) · Glad · Blink ved treff'));
+    cardEl.append(make2('h2', 'margin:12px 0 2px', `${i + 1}. ${k.name}`));
+    cardEl.append(make2('p', 'margin:0 0 6px;color:#5d6b7a', k.title));
+    cardEl.append(make2('p', 'margin:0', `Startvåpen: ${CONFIG.weapons[k.startWeapon].name}`));
+    cardEl.append(make2('p', 'margin:0', `Bonus: ${k.bonusText}`));
+    grid.append(cardEl);
   });
-  rot.append(rad);
-  const lukk = lag2('button', 'margin-top:20px', 'Lukk forhåndsvisningen');
-  lukk.addEventListener('click', () => rot.remove());
-  rot.append(lukk);
-  document.body.append(rot);
-  let bilde = 0;
-  const tikk = () => {
-    if (!rot.isConnected) return;
-    bilde = (bilde + 1) & 3;
-    for (const { c, i } of animerte) {
-      const ark = fig.ark('spiller', i);
+  root.append(grid);
+  const close = make2('button', 'margin-top:20px', 'Lukk forhåndsvisningen');
+  close.addEventListener('click', () => root.remove());
+  root.append(close);
+  document.body.append(root);
+  let frame = 0;
+  const tick = () => {
+    if (!root.isConnected) return;
+    frame = (frame + 1) & 3;
+    for (const { c, i } of animated) {
+      const sheet = fig.sheet('player', i);
       const ctx = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
       ctx.clearRect(0, 0, c.width, c.height);
-      ctx.drawImage(ark.lerret, bilde * ark.w, ark.sy, ark.w, ark.h, 0, 0, ark.w, ark.h);
+      ctx.drawImage(sheet.canvas, frame * sheet.w, sheet.sy, sheet.w, sheet.h, 0, 0, sheet.w, sheet.h);
     }
-    setTimeout(tikk, 140);
+    setTimeout(tick, 140);
   };
-  tikk();
+  tick();
 }
 
-// ---------- Innstillinger ----------
+// ---------- Settings ----------
 
 /**
- * Kobler innstillingsmenyen til innstillingene.
- * @param {import('./innstillinger.js').Innstillinger} innst
- * @param {{testlyd: () => void, fullskjerm: (paa: boolean) => void, erFullskjerm: () => boolean}} hjelp
+ * Connects the settings menu to the settings.
+ * @param {import('./settings.js').Settings} settings
+ * @param {{testSound: () => void, fullscreen: (on: boolean) => void, isFullscreen: () => boolean}} help
  */
-export function kobleInnstillinger(innst, hjelp) {
-  const demp = /** @type {HTMLInputElement} */ (el('i-demp'));
-  const volum = /** @type {HTMLInputElement} */ (el('i-volum'));
-  const effekter = /** @type {HTMLInputElement} */ (el('i-effekter'));
-  const full = /** @type {HTMLInputElement} */ (el('i-fullskjerm'));
-  const rist = /** @type {HTMLInputElement} */ (el('i-rist'));
+export function bindSettings(settings, help) {
+  const mute = /** @type {HTMLInputElement} */ (el('i-mute'));
+  const volume = /** @type {HTMLInputElement} */ (el('i-volume'));
+  const effects = /** @type {HTMLInputElement} */ (el('i-effects'));
+  const full = /** @type {HTMLInputElement} */ (el('i-fullscreen'));
+  const shake = /** @type {HTMLInputElement} */ (el('i-shake'));
   const blink = /** @type {HTMLInputElement} */ (el('i-blink'));
 
-  const vis = () => {
-    const v = innst.v;
-    demp.checked = v.demp;
-    volum.value = String(Math.round(v.volum * 100));
-    effekter.value = String(Math.round(v.effekter * 100));
-    el('o-volum').textContent = volum.value + ' %';
-    el('o-effekter').textContent = effekter.value + ' %';
-    full.checked = hjelp.erFullskjerm();
-    rist.checked = v.rist;
-    blink.checked = v.faerreBlink;
-    for (const gruppe of document.querySelectorAll('.valg')) {
-      const navn = /** @type {HTMLElement} */ (gruppe).dataset.navn ?? '';
-      for (const inp of gruppe.querySelectorAll('input')) /** @type {HTMLInputElement} */ (inp).checked = /** @type {HTMLInputElement} */ (inp).value === String(v[navn]);
+  const show = () => {
+    const v = settings.v;
+    mute.checked = v.mute;
+    volume.value = String(Math.round(v.volume * 100));
+    effects.value = String(Math.round(v.effects * 100));
+    el('o-volume').textContent = volume.value + ' %';
+    el('o-effects').textContent = effects.value + ' %';
+    full.checked = help.isFullscreen();
+    shake.checked = v.shake;
+    blink.checked = v.fewerFlashes;
+    for (const group of document.querySelectorAll('.options')) {
+      const name = /** @type {HTMLElement} */ (group).dataset.name ?? '';
+      for (const inp of group.querySelectorAll('input')) /** @type {HTMLInputElement} */ (inp).checked = /** @type {HTMLInputElement} */ (inp).value === String(v[name]);
     }
   };
 
-  demp.addEventListener('change', () => {
-    innst.sett('demp', demp.checked);
-    if (!demp.checked) hjelp.testlyd();
+  mute.addEventListener('change', () => {
+    settings.set('mute', mute.checked);
+    if (!mute.checked) help.testSound();
   });
-  for (const [felt, navn] of [[volum, 'volum'], [effekter, 'effekter']]) {
-    const f = /** @type {HTMLInputElement} */ (felt);
+  for (const [field, name] of [[volume, 'volume'], [effects, 'effects']]) {
+    const f = /** @type {HTMLInputElement} */ (field);
     f.addEventListener('input', () => {
-      innst.sett(navn, Number(f.value) / 100);
-      el('o-' + navn).textContent = f.value + ' %';
+      settings.set(name, Number(f.value) / 100);
+      el('o-' + name).textContent = f.value + ' %';
     });
-    // Testlyd når man slipper glidebryteren
-    f.addEventListener('change', () => hjelp.testlyd());
+    // Test sound when the slider is released
+    f.addEventListener('change', () => help.testSound());
   }
-  full.addEventListener('change', () => hjelp.fullskjerm(full.checked));
-  rist.addEventListener('change', () => innst.sett('rist', rist.checked));
-  blink.addEventListener('change', () => innst.sett('faerreBlink', blink.checked));
-  for (const gruppe of document.querySelectorAll('.valg')) {
-    const navn = /** @type {HTMLElement} */ (gruppe).dataset.navn ?? '';
-    gruppe.addEventListener('change', (e) => innst.sett(navn, /** @type {HTMLInputElement} */ (e.target).value));
+  full.addEventListener('change', () => help.fullscreen(full.checked));
+  shake.addEventListener('change', () => settings.set('shake', shake.checked));
+  blink.addEventListener('change', () => settings.set('fewerFlashes', blink.checked));
+  for (const group of document.querySelectorAll('.options')) {
+    const name = /** @type {HTMLElement} */ (group).dataset.name ?? '';
+    group.addEventListener('change', (e) => settings.set(name, /** @type {HTMLInputElement} */ (e.target).value));
   }
-  el('innstnullstill').addEventListener('click', () => {
-    innst.tilbakestill();
-    vis();
+  el('settingsReset').addEventListener('click', () => {
+    settings.restoreDefaults();
+    show();
   });
   document.addEventListener('fullscreenchange', () => {
-    full.checked = hjelp.erFullskjerm();
+    full.checked = help.isFullscreen();
   });
-  return vis;
+  return show;
 }

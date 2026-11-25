@@ -55,7 +55,7 @@ powershell -ExecutionPolicy Bypass -File start.ps1
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `3000` | HTTP port |
-| `DATA_DIR` | `server/data` | Where the leaderboard database (`toppliste.db`) is stored |
+| `DATA_DIR` | `server/data` | Where the leaderboard database (`leaderboard.db`) is stored |
 
 Example: `PORT=8080 DATA_DIR=/var/lib/hds node server/server.js`
 
@@ -80,32 +80,36 @@ the leaderboard API.
 
 **Static hosting only:** `index.html`, `css/`, `js/` and `fonts/` can go on any static host. For example,
 `python -m http.server` works for local testing. The game is fully playable, but it shows "Topplisten er
-utilgjengelig" (leaderboard unavailable) until `/api/toppliste` and `/api/score` respond. To use different
-storage, replace `hentToppliste(dato)` and `sendInnScore(innslag)` in `js/toppliste.js`.
+utilgjengelig" (leaderboard unavailable) until `/api/leaderboard` and `/api/score` respond. To use different
+storage, replace `fetchLeaderboard(date)` and `submitScore(entry)` in `js/leaderboard.js`.
 
 ### Leaderboard API
 
 | Method | Path | Body / query | Response |
 | --- | --- | --- | --- |
-| `GET` | `/api/toppliste` | `?dato=YYYY-MM-DD&navn=<name>` | `{ dato, topp: [...], egen, antall }` (top 20, plus your own rank) |
-| `POST` | `/api/score` | `{ navn, dato, karakter, score, tid, hjulpne, maksMult }` | `{ ok, forbedret, plass }` |
+| `GET` | `/api/leaderboard` | `?date=YYYY-MM-DD&name=<name>` | `{ date, top: [...], own, count }` (top 20, plus your own rank) |
+| `POST` | `/api/score` | `{ name, date, character, score, time, helped, maxMult }` | `{ ok, improved, spot }` |
 
 ## Project structure
 
 ```
 index.html            Page and menus
-css/stil.css          Menu and HUD styling
+css/style.css         Menu and HUD styling
 fonts/                Pixel font «KontorPiksel» (generated, CC0)
 js/config.js          ALL balance numbers (weapons, enemies, curve, characters …)
-js/spill.js           Game state and fixed-timestep update (60 per second)
-js/fiender.js         Lawyers, spawning, emails
-js/vaapen.js          Weapons and combinations
-js/oppgraderinger.js  Level-up cards and passives
-js/kart.js            Office map layout (zones, decorations, doors)
-js/tegning.js         World renderer (640 × 360 pixel art)
+js/game.js            Game state and fixed-timestep update (60 per second)
+js/player.js          The player (movement, energy, pickups)
+js/enemies.js         Lawyers, spawning, emails
+js/weapons.js         Weapons and combinations
+js/upgrades.js        Level-up cards and passives
+js/tickets.js, js/score.js   Tickets / energy drinks / new PC, points and multiplier
+js/map.js             Office map layout (zones, decorations, doors)
+js/renderer.js        World renderer (640 × 360 pixel art)
 js/hud.js             HUD and minimap
-js/figurer.js         Characters and lawyers (palette-indexed pixel grids)
-js/sprites.js, js/ikoner.js, js/piksel.js, js/pikselfont.js   Graphics
+js/figures.js         Characters and lawyers (palette-indexed pixel grids)
+js/sprites.js, js/icons.js, js/pixel.js, js/pixelfont.js   Graphics
+js/settings.js, js/sound.js, js/input.js   Settings, sound (Web Audio), keyboard/touch
+js/leaderboard.js     Leaderboard client
 js/main.js, js/ui.js  Game loop, menus, debug mode
 server/server.js      Static file server + leaderboard API (SQLite)
 tools/                Balance simulator, weapon measurement, font generator
@@ -115,11 +119,11 @@ tools/                Balance simulator, weapon measurement, font generator
 
 | Command | What it does |
 | --- | --- |
-| `npm run simuler` | Bots play full runs in seconds and report survival times, plus determinism checks |
-| `npm run maalvaapen` | Measures help per second for every weapon at level 8 and as a combination |
-| `npm run lagfont` | Rebuilds `fonts/kontorpiksel.ttf` from the glyphs in `js/pikselfont.js` |
+| `npm run simulate` | Bots play full runs in seconds and report survival times, plus determinism checks |
+| `npm run measure-weapons` | Measures help per second for every weapon at level 8 and as a combination |
+| `npm run build-font` | Rebuilds `fonts/kontorpiksel.ttf` from the glyphs in `js/pixelfont.js` |
 
-On Windows without Node.js: `powershell -File tools/node.ps1 tools/simuler.js`.
+On Windows without Node.js: `powershell -File tools/node.ps1 tools/simulate.js`.
 
 **Debug mode:** add `?debug` to the URL for a performance overlay (FPS, frame time, entity counts, memory,
 help per second per weapon) and buttons to skip time, level up, spawn bosses and run a 5-minute stress test.
@@ -129,7 +133,7 @@ preview of the four playable characters. Runs where debug buttons were used are 
 ## Customising
 
 All balance numbers are in **[`js/config.js`](js/config.js)**, with a comment on every field. That includes
-character names, titles, starting weapons and bonuses (`CONFIG.karakterer`). See [DOKUMENTASJON.md](DOKUMENTASJON.md)
+character names, titles, starting weapons and bonuses (`CONFIG.characters`). See [DOKUMENTASJON.md](DOKUMENTASJON.md)
 (Norwegian) for how to tune difficulty, edit the map and change the graphics.
 
 ## License

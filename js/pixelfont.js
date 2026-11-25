@@ -1,21 +1,21 @@
 // @ts-check
-// «KontorPiksel» – en egenprodusert pikselfont for spillet (5×7 piksler, med æ, ø og å).
-// Samme glyfdata brukes til to ting:
-//   1. tekst på lerretet (BitmapFont under), og
-//   2. fonts/kontorpiksel.ttf, som lages av tools/lagfont.js og brukes i menyene.
-// Lisens: se fonts/LISENS.txt (CC0 – fri bruk).
+// «KontorPiksel» – a home-made pixel font for the game (5×7 pixels, with æ, ø and å).
+// The same glyph data is used for two things:
+//   1. text on the canvas (BitmapFont below), and
+//   2. fonts/kontorpiksel.ttf, which is made by tools/build-font.js and used in the menus.
+// License: see fonts/LISENS.txt (CC0 – free to use).
 
-/** Rader over grunnlinjen (aksenter + versaler). Grunnlinjen ligger under rad 8. */
+/** Rows above the baseline (accents + capitals). The baseline is below row 8. */
 export const OVER = 9;
-/** Rader under grunnlinjen (g, j, p, q, y …). */
+/** Rows below the baseline (g, j, p, q, y …). */
 export const UNDER = 2;
-/** Total høyde på en tekstlinje i piksler. */
-export const HOEYDE = OVER + UNDER;
+/** Total height of a line of text in pixels. */
+export const HEIGHT = OVER + UNDER;
 
 /**
- * Hver glyf er rader adskilt med mellomrom. '#' = piksel, '.' = tom.
- * Første rad er rad 2 (toppen av en versal) med mindre glyfen starter med «n:»,
- * som betyr at den starter n rader høyere (for Å, É …).
+ * Each glyph is rows separated by spaces. '#' = pixel, '.' = empty.
+ * The first row is row 2 (the top of a capital) unless the glyph starts with «n:»,
+ * which means it starts n rows higher (for Å, É …).
  * @type {Record<string, string>}
  */
 const G = {
@@ -138,123 +138,123 @@ const G = {
 };
 
 /**
- * @typedef {Object} Glyf
- * @property {number} b bredde i piksler
- * @property {number} topp første rad (0 = helt øverst, 2 = toppen av en versal)
- * @property {string[]} rader
+ * @typedef {Object} Glyph
+ * @property {number} b width in pixels
+ * @property {number} top first row (0 = very top, 2 = the top of a capital)
+ * @property {string[]} rows
  */
 
-/** @type {Map<string, Glyf>} */
-const tolket = new Map();
+/** @type {Map<string, Glyph>} */
+const parsed = new Map();
 
-/** Henter (og tolker) glyfen for et tegn. Ukjente tegn blir en firkant. */
-export function glyf(tegn) {
-  let g = tolket.get(tegn);
+/** Gets (and parses) the glyph for a character. Unknown characters become a square. */
+export function glyph(ch) {
+  let g = parsed.get(ch);
   if (g) return g;
-  if (tegn === ' ' || tegn === ' ') {
-    g = { b: 3, topp: 2, rader: [] };
+  if (ch === ' ' || ch === ' ') {
+    g = { b: 3, top: 2, rows: [] };
   } else {
-    let kilde = G[tegn] ?? G['?missing'];
-    let topp = 2;
-    const m = /^(\d):/.exec(kilde);
+    let source = G[ch] ?? G['?missing'];
+    let top = 2;
+    const m = /^(\d):/.exec(source);
     if (m) {
-      topp = 2 - Number(m[1]);
-      kilde = kilde.slice(2);
+      top = 2 - Number(m[1]);
+      source = source.slice(2);
     }
-    const rader = kilde.split(' ');
-    g = { b: rader[0].length, topp, rader };
+    const rows = source.split(' ');
+    g = { b: rows[0].length, top, rows };
   }
-  tolket.set(tegn, g);
+  parsed.set(ch, g);
   return g;
 }
 
-/** Alle tegn fonten har (brukes av font-generatoren). */
-export function alleTegn() {
+/** All the characters the font has (used by the font generator). */
+export function allChars() {
   return Object.keys(G).filter((t) => t.length === 1);
 }
 
-/** Bredde i piksler (uskalert) for en tekst. 1 piksel mellomrom mellom tegn. */
-export function tekstBredde(tekst) {
+/** Width in pixels (unscaled) of a text. 1 pixel of spacing between characters. */
+export function textWidth(text) {
   let b = 0;
-  for (const t of tekst) b += glyf(t).b + 1;
+  for (const t of text) b += glyph(t).b + 1;
   return Math.max(0, b - 1);
 }
 
 /**
- * Tegner tekst på et lerret ved å kopiere ferdige glyfer (raskt, skarpt og uten søppel).
- * Hver farge får sitt eget glyfark som lages første gang fargen brukes.
+ * Draws text on a canvas by copying prepared glyphs (fast, sharp and without junk).
+ * Each color gets its own glyph sheet, which is made the first time the color is used.
  */
 export class BitmapFont {
   constructor() {
-    /** @type {Map<string, {lerret: HTMLCanvasElement, pos: Map<string, number>}>} */
-    this.ark = new Map();
+    /** @type {Map<string, {canvas: HTMLCanvasElement, pos: Map<string, number>}>} */
+    this.sheet = new Map();
   }
 
-  /** Lager (eller henter) et glyfark i én farge. */
-  hentArk(farge) {
-    let a = this.ark.get(farge);
+  /** Makes (or gets) a glyph sheet in one color. */
+  getSheet(color) {
+    let a = this.sheet.get(color);
     if (a) return a;
-    const tegn = [' ', ...alleTegn(), '?missing'];
+    const chars = [' ', ...allChars(), '?missing'];
     let x = 0;
     const pos = new Map();
-    for (const t of tegn) {
+    for (const t of chars) {
       pos.set(t, x);
-      x += glyf(t).b + 1;
+      x += glyph(t).b + 1;
     }
-    const lerret = document.createElement('canvas');
-    lerret.width = x;
-    lerret.height = HOEYDE;
-    const ctx = /** @type {CanvasRenderingContext2D} */ (lerret.getContext('2d'));
-    ctx.fillStyle = farge;
-    for (const t of tegn) {
-      const g = glyf(t);
+    const canvas = document.createElement('canvas');
+    canvas.width = x;
+    canvas.height = HEIGHT;
+    const ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d'));
+    ctx.fillStyle = color;
+    for (const t of chars) {
+      const g = glyph(t);
       const x0 = /** @type {number} */ (pos.get(t));
-      g.rader.forEach((rad, ry) => {
-        for (let rx = 0; rx < rad.length; rx++) if (rad[rx] === '#') ctx.fillRect(x0 + rx, g.topp + ry, 1, 1);
+      g.rows.forEach((row, ry) => {
+        for (let rx = 0; rx < row.length; rx++) if (row[rx] === '#') ctx.fillRect(x0 + rx, g.top + ry, 1, 1);
       });
     }
-    a = { lerret, pos };
-    this.ark.set(farge, a);
+    a = { canvas, pos };
+    this.sheet.set(color, a);
     return a;
   }
 
   /**
-   * Tegner tekst med øvre venstre hjørne i (x, y). Returnerer bredden i skjermpiksler.
+   * Draws text with the upper left corner at (x, y). Returns the width in screen pixels.
    * @param {CanvasRenderingContext2D} ctx
-   * @param {string} tekst
+   * @param {string} text
    * @param {number} x
    * @param {number} y
-   * @param {string} farge CSS-farge
-   * @param {number} [skala] heltall
-   * @param {string | null} [skygge] farge på skygge/kontur (null = ingen)
-   * @param {'venstre'|'midt'|'hoeyre'} [juster]
+   * @param {string} color CSS color
+   * @param {number} [scale] integer
+   * @param {string | null} [shadow] color of shadow/outline (null = none)
+   * @param {'left'|'center'|'right'} [align]
    */
-  tegn(ctx, tekst, x, y, farge, skala = 1, skygge = null, juster = 'venstre') {
-    const b = tekstBredde(tekst) * skala;
-    if (juster === 'midt') x -= Math.floor(b / 2);
-    else if (juster === 'hoeyre') x -= b;
+  draw(ctx, text, x, y, color, scale = 1, shadow = null, align = 'left') {
+    const b = textWidth(text) * scale;
+    if (align === 'center') x -= Math.floor(b / 2);
+    else if (align === 'right') x -= b;
     x = Math.round(x);
     y = Math.round(y);
-    if (skygge) {
-      // Kontur rundt teksten (lesbar på alle bakgrunner)
-      const s = Math.max(1, Math.round(skala / 2));
-      this.tegnRaa(ctx, tekst, x - s, y, skygge, skala);
-      this.tegnRaa(ctx, tekst, x + s, y, skygge, skala);
-      this.tegnRaa(ctx, tekst, x, y - s, skygge, skala);
-      this.tegnRaa(ctx, tekst, x, y + s, skygge, skala);
-      this.tegnRaa(ctx, tekst, x + s, y + s, skygge, skala);
+    if (shadow) {
+      // Outline around the text (readable on all backgrounds)
+      const s = Math.max(1, Math.round(scale / 2));
+      this.drawRaw(ctx, text, x - s, y, shadow, scale);
+      this.drawRaw(ctx, text, x + s, y, shadow, scale);
+      this.drawRaw(ctx, text, x, y - s, shadow, scale);
+      this.drawRaw(ctx, text, x, y + s, shadow, scale);
+      this.drawRaw(ctx, text, x + s, y + s, shadow, scale);
     }
-    this.tegnRaa(ctx, tekst, x, y, farge, skala);
+    this.drawRaw(ctx, text, x, y, color, scale);
     return b;
   }
 
-  tegnRaa(ctx, tekst, x, y, farge, skala) {
-    const a = this.hentArk(farge);
-    for (const t of tekst) {
-      const g = glyf(t);
+  drawRaw(ctx, text, x, y, color, scale) {
+    const a = this.getSheet(color);
+    for (const t of text) {
+      const g = glyph(t);
       const sx = a.pos.get(t) ?? a.pos.get('?missing');
-      ctx.drawImage(a.lerret, /** @type {number} */ (sx), 0, g.b, HOEYDE, x, y, g.b * skala, HOEYDE * skala);
-      x += (g.b + 1) * skala;
+      ctx.drawImage(a.canvas, /** @type {number} */ (sx), 0, g.b, HEIGHT, x, y, g.b * scale, HEIGHT * scale);
+      x += (g.b + 1) * scale;
     }
   }
 }

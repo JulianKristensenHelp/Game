@@ -1,14 +1,14 @@
 {
   "name": "help-desk-survivors",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "«Har du prøvd å skru den av og på?» – Help Desk Survivors",
   "type": "module",
   "private": true,
   "scripts": {
     "start": "node server/server.js",
-    "simuler": "node tools/simuler.js",
-    "lagfont": "node tools/lagfont.js",
-    "maalvaapen": "node tools/maalvaapen.js"
+    "simulate": "node tools/simulate.js",
+    "build-font": "node tools/build-font.js",
+    "measure-weapons": "node tools/measure-weapons.js"
   },
   "engines": {
     "node": ">=22.5"

@@ -1,166 +1,188 @@
 // @ts-check
-// Liten server for «Help Desk Survivors»: leverer spillfilene og den felles topplisten.
-// Ingen npm-pakker trengs – bare Node.js 22.5 eller nyere (bruker innebygd SQLite).
+// Small server for «Help Desk Survivors»: serves the game files and the shared leaderboard.
+// No npm packages needed – just Node.js 22.5 or newer (uses built-in SQLite).
 //
 //   node server/server.js            → http://localhost:3000
-//   PORT=8080 node server/server.js  → annen port
+//   PORT=8080 node server/server.js  → different port
 //
 // API:
-//   GET  /api/toppliste?dato=ÅÅÅÅ-MM-DD&navn=Kari  → { dato, topp: [...], egen, antall }
-//   POST /api/score  { navn, score, tid, hjulpne, maksMult, dato } → { ok, forbedret, plass }
+//   GET  /api/leaderboard?date=YYYY-MM-DD&name=Kari  → { date, top: [...], own, count }
+//   POST /api/score  { name, score, time, helped, maxMult, date } → { ok, improved, spot }
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CONFIG } from '../js/config.js';
 
-const MAPPE = path.dirname(fileURLToPath(import.meta.url));
-const ROT = path.resolve(MAPPE, '..');
+const FOLDER = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(FOLDER, '..');
 const PORT = Number(process.env.PORT || 3000);
-const DATAMAPPE = process.env.DATA_DIR || path.join(MAPPE, 'data');
-const T = CONFIG.toppliste;
+const DATA_FOLDER = process.env.DATA_DIR || path.join(FOLDER, 'data');
+const T = CONFIG.leaderboard;
 
-/** Dagens dato i norsk tid – topplisten nullstilles ved midnatt i Norge. */
-function datoOslo(naa = new Date()) {
-  const deler = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Oslo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(naa);
-  const hent = (t) => deler.find((d) => d.type === t)?.value ?? '';
-  return `${hent('year')}-${hent('month')}-${hent('day')}`;
+/** Today's date in Norwegian time – the leaderboard resets at midnight in Norway. */
+function dateOslo(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Oslo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+  const part = (t) => parts.find((d) => d.type === t)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
 }
 
-// ---------- Lagring ----------
-// Lagringen ligger bak to funksjoner (hentDag, lagre), så den er lett å bytte ut.
+// ---------- Storage ----------
+// The storage sits behind two functions (getDay, save), so it is easy to replace.
 
 /**
- * @typedef {{navn:string, score:number, tid:number, hjulpne:number, maksMult:number, karakter:string}} Rad
- * @typedef {{hentDag:(dato:string)=>Rad[], lagre:(dato:string, noekkel:string, rad:Rad)=>boolean, slettEldre:(dato:string)=>void, type:string}} Lager
+ * @typedef {{name:string, score:number, time:number, helped:number, maxMult:number, character:string}} Row
+ * @typedef {{getDay:(date:string)=>Row[], save:(date:string, key:string, row:Row)=>boolean, deleteOlder:(date:string)=>void, type:string}} Store
  */
 
-/** SQLite-lager (innebygd i Node 22.5+). @returns {Promise<Lager>} */
-async function lagSqliteLager() {
-  const { DatabaseSync } = await import('node:sqlite');
-  fs.mkdirSync(DATAMAPPE, { recursive: true });
-  const db = new DatabaseSync(path.join(DATAMAPPE, 'toppliste.db'));
-  db.exec(`CREATE TABLE IF NOT EXISTS innslag (
-    dato TEXT NOT NULL, noekkel TEXT NOT NULL, navn TEXT NOT NULL,
-    score INTEGER NOT NULL, tid INTEGER NOT NULL, hjulpne INTEGER NOT NULL, maks_mult REAL NOT NULL,
-    karakter TEXT NOT NULL DEFAULT '',
-    oppdatert TEXT NOT NULL DEFAULT (datetime('now')),
-    PRIMARY KEY (dato, noekkel))`);
-  // Eldre databaser (før karakterene kom) får den nye kolonnen her.
-  try {
-    db.exec("ALTER TABLE innslag ADD COLUMN karakter TEXT NOT NULL DEFAULT ''");
-  } catch {
-    /* kolonnen finnes allerede */
+/** Data files from older versions get the new file name (the content is migrated when it is opened). */
+function renameOldDataFile(oldName, newName) {
+  const from = path.join(DATA_FOLDER, oldName), to = path.join(DATA_FOLDER, newName);
+  if (fs.existsSync(from) && !fs.existsSync(to)) {
+    try {
+      fs.renameSync(from, to);
+    } catch {
+      return from; // the file is in use (e.g. by another server): keep using it under the old name
+    }
   }
-  const hent = db.prepare('SELECT navn, score, tid, hjulpne, maks_mult AS maksMult, karakter FROM innslag WHERE dato = ? ORDER BY score DESC, tid DESC, oppdatert ASC');
-  const hentEn = db.prepare('SELECT score FROM innslag WHERE dato = ? AND noekkel = ?');
-  const sett = db.prepare(`INSERT INTO innslag (dato, noekkel, navn, score, tid, hjulpne, maks_mult, karakter) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT (dato, noekkel) DO UPDATE SET navn = excluded.navn, score = excluded.score, tid = excluded.tid,
-      hjulpne = excluded.hjulpne, maks_mult = excluded.maks_mult, karakter = excluded.karakter, oppdatert = datetime('now')`);
-  const slett = db.prepare('DELETE FROM innslag WHERE dato < ?');
+  return to;
+}
+
+/** SQLite store (built into Node 22.5+). @returns {Promise<Store>} */
+async function makeSqliteStore() {
+  const { DatabaseSync } = await import('node:sqlite');
+  fs.mkdirSync(DATA_FOLDER, { recursive: true });
+  const db = new DatabaseSync(renameOldDataFile('toppliste.db', 'leaderboard.db'));
+  db.exec(`CREATE TABLE IF NOT EXISTS entries (
+    date TEXT NOT NULL, name_key TEXT NOT NULL, name TEXT NOT NULL,
+    score INTEGER NOT NULL, time INTEGER NOT NULL, helped INTEGER NOT NULL, max_mult REAL NOT NULL,
+    character TEXT NOT NULL DEFAULT '',
+    updated TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (date, name_key))`);
+  // Databases from older versions used Norwegian table and column names: copy the rows over once.
+  const oldTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'innslag'").get();
+  if (oldTable) {
+    const columns = /** @type {any[]} */ (db.prepare('PRAGMA table_info(innslag)').all()).map((c) => c.name);
+    const character = columns.includes('karakter') ? 'karakter' : "''";
+    db.exec(`BEGIN;
+      INSERT OR IGNORE INTO entries (date, name_key, name, score, time, helped, max_mult, character, updated)
+        SELECT dato, noekkel, navn, score, tid, hjulpne, maks_mult, ${character}, oppdatert FROM innslag;
+      DROP TABLE innslag;
+      COMMIT;`);
+  }
+  const load = db.prepare('SELECT name, score, time, helped, max_mult AS maxMult, character FROM entries WHERE date = ? ORDER BY score DESC, time DESC, updated ASC');
+  const getOne = db.prepare('SELECT score FROM entries WHERE date = ? AND name_key = ?');
+  const upsert = db.prepare(`INSERT INTO entries (date, name_key, name, score, time, helped, max_mult, character) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (date, name_key) DO UPDATE SET name = excluded.name, score = excluded.score, time = excluded.time,
+      helped = excluded.helped, max_mult = excluded.max_mult, character = excluded.character, updated = datetime('now')`);
+  const erase = db.prepare('DELETE FROM entries WHERE date < ?');
   return {
     type: 'SQLite',
-    hentDag: (dato) => /** @type {any} */ (hent.all(dato)),
-    lagre(dato, noekkel, rad) {
-      const gammel = /** @type {any} */ (hentEn.get(dato, noekkel));
-      if (gammel && gammel.score >= rad.score) return false;
-      sett.run(dato, noekkel, rad.navn, rad.score, rad.tid, rad.hjulpne, rad.maksMult, rad.karakter);
+    getDay: (date) => /** @type {any} */ (load.all(date)),
+    save(date, key, row) {
+      const old = /** @type {any} */ (getOne.get(date, key));
+      if (old && old.score >= row.score) return false;
+      upsert.run(date, key, row.name, row.score, row.time, row.helped, row.maxMult, row.character);
       return true;
     },
-    slettEldre: (dato) => void slett.run(dato),
+    deleteOlder: (date) => void erase.run(date),
   };
 }
 
-/** Reserve: enkel JSON-fil, hvis SQLite ikke finnes i denne Node-versjonen. @returns {Lager} */
-function lagFilLager() {
-  fs.mkdirSync(DATAMAPPE, { recursive: true });
-  const fil = path.join(DATAMAPPE, 'toppliste.json');
-  /** @type {Record<string, Record<string, Rad>>} */
+/** Field names used by the JSON file in older versions. */
+const OLD_FIELDS = { navn: 'name', tid: 'time', hjulpne: 'helped', maksMult: 'maxMult', karakter: 'character' };
+
+/** Fallback: simple JSON file, if SQLite is not available in this Node version. @returns {Store} */
+function makeFileStore() {
+  fs.mkdirSync(DATA_FOLDER, { recursive: true });
+  const file = renameOldDataFile('toppliste.json', 'leaderboard.json');
+  /** @type {Record<string, Record<string, Row>>} */
   let data = {};
   try {
-    data = JSON.parse(fs.readFileSync(fil, 'utf8'));
+    data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    for (const day of Object.values(data)) for (const row of Object.values(day)) for (const [old, now] of Object.entries(OLD_FIELDS)) if (old in row) { row[now] = row[old]; delete row[old]; }
   } catch {
-    /* ny fil */
+    /* new file */
   }
-  const skriv = () => fs.writeFileSync(fil, JSON.stringify(data));
+  const write = () => fs.writeFileSync(file, JSON.stringify(data));
   return {
     type: 'JSON-fil',
-    hentDag: (dato) => Object.values(data[dato] || {}).sort((a, b) => b.score - a.score || b.tid - a.tid),
-    lagre(dato, noekkel, rad) {
-      const dag = (data[dato] ||= {});
-      if (dag[noekkel] && dag[noekkel].score >= rad.score) return false;
-      dag[noekkel] = rad;
-      skriv();
+    getDay: (date) => Object.values(data[date] || {}).sort((a, b) => b.score - a.score || b.time - a.time),
+    save(date, key, row) {
+      const day = (data[date] ||= {});
+      if (day[key] && day[key].score >= row.score) return false;
+      day[key] = row;
+      write();
       return true;
     },
-    slettEldre(dato) {
-      for (const d of Object.keys(data)) if (d < dato) delete data[d];
-      skriv();
+    deleteOlder(date) {
+      for (const d of Object.keys(data)) if (d < date) delete data[d];
+      write();
     },
   };
 }
 
-/** @type {Lager} */
-let lager;
+/** @type {Store} */
+let store;
 try {
-  lager = await lagSqliteLager();
-} catch (feil) {
-  console.warn('SQLite er ikke tilgjengelig, bruker JSON-fil i stedet:', /** @type {any} */ (feil)?.message);
-  lager = lagFilLager();
+  store = await makeSqliteStore();
+} catch (error) {
+  console.warn('SQLite er ikke tilgjengelig, bruker JSON-fil i stedet:', /** @type {any} */ (error)?.message);
+  store = makeFileStore();
 }
 
-// ---------- Validering (enkel beskyttelse mot juks) ----------
+// ---------- Validation (simple protection against cheating) ----------
 
-/** Høyeste poengsum som er realistisk for en runde på «tid» sekunder. */
-function maksRealistiskScore(tid) {
-  const maksMult = CONFIG.multiplikator.maks;
-  const B = CONFIG.fiender.boss;
-  let maks = 5000 + tid * T.maksPoengPerSekund;
-  // Bosser (poengene øker for hver boss) og hastesaker kommer i tillegg.
-  const bosser = tid >= B.forste ? Math.floor((tid - B.forste) / B.intervall) + 1 : 0;
-  for (let i = 0; i < bosser; i++) maks += B.poeng * Math.pow(B.poengPerBoss, i) * maksMult;
-  maks += Math.ceil(tid / CONFIG.fiender.hastesak.intervallMin) * CONFIG.fiender.hastesak.poeng * maksMult;
-  return maks;
+/** The highest score that is realistic for a round of `time` seconds. */
+function maxRealisticScore(time) {
+  const maxMult = CONFIG.multiplier.max;
+  const B = CONFIG.enemies.boss;
+  let max = 5000 + time * T.maxPointsPerSecond;
+  // Bosses (the points increase with each boss) and urgent cases come in addition.
+  const bosses = time >= B.first ? Math.floor((time - B.first) / B.interval) + 1 : 0;
+  for (let i = 0; i < bosses; i++) max += B.points * Math.pow(B.pointsPerBoss, i) * maxMult;
+  max += Math.ceil(time / CONFIG.enemies.urgent.intervalMin) * CONFIG.enemies.urgent.points * maxMult;
+  return max;
 }
 
-/** @returns {{feil: string} | {rad: Rad, noekkel: string, dato: string}} */
-function valider(inn) {
-  if (!inn || typeof inn !== 'object') return { feil: 'Ugyldig innsending.' };
-  const navn = typeof inn.navn === 'string' ? inn.navn.replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim() : '';
-  if (!navn) return { feil: 'Navnet kan ikke være tomt.' };
-  if ([...navn].length > T.maksNavn) return { feil: `Navnet kan være maks ${T.maksNavn} tegn.` };
-  const { score, tid, hjulpne, maksMult } = inn;
-  for (const v of [score, tid, hjulpne, maksMult]) {
-    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) return { feil: 'Ugyldige tall i innsendingen.' };
+/** @returns {{error: string} | {row: Row, key: string, date: string}} */
+function validate(body) {
+  if (!body || typeof body !== 'object') return { error: 'Ugyldig innsending.' };
+  const name = typeof body.name === 'string' ? body.name.replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim() : '';
+  if (!name) return { error: 'Navnet kan ikke være tomt.' };
+  if ([...name].length > T.maxName) return { error: `Navnet kan være maks ${T.maxName} tegn.` };
+  const { score, time, helped, maxMult } = body;
+  for (const v of [score, time, helped, maxMult]) {
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) return { error: 'Ugyldige tall i innsendingen.' };
   }
-  if (!Number.isInteger(score) || !Number.isInteger(hjulpne)) return { feil: 'Ugyldige tall i innsendingen.' };
-  const dato = datoOslo();
-  // Runden må være spilt på dagens vakt (litt slingringsmonn rett etter midnatt håndteres ved å godta gårsdagens seed).
-  if (inn.dato !== dato && inn.dato !== datoOslo(new Date(Date.now() - 3 * 3600 * 1000))) return { feil: 'Runden gjelder ikke dagens vakt.' };
-  if (tid < 3 || tid > 6 * 3600) return { feil: 'Urealistisk tid.' };
-  if (score > maksRealistiskScore(tid)) return { feil: 'Urealistisk poengsum.' };
-  if (hjulpne > 50 + tid * T.maksHjulpnePerSekund) return { feil: 'Urealistisk antall hjulpne.' };
-  if (maksMult < CONFIG.multiplikator.start - 1e-6 || maksMult > CONFIG.multiplikator.maks + 1e-6) return { feil: 'Ugyldig multiplikator.' };
-  const karakter = typeof inn.karakter === 'string' && CONFIG.karakterer.some((k) => k.id === inn.karakter) ? inn.karakter : '';
+  if (!Number.isInteger(score) || !Number.isInteger(helped)) return { error: 'Ugyldige tall i innsendingen.' };
+  const date = dateOslo();
+  // The round must have been played on today's shift (some leeway right after midnight is handled by accepting yesterday's seed).
+  if (body.date !== date && body.date !== dateOslo(new Date(Date.now() - 3 * 3600 * 1000))) return { error: 'Runden gjelder ikke dagens vakt.' };
+  if (time < 3 || time > 6 * 3600) return { error: 'Urealistisk tid.' };
+  if (score > maxRealisticScore(time)) return { error: 'Urealistisk poengsum.' };
+  if (helped > 50 + time * T.maxHelpedPerSecond) return { error: 'Urealistisk antall hjulpne.' };
+  if (maxMult < CONFIG.multiplier.start - 1e-6 || maxMult > CONFIG.multiplier.max + 1e-6) return { error: 'Ugyldig multiplikator.' };
+  const character = typeof body.character === 'string' && CONFIG.characters.some((k) => k.id === body.character) ? body.character : '';
   return {
-    dato,
-    noekkel: navn.toLocaleLowerCase('nb'),
-    rad: { navn, score, tid: Math.round(tid), hjulpne, maksMult: Math.round(maksMult * 10) / 10, karakter },
+    date,
+    key: name.toLocaleLowerCase('nb'),
+    row: { name, score, time: Math.round(time), helped, maxMult: Math.round(maxMult * 10) / 10, character },
   };
 }
 
-/** Begrenser antall innsendinger per minutt per adresse. */
-const innsendinger = new Map();
-function forMange(ip) {
-  const naa = Date.now();
-  const liste = (innsendinger.get(ip) || []).filter((t) => naa - t < 60_000);
-  if (liste.length >= T.maksInnsendingerPerMinutt) {
-    innsendinger.set(ip, liste);
+/** Limits the number of submissions per minute per address. */
+const submissions = new Map();
+function tooMany(ip) {
+  const now = Date.now();
+  const list = (submissions.get(ip) || []).filter((t) => now - t < 60_000);
+  if (list.length >= T.maxSubmissionsPerMinute) {
+    submissions.set(ip, list);
     return true;
   }
-  liste.push(naa);
-  innsendinger.set(ip, liste);
-  if (innsendinger.size > 5000) innsendinger.clear();
+  list.push(now);
+  submissions.set(ip, list);
+  if (submissions.size > 5000) submissions.clear();
   return false;
 }
 
@@ -171,32 +193,32 @@ const MIME = {
   '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png',
   '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8',
 };
-/** Bare disse ligger åpent på nett (ikke server-mappen eller databasen). */
-const AAPNE = ['/index.html', '/css/', '/js/', '/fonts/'];
+/** Only these are served openly on the web (not the server folder or the database). */
+const OPEN = ['/index.html', '/css/', '/js/', '/fonts/'];
 
 function json(res, status, data) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(data));
 }
 
-function toppliste(dato, navn) {
-  const alle = lager.hentDag(dato).map((r, i) => ({ plass: i + 1, ...r }));
-  const noekkel = navn.trim().toLocaleLowerCase('nb');
-  const egen = noekkel ? alle.find((r) => r.navn.toLocaleLowerCase('nb') === noekkel) || null : null;
-  return { dato, topp: alle.slice(0, T.vis), egen, antall: alle.length };
+function leaderboard(date, name) {
+  const all = store.getDay(date).map((r, i) => ({ spot: i + 1, ...r }));
+  const key = name.trim().toLocaleLowerCase('nb');
+  const own = key ? all.find((r) => r.name.toLocaleLowerCase('nb') === key) || null : null;
+  return { date, top: all.slice(0, T.show), own, count: all.length };
 }
 
-function lesKropp(req) {
+function readBody(req) {
   return new Promise((resolve, reject) => {
-    let tekst = '';
+    let text = '';
     req.on('data', (bit) => {
-      tekst += bit;
-      if (tekst.length > 2000) {
+      text += bit;
+      if (text.length > 2000) {
         reject(new Error('for stor'));
         req.destroy();
       }
     });
-    req.on('end', () => resolve(tekst));
+    req.on('end', () => resolve(text));
     req.on('error', reject);
   });
 }
@@ -204,56 +226,56 @@ function lesKropp(req) {
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url || '/', 'http://x');
-    const sti = decodeURIComponent(url.pathname);
+    const urlPath = decodeURIComponent(url.pathname);
 
-    if (sti === '/api/toppliste' && req.method === 'GET') {
-      // Bare dagens liste vises; tidligere dager trengs ikke.
-      return json(res, 200, toppliste(datoOslo(), url.searchParams.get('navn') || ''));
+    if (urlPath === '/api/leaderboard' && req.method === 'GET') {
+      // Only today's list is shown; earlier days are not needed.
+      return json(res, 200, leaderboard(dateOslo(), url.searchParams.get('name') || ''));
     }
-    if (sti === '/api/score' && req.method === 'POST') {
+    if (urlPath === '/api/score' && req.method === 'POST') {
       const ip = req.socket.remoteAddress || '?';
-      if (forMange(ip)) return json(res, 429, { feil: 'For mange innsendinger. Vent et minutt og prøv igjen.' });
-      let inn;
+      if (tooMany(ip)) return json(res, 429, { error: 'For mange innsendinger. Vent et minutt og prøv igjen.' });
+      let body;
       try {
-        inn = JSON.parse(String(await lesKropp(req)));
+        body = JSON.parse(String(await readBody(req)));
       } catch {
-        return json(res, 400, { feil: 'Ugyldig innsending.' });
+        return json(res, 400, { error: 'Ugyldig innsending.' });
       }
-      const v = valider(inn);
-      if ('feil' in v) return json(res, 400, { feil: v.feil });
-      lager.slettEldre(v.dato);
-      const forbedret = lager.lagre(v.dato, v.noekkel, v.rad);
-      const liste = toppliste(v.dato, v.rad.navn);
-      return json(res, 200, { ok: true, forbedret, plass: liste.egen?.plass ?? 0 });
+      const v = validate(body);
+      if ('error' in v) return json(res, 400, { error: v.error });
+      store.deleteOlder(v.date);
+      const improved = store.save(v.date, v.key, v.row);
+      const list = leaderboard(v.date, v.row.name);
+      return json(res, 200, { ok: true, improved, spot: list.own?.spot ?? 0 });
     }
-    if (sti.startsWith('/api/')) return json(res, 404, { feil: 'Fant ikke.' });
+    if (urlPath.startsWith('/api/')) return json(res, 404, { error: 'Fant ikke.' });
 
-    // Statiske filer
+    // Static files
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405);
       return res.end();
     }
-    const rel = sti === '/' ? '/index.html' : sti;
-    const fil = path.join(ROT, path.normalize(rel));
-    if (!fil.startsWith(ROT + path.sep) || !AAPNE.some((a) => rel === a || (a.endsWith('/') && rel.startsWith(a)))) {
+    const rel = urlPath === '/' ? '/index.html' : urlPath;
+    const file = path.join(ROOT, path.normalize(rel));
+    if (!file.startsWith(ROOT + path.sep) || !OPEN.some((a) => rel === a || (a.endsWith('/') && rel.startsWith(a)))) {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       return res.end('Fant ikke siden.');
     }
-    fs.readFile(fil, (feil, innhold) => {
-      if (feil) {
+    fs.readFile(file, (error, content) => {
+      if (error) {
         res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
         return res.end('Fant ikke siden.');
       }
-      res.writeHead(200, { 'Content-Type': MIME[path.extname(fil)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
-      res.end(req.method === 'HEAD' ? undefined : innhold);
+      res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+      res.end(req.method === 'HEAD' ? undefined : content);
     });
-  } catch (feil) {
-    console.error(feil);
-    json(res, 500, { feil: 'Noe gikk galt på serveren.' });
+  } catch (error) {
+    console.error(error);
+    json(res, 500, { error: 'Noe gikk galt på serveren.' });
   }
 });
 
 server.listen(PORT, () => {
   console.log(`«Har du prøvd å skru den av og på?» kjører på http://localhost:${PORT}`);
-  console.log(`Toppliste-lagring: ${lager.type} (${DATAMAPPE})`);
+  console.log(`Toppliste-lagring: ${store.type} (${DATA_FOLDER})`);
 });

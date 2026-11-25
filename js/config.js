@@ -1,558 +1,558 @@
 // @ts-check
 /**
- * KONFIGURASJON – alle balansetall i spillet ligger her.
+ * CONFIGURATION – all balance numbers in the game live here.
  *
- * Du trenger ikke kunne programmere for å justere balansen:
- * endre et tall, lagre filen og last siden på nytt.
- * Avstander er i logiske piksler (skjermen viser 640 × 360, spilleren er ca. 32 piksler høy),
- * tider er i sekunder, og fart er piksler per sekund.
+ * You don't need to be able to program to tweak the balance:
+ * change a number, save the file and reload the page.
+ * Distances are in logical pixels (the screen shows 640 × 360, the player is about 32 pixels tall),
+ * times are in seconds, and speed is in pixels per second.
  */
 export const CONFIG = {
-  /** Antall logikk-oppdateringer per sekund (fast tidssteg). Bør ikke endres. */
-  tikkPerSekund: 60,
-  /** Maks logikk-oppdateringer per bilde. Hindrer at en treg maskin henger seg opp mer og mer. */
-  maksTikkPerBilde: 4,
+  /** Number of logic updates per second (fixed time step). Should not be changed. */
+  ticksPerSecond: 60,
+  /** Max logic updates per frame. Prevents a slow machine from falling further and further behind. */
+  maxTicksPerFrame: 4,
 
-  /** Hvor mye av kartet alle ser. Likt for alle skjermer (resten fylles med ramme). */
-  visning: { bredde: 640, hoeyde: 360 },
+  /** How much of the map everyone sees. The same on all screens (the rest is filled with a frame). */
+  view: { width: 640, height: 360 },
 
-  /** Kartet: én kontoretasje med yttervegger. Sonene er beskrevet i js/kart.js. */
-  kart: {
-    bredde: 2560,
-    hoeyde: 1440,
-    /** Tykkelse på ytterveggene (toppveggen er høyere fordi vi ser veggflaten). */
-    vegg: { venstre: 16, hoeyre: 16, topp: 40, bunn: 16 },
+  /** The map: one office floor with outer walls. The zones are described in js/map.js. */
+  map: {
+    width: 2560,
+    height: 1440,
+    /** Thickness of the outer walls (the top wall is taller because we see the wall surface). */
+    wall: { left: 16, right: 16, top: 40, bottom: 16 },
   },
 
-  spiller: {
-    /** Bevegelseshastighet. */
-    fart: 95,
-    /** Kollisjonsradius. */
+  player: {
+    /** Movement speed. */
+    speed: 95,
+    /** Collision radius. */
     radius: 7,
-    /** Energi ved start. */
-    startEnergi: 100,
-    /** Sekunder usårbar etter et treff. */
-    usaarbarTid: 0.5,
-    /** Radius for å plukke opp ticket-lapper. */
-    plukkRadius: 30,
-    /** Hvor fort lapper flyr mot spilleren når de er innenfor radiusen. */
-    lappFart: 280,
+    /** Energy at the start. */
+    startEnergy: 100,
+    /** Seconds of invulnerability after a hit. */
+    invulnerableTime: 0.5,
+    /** Radius for picking up tickets. */
+    pickRadius: 30,
+    /** How fast tickets fly toward the player when they are within the radius. */
+    ticketSpeed: 280,
   },
 
-  /** Energidrikk ligger på kartet og må hentes. Den dropper aldri fra advokater eller bosser. */
-  energidrikk: {
-    /** Energi som fylles opp. */
-    fyll: 30,
-    /** Sukkerkick: ekstra fart (0.30 = +30 %). */
-    kickFart: 0.3,
-    /** Sukkerkick: varighet i sekunder. */
-    kickTid: 5,
-    /** Når den første boksen dukker opp, og tiden mellom hver ny boks. Øker ikke i senere faser. */
-    forste: 30,
-    intervall: 35,
-    /** Maks antall bokser på kartet samtidig. */
-    maks: 3,
-    /** En ny boks dukker opp minst så langt unna spilleren (960 = 1,5 skjermbredder). */
-    minAvstand: 960,
-    /** Hvor mange faste kandidatplasser som trekkes for hver boks (den første som er langt nok unna velges). */
-    kandidater: 12,
-    /** Avstand fra veggene. */
-    veggMarg: 48,
+  /** The energy drink sits on the map and has to be fetched. It never drops from lawyers or bosses. */
+  energyDrink: {
+    /** Energy that is restored. */
+    fill: 30,
+    /** Sugar rush: extra speed (0.30 = +30 %). */
+    kickSpeed: 0.3,
+    /** Sugar rush: duration in seconds. */
+    kickTime: 5,
+    /** When the first can appears, and the time between each new can. Does not increase in later phases. */
+    first: 30,
+    interval: 35,
+    /** Max number of cans on the map at the same time. */
+    max: 3,
+    /** A new can appears at least this far from the player (960 = 1.5 screen widths). */
+    minDistance: 960,
+    /** How many fixed candidate spots are drawn for each can (the first one far enough away is chosen). */
+    candidates: 12,
+    /** Distance from the walls. */
+    wallMargin: 48,
   },
 
-  nyPc: {
-    /** Sjanse for drop per fornøyd advokat (bosser gir alltid én). */
-    dropSjanse: 1 / 1500,
-    /** Hjelp som gis til bosser og hastesaker i stedet for å gjøre dem glade direkte. */
-    hjelpTilSpesielle: 700,
+  newPc: {
+    /** Chance of a drop per happy lawyer (bosses always give one). */
+    dropChance: 1 / 1500,
+    /** Help given to bosses and urgent cases instead of making them happy outright. */
+    helpToSpecial: 700,
   },
 
   /**
-   * Advokattyper. frustrasjon = «liv», skade = energi spilleren mister ved berøring,
-   * poeng = verdi på ticket-lappen (og erfaring), vekt = hvor ofte typen velges, fra = sekunder.
+   * Lawyer types. frustration = "life", damage = energy the player loses on contact,
+   * points = value of the ticket (and experience), weight = how often the type is chosen, from = seconds.
    */
-  fiender: {
-    junior: { navn: 'Juniorfullmektig', fra: 0, frustrasjon: 10, fart: 48, radius: 7, skade: 8, poeng: 10, vekt: 1 },
-    senior: { navn: 'Seniorpartner', fra: 90, frustrasjon: 80, fart: 30, radius: 10, skade: 14, poeng: 50, vekt: 0.2 },
+  enemies: {
+    junior: { name: 'Juniorfullmektig', from: 0, frustration: 10, speed: 48, radius: 7, damage: 8, points: 10, weight: 1 },
+    senior: { name: 'Seniorpartner', from: 90, frustration: 80, speed: 30, radius: 10, damage: 14, points: 50, weight: 0.2 },
     printer: {
-      navn: 'Printerentusiast', fra: 180, frustrasjon: 35, fart: 44, radius: 8, skade: 10, poeng: 30, vekt: 0.14,
-      /** Sekunder mellom hver papirhaug. */
-      papirIntervall: 2.6,
-      /** Hvor lenge en papirhaug blir liggende. */
-      papirLevetid: 8,
-      /** Maks antall papirhauger samtidig. */
-      papirMaks: 15,
-      /** Radius på papirhaugen. */
-      papirRadius: 13,
-      /** Hvor mye haugen sinker spilleren (0.4 = 40 %). */
-      papirSinking: 0.4,
+      name: 'Printerentusiast', from: 180, frustration: 35, speed: 44, radius: 8, damage: 10, points: 30, weight: 0.14,
+      /** Seconds between each paper pile. */
+      paperInterval: 2.6,
+      /** How long a paper pile stays on the floor. */
+      paperLifetime: 8,
+      /** Max number of paper piles at the same time. */
+      paperMax: 15,
+      /** Radius of the paper pile. */
+      paperRadius: 13,
+      /** How much the pile slows the player (0.4 = 40 %). */
+      paperSlow: 0.4,
     },
-    hastesak: {
-      navn: 'Hastesak', fra: 60, frustrasjon: 150, fart: 80, radius: 9, skade: 0, poeng: 1000,
-      /** Sekunder mellom hver hastesak (tilfeldig mellom min og maks). */
-      intervallMin: 45, intervallMaks: 60,
-      /** Sekunder før den forsvinner av seg selv. */
-      levetid: 20,
-      /** Hvor langt unna spilleren den dukker opp. */
-      startAvstand: 215,
-      /** Er den lenger unna enn dette, løper den saktere så den kan tas igjen. */
-      saktAvstand: 260, saktFaktor: 0.35,
+    urgent: {
+      name: 'Hastesak', from: 60, frustration: 150, speed: 80, radius: 9, damage: 0, points: 1000,
+      /** Seconds between each urgent case (random between min and max). */
+      intervalMin: 45, intervalMax: 60,
+      /** Seconds before it disappears on its own. */
+      lifetime: 20,
+      /** How far from the player it appears. */
+      startDistance: 215,
+      /** If it is farther away than this, it runs slower so it can be caught. */
+      slowDistance: 260, slowFactor: 0.35,
     },
     boss: {
-      navn: 'Fristen er om 2 minutter!', frustrasjon: 1500, fart: 26, radius: 20, skade: 20, poeng: 2500,
-      /** Første boss og tid mellom hver boss. */
-      forste: 180, intervall: 180,
-      /** Nedtelling i sekunder. */
-      frist: 90,
-      /** Økning per boss. */
-      frustrasjonPerBoss: 1.6, poengPerBoss: 1.5,
-      /** Fart når bossen går sint ut av skjermen. */
-      gaarFart: 85,
+      name: 'Fristen er om 2 minutter!', frustration: 1500, speed: 26, radius: 20, damage: 20, points: 2500,
+      /** First boss and time between each boss. */
+      first: 180, interval: 180,
+      /** Countdown in seconds. */
+      deadline: 90,
+      /** Increase per boss. */
+      frustrationPerBoss: 1.6, pointsPerBoss: 1.5,
+      /** Speed when the boss storms angrily off the screen. */
+      leavingSpeed: 85,
     },
   },
 
   /**
-   * De fire spillbare karakterene (IT-avdelingen). Navn og tittel fylles inn av oppdragsgiver.
-   * startVaapen = våpenet karakteren starter med (teller som én av fire plasser).
-   * bonus: maksEnergi (+energi), hjelp (+andel), fart (+andel), plukk (+andel radius for lapper).
-   * Utseendet står i js/figurer.js (SPILLERE), i samme rekkefølge.
+   * The four playable characters (the IT department). Name and title are filled in by the client.
+   * startWeapon = the weapon the character starts with (counts as one of four slots).
+   * bonus: maxEnergy (+energy), help (+fraction), speed (+fraction), pick (+fraction of the pickup radius for tickets).
+   * The looks are in js/figures.js (PLAYERS), in the same order.
    */
-  karakterer: [
-    { id: 'k1', navn: 'Odyssefs', tittel: 'IT-avdelingen', startVaapen: 'avpaa', bonus: { maksEnergi: 20 }, bonusTekst: '+20 maks energi' },
-    { id: 'k2', navn: 'Johannes', tittel: 'IT-avdelingen', startVaapen: 'toner', bonus: { hjelp: 0.10 }, bonusTekst: '+10 % hjelp' },
-    { id: 'k3', navn: 'Jin', tittel: 'IT-avdelingen', startVaapen: 'hdmi', bonus: { fart: 0.10 }, bonusTekst: '+10 % bevegelseshastighet' },
-    { id: 'k4', navn: 'Julian', tittel: 'IT-avdelingen', startVaapen: 'mus', bonus: { plukk: 0.25 }, bonusTekst: '+25 % radius for å plukke opp ticket-lapper' },
+  characters: [
+    { id: 'k1', name: 'Odyssefs', title: 'IT-avdelingen', startWeapon: 'powerCycle', bonus: { maxEnergy: 20 }, bonusText: '+20 maks energi' },
+    { id: 'k2', name: 'Johannes', title: 'IT-avdelingen', startWeapon: 'toner', bonus: { help: 0.10 }, bonusText: '+10 % hjelp' },
+    { id: 'k3', name: 'Jin', title: 'IT-avdelingen', startWeapon: 'hdmi', bonus: { speed: 0.10 }, bonusText: '+10 % bevegelseshastighet' },
+    { id: 'k4', name: 'Julian', title: 'IT-avdelingen', startWeapon: 'mouse', bonus: { pick: 0.25 }, bonusText: '+25 % radius for å plukke opp ticket-lapper' },
   ],
 
-  /** «Haster!»-avsenderen: holder avstand og sender e-poster («Haster!!!») mot spilleren. */
-  avsender: {
-    navn: '«Haster!»-avsender', fra: 150, frustrasjon: 30, fart: 40, radius: 7, skade: 9, poeng: 40,
-    /** Hvor ofte typen velges (andel av vekten til en juniorfullmektig). */
-    vekt: 0.25,
-    /** Tak: maks andel av de aktive advokatene, og maks antall samtidig. */
-    maksAndel: 0.15, maksAntall: 30,
-    /** Prøver å holde seg mellom disse avstandene fra spilleren. */
-    avstandMin: 150, avstandMaks: 200,
-    /** Sekunder mellom hver e-post (blir litt raskere med tiden, men aldri under minimum). */
-    skuddIntervall: 3, skuddRaskerePerMin: 0.04, skuddIntervallMin: 1.8,
-    /** Sekunder med varsel (laptopen lyser og «!» over hodet) før hver e-post. */
-    varsel: 0.5,
+  /** The «Haster!» ("Urgent!") sender: keeps its distance and sends emails («Haster!!!») at the player. */
+  sender: {
+    name: '«Haster!»-avsender', from: 150, frustration: 30, speed: 40, radius: 7, damage: 9, points: 40,
+    /** How often the type is chosen (fraction of the weight of a junior associate). */
+    weight: 0.25,
+    /** Cap: max fraction of the active lawyers, and max number at the same time. */
+    maxFraction: 0.15, maxCount: 30,
+    /** Tries to stay between these distances from the player. */
+    distMin: 150, distMax: 200,
+    /** Seconds between each email (gets a bit faster over time, but never below the minimum). */
+    shotInterval: 3, shotFasterPerMin: 0.04, shotIntervalMin: 1.8,
+    /** Seconds of warning (the laptop lights up and a «!» over the head) before each email. */
+    alert: 0.5,
   },
 
-  /** E-postene («fiendeskudd») fra avsendere og bosser. */
-  fiendeSkudd: {
-    /** Fart (ca. 60 % av spillerens fart, så man kan gå unna). */
-    fart: 57,
-    /** Sekunder før en e-post forsvinner av seg selv. */
-    levetid: 4,
-    /** Treffradius. */
+  /** The emails (enemy shots) from senders and bosses. */
+  enemyShots: {
+    /** Speed (about 60 % of the player's speed, so you can walk away). */
+    speed: 57,
+    /** Seconds before an email disappears on its own. */
+    lifetime: 4,
+    /** Hit radius. */
     radius: 4,
-    /** Maks antall på kartet samtidig. Når taket er nådd, venter avsenderne. */
-    maks: 60,
+    /** Max number on the map at the same time. When the cap is reached, the senders wait. */
+    max: 60,
   },
 
-  /** Bossen sender en vifte med e-poster fra og med denne bossen (3 = den tredje). */
-  bossSkudd: { fraBoss: 3, intervall: 4, antall: 3, spredning: 0.3 },
+  /** The boss sends a fan of emails starting from this boss (3 = the third). */
+  bossShots: { fromBoss: 3, interval: 4, count: 3, spread: 0.3 },
 
-  /** Hvor mange forskjellige utseender hver type har (bare kosmetisk). */
-  figurVarianter: { junior: 42, printer: 42, senior: 42, hastesak: 21, boss: 12, avsender: 42 },
+  /** How many different looks each type has (purely cosmetic). */
+  figureVariants: { junior: 42, printer: 42, senior: 42, urgent: 21, boss: 12, sender: 42 },
 
-  /** Hvordan vanlige advokater blir tøffere med tiden. */
-  skalering: {
-    /** Frustrasjonen ganges med dette for hvert minutt (1.08 = +8 % oppå hverandre). */
-    frustrasjonVekstPerMin: 1.08,
-    /** Økningen i frustrasjon starter etter så mange minutter (rolig start). */
-    startEtterMin: 3,
-    /** Økt skade per minutt (0.06 = +6 %). */
-    skadePerMin: 0.06,
-    /** Økt fart per minutt (0.025 = +2,5 %), så man ikke kan løpe fra alt for alltid. */
-    fartPerMin: 0.025,
-    /** Høyeste fartsøkning (1.55 = +55 %). Juniorene blir aldri raskere enn spilleren. */
-    fartMaks: 1.55,
-    /** Etter dette minuttet («Overtid») øker alt bratt, uten tak. */
-    overtidFraMin: 13,
-    /** I overtid ganges frustrasjon og skade i tillegg med dette for hvert minutt. */
-    overtidVekstPerMin: 1.6,
-    /** I overtid blir advokatene i tillegg så mye raskere per minutt (0.15 = +15 %), uten tak. */
-    overtidFartPerMin: 0.15,
+  /** How ordinary lawyers get tougher over time. */
+  scaling: {
+    /** Frustration is multiplied by this every minute (1.08 = +8 %, compounding). */
+    frustrationGrowthPerMin: 1.08,
+    /** The increase in frustration starts after this many minutes (calm start). */
+    startAfterMin: 3,
+    /** Increased damage per minute (0.06 = +6 %). */
+    damagePerMin: 0.06,
+    /** Increased speed per minute (0.025 = +2.5 %), so you can't outrun everything forever. */
+    speedPerMin: 0.025,
+    /** Highest speed increase (1.55 = +55 %). The juniors never get faster than the player. */
+    speedMax: 1.55,
+    /** After this minute («Overtid», "Overtime") everything rises steeply, with no cap. */
+    overtimeFromMin: 13,
+    /** In overtime, frustration and damage are additionally multiplied by this every minute. */
+    overtimeGrowthPerMin: 1.6,
+    /** In overtime the lawyers additionally get this much faster per minute (0.15 = +15 %), with no cap. */
+    overtimeSpeedPerMin: 0.15,
   },
 
   spawn: {
-    /** Advokater per sekund som [tid i sekunder, antall per sekund]. Mellom punktene glir verdien jevnt. */
+    /** Lawyers per second as [time in seconds, count per second]. Between the points the value glides smoothly. */
     rate: [[0, 0.5], [30, 0.8], [90, 1.7], [300, 5], [600, 13], [900, 22]],
-    /** Økning i advokater per sekund for hvert minutt etter siste punkt. */
-    overtidPerMin: 4,
-    /** Maks antall aktive advokater (fast og likt for alle). */
-    maksSamtidige: 400,
+    /** Increase in lawyers per second for each minute after the last point. */
+    overtimePerMin: 4,
+    /** Max number of active lawyers (fixed and the same for everyone). */
+    maxConcurrent: 400,
     /**
-     * Når taket er nådd, «spares» advokatene som skulle kommet, og de neste blir sterkere i stedet.
-     * styrkePerSpart = ekstra frustrasjon per sparte advokat, maksSpart = tak per advokat.
+     * When the cap is reached, the lawyers that should have come are "saved up", and the next ones become stronger instead.
+     * strengthPerSaved = extra frustration per saved lawyer, maxSaved = cap per lawyer.
      */
-    styrkePerSpart: 0.5, skadePerSpart: 0.2, maksSpart: 4,
-    /** Advokater dukker opp utenfor synsfeltet, mellom disse avstandene fra spilleren. */
-    minAvstand: 380, maksAvstand: 560,
-    /** Aldri nærmere spilleren enn dette (gjelder også dører og heiser). */
-    absoluttMin: 260,
-    /** Antall forsøk på å finne en ledig plass før dører/heiser brukes. */
-    forsoek: 8,
+    strengthPerSaved: 0.5, damagePerSaved: 0.2, maxSaved: 4,
+    /** Lawyers appear outside the field of view, between these distances from the player. */
+    minDistance: 380, maxDistance: 560,
+    /** Never closer to the player than this (also applies to doors and elevators). */
+    absoluteMin: 260,
+    /** Number of attempts to find a free spot before doors/elevators are used. */
+    attempt: 8,
   },
 
-  /** Bølgehendelser: flokk fra én retning eller ring rundt spilleren. */
-  boelger: {
-    forste: 45,
-    intervallMin: 25, intervallMaks: 40,
-    /** Flokk: antall = start + perMin × minutter (maks «maks»). */
-    flokkStart: 10, flokkPerMin: 4, flokkMaks: 60,
-    /** Ring: tidligst fra dette sekundet, og sjansen for at en bølge blir en ring. */
-    ringFra: 120, ringSjanse: 0.4,
-    ringStart: 20, ringPerMin: 3, ringMaks: 60,
+  /** Wave events: a flock from one direction or a ring around the player. */
+  waves: {
+    first: 45,
+    intervalMin: 25, intervalMax: 40,
+    /** Flock: count = start + perMin × minutes (capped at max). */
+    flockStart: 10, flockPerMin: 4, flockMax: 60,
+    /** Ring: from this second at the earliest, and the chance that a wave becomes a ring. */
+    ringFrom: 120, ringChance: 0.4,
+    ringStart: 20, ringPerMin: 3, ringMax: 60,
     ringRadius: 370,
-    /** Åpningen i ringen, i radianer (0.9 ≈ 50 grader). */
-    ringAapning: 0.9,
+    /** The opening in the ring, in radians (0.9 ≈ 50 degrees). */
+    ringGap: 0.9,
   },
 
-  /** Fasene vises som tekst ved bytte. */
-  faser: [
-    { fra: 0, navn: 'Morgenkaffe' },
-    { fra: 90, navn: 'Formiddagen' },
-    { fra: 300, navn: 'Etter lunsj' },
-    { fra: 600, navn: 'Fredag ettermiddag' },
-    { fra: 780, navn: 'Overtid' },
+  /** The phases are shown as text when they change. */
+  phases: [
+    { from: 0, name: 'Morgenkaffe' },
+    { from: 90, name: 'Formiddagen' },
+    { from: 300, name: 'Etter lunsj' },
+    { from: 600, name: 'Fredag ettermiddag' },
+    { from: 780, name: 'Overtid' },
   ],
 
-  lapper: {
-    /** Sekunder en ticket-lapp ligger. */
-    levetid: 10,
-    /** De siste sekundene blinker lappen. */
-    blinkTid: 3,
-    /** Over dette antallet slås nærliggende lapper sammen. */
-    maks: 400,
-    /** Rutestørrelse ved sammenslåing. */
-    slaaSammenCelle: 35,
+  tickets: {
+    /** Seconds a ticket stays on the floor. */
+    lifetime: 10,
+    /** The ticket blinks during the last seconds. */
+    blinkTime: 3,
+    /** Above this count, nearby tickets are merged. */
+    max: 400,
+    /** Grid cell size when merging. */
+    mergeCell: 35,
   },
 
-  /** Erfaring som kreves for neste nivå = base + perNivaa × nivå + kvadrat × nivå². */
-  nivaa: { base: 20, perNivaa: 13, kvadrat: 1.5 },
+  /** Experience required for the next level = base + perLevel × level + square × level². */
+  level: { base: 20, perLevel: 13, square: 1.5 },
 
-  multiplikator: {
+  multiplier: {
     start: 1.0,
-    /** Økning per steg. */
-    steg: 0.1,
-    /** Antall hjulpne advokater uten å bli truffet for hvert steg. */
-    perHjulpne: 25,
-    maks: 5.0,
+    /** Increase per step. */
+    step: 0.1,
+    /** Number of lawyers helped without being hit for each step. */
+    perHelped: 25,
+    max: 5.0,
   },
 
-  /** Poeng for «Kaffepause-bonus» når alt er maksert. */
-  kaffepauseBonus: 500,
+  /** Points for the «Kaffepause-bonus» ("Coffee break bonus") when everything is maxed out. */
+  coffeeBreakBonus: 500,
 
-  /** Maks antall våpen og passive, og maksnivå. */
-  grenser: { vaapen: 4, passiver: 6, vaapenNivaa: 8, passivNivaa: 5 },
+  /** Max number of weapons and passives, and max level. */
+  limits: { weapons: 4, passives: 6, weaponLevel: 8, passiveLevel: 5 },
 
-  /** Maks antall prosjektiler i lufta per våpen (ytelse). */
-  maksProsjektilerPerVaapen: 60,
+  /** Max number of projectiles in the air per weapon (performance). */
+  maxProjectilesPerWeapon: 60,
 
-  /** Glade advokater: smil og tommel opp, så en liten piksel-sky. */
-  glad: {
-    /** Sekunder med smil og tommel opp. */
-    smil: 0.3,
-    /** Total tid før figuren er helt borte. */
-    varighet: 0.5,
-    /** Blir flere enn dette glade samtidig (f.eks. Ny PC), forkortes animasjonen. */
-    mangeSamtidig: 60,
-    /** Forkortet: smil og total tid. */
-    kortSmil: 0.15, kortVarighet: 0.25,
+  /** Happy lawyers: smile and thumbs up, then a small pixel cloud. */
+  happy: {
+    /** Seconds of smile and thumbs up. */
+    smile: 0.3,
+    /** Total time before the figure is completely gone. */
+    duration: 0.5,
+    /** If more than this many become happy at once (e.g. «Ny PC»), the animation is shortened. */
+    manyAtOnce: 60,
+    /** Shortened: smile and total time. */
+    shortSmile: 0.15, shortDuration: 0.25,
   },
 
   /**
-   * VÅPEN. Hver linje i «nivaaer» er de fulle tallene for det nivået (nivå 1 øverst).
-   * hjelp = hvor mye frustrasjon som fjernes per treff, intervall = sekunder mellom aktiveringer,
-   * tekst = det som står på oppgraderingskortet.
+   * WEAPONS. Each line in "levels" holds the full numbers for that level (level 1 at the top).
+   * help = how much frustration is removed per hit, interval = seconds between activations,
+   * text = what is shown on the upgrade card.
    */
-  vaapen: {
-    avpaa: {
-      navn: 'Skru av og på',
-      beskrivelse: 'En puls rundt deg hjelper alle i nærheten.',
-      nivaaer: [
-        { radius: 48, hjelp: 12, intervall: 1.0, tekst: 'En puls rundt deg hjelper alle i nærheten.' },
-        { radius: 55, hjelp: 12, intervall: 1.0, tekst: 'Større radius på pulsen.' },
-        { radius: 55, hjelp: 17, intervall: 1.0, tekst: 'Mer hjelp per puls.' },
-        { radius: 55, hjelp: 17, intervall: 0.85, tekst: 'Kortere tid mellom hver puls.' },
-        { radius: 63, hjelp: 17, intervall: 0.85, tekst: 'Større radius på pulsen.' },
-        { radius: 63, hjelp: 24, intervall: 0.85, tekst: 'Mer hjelp per puls.' },
-        { radius: 63, hjelp: 24, intervall: 0.7, tekst: 'Kortere tid mellom hver puls.' },
-        { radius: 72, hjelp: 32, intervall: 0.7, tekst: 'Større radius og mer hjelp.' },
+  weapons: {
+    powerCycle: {
+      name: 'Skru av og på',
+      description: 'En puls rundt deg hjelper alle i nærheten.',
+      levels: [
+        { radius: 48, help: 12, interval: 1.0, text: 'En puls rundt deg hjelper alle i nærheten.' },
+        { radius: 55, help: 12, interval: 1.0, text: 'Større radius på pulsen.' },
+        { radius: 55, help: 17, interval: 1.0, text: 'Mer hjelp per puls.' },
+        { radius: 55, help: 17, interval: 0.85, text: 'Kortere tid mellom hver puls.' },
+        { radius: 63, help: 17, interval: 0.85, text: 'Større radius på pulsen.' },
+        { radius: 63, help: 24, interval: 0.85, text: 'Mer hjelp per puls.' },
+        { radius: 63, help: 24, interval: 0.7, text: 'Kortere tid mellom hver puls.' },
+        { radius: 72, help: 32, interval: 0.7, text: 'Større radius og mer hjelp.' },
       ],
-      kombinasjon: {
-        passiv: 'ram', navn: 'Full omstart',
-        tekst: 'Mye større puls som går raskere og skyver advokatene tilbake.',
-        /** dytt = hvor langt advokatene skyves per puls. */
-        tall: { radius: 85, hjelp: 20, intervall: 0.65, dytt: 4 },
+      combination: {
+        passive: 'ram', name: 'Full omstart',
+        text: 'Mye større puls som går raskere og skyver advokatene tilbake.',
+        /** nudge = how far the lawyers are pushed per pulse. */
+        stats: { radius: 85, help: 20, interval: 0.65, nudge: 4 },
       },
     },
     toner: {
-      navn: 'Toner-kast',
-      beskrivelse: 'Kaster tonerkassetter i en vifte dit du går. De sprekker og hjelper alle rundt.',
-      nivaaer: [
-        { antall: 3, sprut: 30, hjelp: 18, intervall: 1.2, fart: 190, rekkevidde: 190, spredning: 0.35, tekst: 'Kaster tonerkassetter i en vifte dit du går. De sprekker og hjelper alle rundt.' },
-        { antall: 3, sprut: 30, hjelp: 18, intervall: 1.1, fart: 190, rekkevidde: 190, spredning: 0.35, tekst: 'Kortere tid mellom hvert kast.' },
-        { antall: 3, sprut: 34, hjelp: 18, intervall: 1.1, fart: 190, rekkevidde: 190, spredning: 0.35, tekst: 'Større tonersprut.' },
-        { antall: 3, sprut: 34, hjelp: 24, intervall: 1.1, fart: 190, rekkevidde: 190, spredning: 0.35, tekst: 'Mer hjelp per kassett.' },
-        { antall: 4, sprut: 34, hjelp: 24, intervall: 1.05, fart: 190, rekkevidde: 190, spredning: 0.35, tekst: '+1 tonerkassett per kast.' },
-        { antall: 4, sprut: 39, hjelp: 24, intervall: 1.05, fart: 190, rekkevidde: 190, spredning: 0.35, tekst: 'Større tonersprut.' },
-        { antall: 4, sprut: 39, hjelp: 32, intervall: 1.0, fart: 190, rekkevidde: 190, spredning: 0.35, tekst: 'Mer hjelp per kassett.' },
-        { antall: 5, sprut: 39, hjelp: 36, intervall: 1.0, fart: 190, rekkevidde: 190, spredning: 0.35, tekst: '+1 tonerkassett og mer hjelp.' },
+      name: 'Toner-kast',
+      description: 'Kaster tonerkassetter i en vifte dit du går. De sprekker og hjelper alle rundt.',
+      levels: [
+        { count: 3, splash: 30, help: 18, interval: 1.2, speed: 190, range: 190, spread: 0.35, text: 'Kaster tonerkassetter i en vifte dit du går. De sprekker og hjelper alle rundt.' },
+        { count: 3, splash: 30, help: 18, interval: 1.1, speed: 190, range: 190, spread: 0.35, text: 'Kortere tid mellom hvert kast.' },
+        { count: 3, splash: 34, help: 18, interval: 1.1, speed: 190, range: 190, spread: 0.35, text: 'Større tonersprut.' },
+        { count: 3, splash: 34, help: 24, interval: 1.1, speed: 190, range: 190, spread: 0.35, text: 'Mer hjelp per kassett.' },
+        { count: 4, splash: 34, help: 24, interval: 1.05, speed: 190, range: 190, spread: 0.35, text: '+1 tonerkassett per kast.' },
+        { count: 4, splash: 39, help: 24, interval: 1.05, speed: 190, range: 190, spread: 0.35, text: 'Større tonersprut.' },
+        { count: 4, splash: 39, help: 32, interval: 1.0, speed: 190, range: 190, spread: 0.35, text: 'Mer hjelp per kassett.' },
+        { count: 5, splash: 39, help: 36, interval: 1.0, speed: 190, range: 190, spread: 0.35, text: '+1 tonerkassett og mer hjelp.' },
       ],
-      kombinasjon: {
-        passiv: 'papir', navn: 'Kontorprinteren fra helvete',
-        tekst: 'Kaster tonerkassetter i alle retninger samtidig, med stor sprut.',
-        tall: { antall: 8, sprut: 38, hjelp: 24, intervall: 1.4, fart: 200, rekkevidde: 210, spredning: 0 },
+      combination: {
+        passive: 'paperTray', name: 'Kontorprinteren fra helvete',
+        text: 'Kaster tonerkassetter i alle retninger samtidig, med stor sprut.',
+        stats: { count: 8, splash: 38, help: 24, interval: 1.4, speed: 200, range: 210, spread: 0 },
       },
     },
-    passord: {
-      navn: 'Passord-reset',
-      beskrivelse: 'Nøkler flyr rett fram dit du går, gjennom flere advokater.',
-      nivaaer: [
-        { antall: 1, gjennom: 3, hjelp: 11, intervall: 1.0, fart: 280, rekkevidde: 310, tekst: 'Nøkler flyr rett fram dit du går, gjennom flere advokater.' },
-        { antall: 2, gjennom: 3, hjelp: 11, intervall: 1.0, fart: 280, rekkevidde: 310, tekst: '+1 nøkkel.' },
-        { antall: 2, gjennom: 5, hjelp: 11, intervall: 1.0, fart: 280, rekkevidde: 310, tekst: 'Nøklene går gjennom 2 flere advokater.' },
-        { antall: 2, gjennom: 5, hjelp: 15, intervall: 1.0, fart: 340, rekkevidde: 330, tekst: 'Raskere nøkler og mer hjelp.' },
-        { antall: 3, gjennom: 5, hjelp: 15, intervall: 0.95, fart: 340, rekkevidde: 330, tekst: '+1 nøkkel.' },
-        { antall: 3, gjennom: 8, hjelp: 15, intervall: 0.95, fart: 340, rekkevidde: 330, tekst: 'Nøklene går gjennom 3 flere advokater.' },
-        { antall: 3, gjennom: 8, hjelp: 21, intervall: 0.9, fart: 390, rekkevidde: 350, tekst: 'Raskere nøkler og mer hjelp.' },
-        { antall: 4, gjennom: 10, hjelp: 26, intervall: 0.85, fart: 390, rekkevidde: 350, tekst: '+1 nøkkel og mer hjelp.' },
+    password: {
+      name: 'Passord-reset',
+      description: 'Nøkler flyr rett fram dit du går, gjennom flere advokater.',
+      levels: [
+        { count: 1, through: 3, help: 11, interval: 1.0, speed: 280, range: 310, text: 'Nøkler flyr rett fram dit du går, gjennom flere advokater.' },
+        { count: 2, through: 3, help: 11, interval: 1.0, speed: 280, range: 310, text: '+1 nøkkel.' },
+        { count: 2, through: 5, help: 11, interval: 1.0, speed: 280, range: 310, text: 'Nøklene går gjennom 2 flere advokater.' },
+        { count: 2, through: 5, help: 15, interval: 1.0, speed: 340, range: 330, text: 'Raskere nøkler og mer hjelp.' },
+        { count: 3, through: 5, help: 15, interval: 0.95, speed: 340, range: 330, text: '+1 nøkkel.' },
+        { count: 3, through: 8, help: 15, interval: 0.95, speed: 340, range: 330, text: 'Nøklene går gjennom 3 flere advokater.' },
+        { count: 3, through: 8, help: 21, interval: 0.9, speed: 390, range: 350, text: 'Raskere nøkler og mer hjelp.' },
+        { count: 4, through: 10, help: 26, interval: 0.85, speed: 390, range: 350, text: '+1 nøkkel og mer hjelp.' },
       ],
-      kombinasjon: {
-        passiv: 'ssd', navn: 'Tofaktor',
-        tekst: 'Dobbelt så mange nøkler, og de stopper aldri før de forlater skjermen.',
-        /** gjennom: 99999 = stopper aldri. antall er allerede doblet. */
-        tall: { antall: 6, gjennom: 99999, hjelp: 30, intervall: 0.9, fart: 410, rekkevidde: 9999 },
+      combination: {
+        passive: 'ssd', name: 'Tofaktor',
+        text: 'Dobbelt så mange nøkler, og de stopper aldri før de forlater skjermen.',
+        /** through: 99999 = never stops. count has already been doubled. */
+        stats: { count: 6, through: 99999, help: 30, interval: 0.9, speed: 410, range: 9999 },
       },
     },
     hdmi: {
-      navn: 'HDMI-kabelen',
-      beskrivelse: 'En kabel svinges i en bue foran deg og hjelper alle den treffer.',
-      nivaaer: [
-        /** bue = buens bredde i radianer (2.1 ≈ 120 grader). bak = svinges også bak. */
-        { lengde: 54, hjelp: 22, intervall: 1.0, bue: 2.4, bak: false, tekst: 'En kabel svinges i en bue foran deg og hjelper alle den treffer.' },
-        { lengde: 58, hjelp: 22, intervall: 1.0, bue: 2.4, bak: false, tekst: 'Lengre kabel.' },
-        { lengde: 58, hjelp: 26, intervall: 1.25, bue: 2.1, bak: false, tekst: 'Mer hjelp per sving.' },
-        { lengde: 58, hjelp: 26, intervall: 1.25, bue: 2.1, bak: true, tekst: 'Kabelen svinges både foran og bak.' },
-        { lengde: 58, hjelp: 26, intervall: 1.05, bue: 2.1, bak: true, tekst: 'Kortere tid mellom hver sving.' },
-        { lengde: 68, hjelp: 26, intervall: 1.05, bue: 2.1, bak: true, tekst: 'Lengre kabel.' },
-        { lengde: 68, hjelp: 38, intervall: 1.05, bue: 2.1, bak: true, tekst: 'Mer hjelp per sving.' },
-        { lengde: 78, hjelp: 48, intervall: 0.9, bue: 2.1, bak: true, tekst: 'Lengre kabel, mer hjelp og raskere sving.' },
+      name: 'HDMI-kabelen',
+      description: 'En kabel svinges i en bue foran deg og hjelper alle den treffer.',
+      levels: [
+        /** arc = width of the arc in radians (2.1 ≈ 120 degrees). back = also swings backward. */
+        { lengthPx: 54, help: 22, interval: 1.0, arc: 2.4, back: false, text: 'En kabel svinges i en bue foran deg og hjelper alle den treffer.' },
+        { lengthPx: 58, help: 22, interval: 1.0, arc: 2.4, back: false, text: 'Lengre kabel.' },
+        { lengthPx: 58, help: 26, interval: 1.25, arc: 2.1, back: false, text: 'Mer hjelp per sving.' },
+        { lengthPx: 58, help: 26, interval: 1.25, arc: 2.1, back: true, text: 'Kabelen svinges både foran og bak.' },
+        { lengthPx: 58, help: 26, interval: 1.05, arc: 2.1, back: true, text: 'Kortere tid mellom hver sving.' },
+        { lengthPx: 68, help: 26, interval: 1.05, arc: 2.1, back: true, text: 'Lengre kabel.' },
+        { lengthPx: 68, help: 38, interval: 1.05, arc: 2.1, back: true, text: 'Mer hjelp per sving.' },
+        { lengthPx: 78, help: 48, interval: 0.9, arc: 2.1, back: true, text: 'Lengre kabel, mer hjelp og raskere sving.' },
       ],
-      kombinasjon: {
-        passiv: 'skjote', navn: 'Kabelkaos',
-        tekst: 'Kabelen svinges i en full sirkel rundt deg.',
-        tall: { lengde: 88, hjelp: 30, intervall: 0.9, bue: 6.2832, bak: true },
+      combination: {
+        passive: 'extensionCord', name: 'Kabelkaos',
+        text: 'Kabelen svinges i en full sirkel rundt deg.',
+        stats: { lengthPx: 88, help: 30, interval: 0.9, arc: 6.2832, back: true },
       },
     },
-    fjern: {
-      navn: 'Fjernstyring',
-      beskrivelse: 'Tilfeldige advokater på skjermen får hjelp via et glimt ovenfra.',
-      nivaaer: [
-        { treff: 1, hjelp: 24, intervall: 1.6, tekst: 'Tilfeldige advokater på skjermen får hjelp via et glimt ovenfra.' },
-        { treff: 2, hjelp: 24, intervall: 1.6, tekst: '+1 treff per gang.' },
-        { treff: 2, hjelp: 34, intervall: 1.6, tekst: 'Mer hjelp per treff.' },
-        { treff: 2, hjelp: 34, intervall: 1.35, tekst: 'Kortere tid mellom hver gang.' },
-        { treff: 3, hjelp: 34, intervall: 1.35, tekst: '+1 treff per gang.' },
-        { treff: 3, hjelp: 46, intervall: 1.35, tekst: 'Mer hjelp per treff.' },
-        { treff: 4, hjelp: 46, intervall: 1.15, tekst: '+1 treff og kortere intervall.' },
-        { treff: 6, hjelp: 60, intervall: 1.15, tekst: '+2 treff og mer hjelp.' },
+    remote: {
+      name: 'Fjernstyring',
+      description: 'Tilfeldige advokater på skjermen får hjelp via et glimt ovenfra.',
+      levels: [
+        { hits: 1, help: 24, interval: 1.6, text: 'Tilfeldige advokater på skjermen får hjelp via et glimt ovenfra.' },
+        { hits: 2, help: 24, interval: 1.6, text: '+1 treff per gang.' },
+        { hits: 2, help: 34, interval: 1.6, text: 'Mer hjelp per treff.' },
+        { hits: 2, help: 34, interval: 1.35, text: 'Kortere tid mellom hver gang.' },
+        { hits: 3, help: 34, interval: 1.35, text: '+1 treff per gang.' },
+        { hits: 3, help: 46, interval: 1.35, text: 'Mer hjelp per treff.' },
+        { hits: 4, help: 46, interval: 1.15, text: '+1 treff og kortere intervall.' },
+        { hits: 6, help: 60, interval: 1.15, text: '+2 treff og mer hjelp.' },
       ],
-      kombinasjon: {
-        passiv: 'admin', navn: 'Domene-admin',
-        tekst: 'Treffer mange advokater samtidig, med kort intervall.',
-        tall: { treff: 9, hjelp: 60, intervall: 0.9 },
+      combination: {
+        passive: 'admin', name: 'Domene-admin',
+        text: 'Treffer mange advokater samtidig, med kort intervall.',
+        stats: { hits: 9, help: 60, interval: 0.9 },
       },
     },
-    mus: {
-      navn: 'Trådløse mus',
-      beskrivelse: 'Mus kretser i en bane rundt deg og hjelper alle de treffer.',
-      nivaaer: [
-        /** bane = avstand fra spilleren, rotasjon = radianer per sekund, treffPause = sek før samme advokat kan treffes igjen. */
-        { antall: 3, bane: 40, rotasjon: 3.0, hjelp: 13, treffPause: 0.45, tekst: 'Mus kretser i en bane rundt deg og hjelper alle de treffer.' },
-        { antall: 3, bane: 48, rotasjon: 3.0, hjelp: 13, treffPause: 0.45, tekst: 'Større bane.' },
-        { antall: 3, bane: 55, rotasjon: 2.6, hjelp: 9, treffPause: 0.45, tekst: 'Større bane.' },
-        { antall: 3, bane: 55, rotasjon: 3.3, hjelp: 9, treffPause: 0.45, tekst: 'Raskere rotasjon.' },
-        { antall: 4, bane: 55, rotasjon: 3.3, hjelp: 12, treffPause: 0.45, tekst: '+1 mus og mer hjelp.' },
-        { antall: 4, bane: 62, rotasjon: 3.3, hjelp: 12, treffPause: 0.45, tekst: 'Større bane.' },
-        { antall: 4, bane: 62, rotasjon: 4.0, hjelp: 15, treffPause: 0.45, tekst: 'Raskere rotasjon og mer hjelp.' },
-        { antall: 6, bane: 62, rotasjon: 4.0, hjelp: 19, treffPause: 0.45, tekst: '+2 mus og mer hjelp.' },
+    mouse: {
+      name: 'Trådløse mus',
+      description: 'Mus kretser i en bane rundt deg og hjelper alle de treffer.',
+      levels: [
+        /** track = distance from the player, rotation = radians per second, hitPause = seconds before the same lawyer can be hit again. */
+        { count: 3, track: 40, rotation: 3.0, help: 13, hitPause: 0.45, text: 'Mus kretser i en bane rundt deg og hjelper alle de treffer.' },
+        { count: 3, track: 48, rotation: 3.0, help: 13, hitPause: 0.45, text: 'Større bane.' },
+        { count: 3, track: 55, rotation: 2.6, help: 9, hitPause: 0.45, text: 'Større bane.' },
+        { count: 3, track: 55, rotation: 3.3, help: 9, hitPause: 0.45, text: 'Raskere rotasjon.' },
+        { count: 4, track: 55, rotation: 3.3, help: 12, hitPause: 0.45, text: '+1 mus og mer hjelp.' },
+        { count: 4, track: 62, rotation: 3.3, help: 12, hitPause: 0.45, text: 'Større bane.' },
+        { count: 4, track: 62, rotation: 4.0, help: 15, hitPause: 0.45, text: 'Raskere rotasjon og mer hjelp.' },
+        { count: 6, track: 62, rotation: 4.0, help: 19, hitPause: 0.45, text: '+2 mus og mer hjelp.' },
       ],
-      kombinasjon: {
-        passiv: 'batteri', navn: 'Musematta',
-        tekst: 'Musene suser så fort at de danner en nesten sammenhengende ring.',
-        tall: { antall: 10, bane: 66, rotasjon: 6.5, hjelp: 21, treffPause: 0.3 },
+      combination: {
+        passive: 'batteries', name: 'Musematta',
+        text: 'Musene suser så fort at de danner en nesten sammenhengende ring.',
+        stats: { count: 10, track: 66, rotation: 6.5, help: 21, hitPause: 0.3 },
       },
     },
   },
 
-  /** De fire nye IT-løsningene (lagt til i versjon 3). Samme oppbygning som våpnene over. */
-  nyeVaapen: {
+  /** The four new IT solutions (added in version 3). Same structure as the weapons above. */
+  newWeapons: {
     ctrlz: {
-      navn: 'Ctrl+Z',
-      beskrivelse: 'En stor Ctrl+Z-tast kastes mot nærmeste advokat og kommer tilbake.',
-      nivaaer: [
-        /** rekkevidde = hvor langt tasten flyr før den snur. */
-        { antall: 1, rekkevidde: 110, hjelp: 16, intervall: 1.6, fart: 220, tekst: 'En stor Ctrl+Z-tast kastes mot nærmeste advokat og kommer tilbake.' },
-        { antall: 1, rekkevidde: 125, hjelp: 16, intervall: 1.5, fart: 220, tekst: 'Lengre rekkevidde.' },
-        { antall: 2, rekkevidde: 125, hjelp: 16, intervall: 1.5, fart: 220, tekst: '+1 tast.' },
-        { antall: 2, rekkevidde: 140, hjelp: 22, intervall: 1.4, fart: 220, tekst: 'Lengre rekkevidde og mer hjelp.' },
-        { antall: 2, rekkevidde: 140, hjelp: 22, intervall: 1.3, fart: 230, tekst: 'Kortere tid mellom hvert kast.' },
-        { antall: 3, rekkevidde: 150, hjelp: 22, intervall: 1.3, fart: 230, tekst: '+1 tast.' },
-        { antall: 3, rekkevidde: 160, hjelp: 24, intervall: 1.2, fart: 240, tekst: 'Mer hjelp og lengre rekkevidde.' },
-        { antall: 3, rekkevidde: 170, hjelp: 28, intervall: 1.1, fart: 250, tekst: 'Mer hjelp, raskere kast.' },
+      name: 'Ctrl+Z',
+      description: 'En stor Ctrl+Z-tast kastes mot nærmeste advokat og kommer tilbake.',
+      levels: [
+        /** range = how far the key flies before it turns around. */
+        { count: 1, range: 110, help: 16, interval: 1.6, speed: 220, text: 'En stor Ctrl+Z-tast kastes mot nærmeste advokat og kommer tilbake.' },
+        { count: 1, range: 125, help: 16, interval: 1.5, speed: 220, text: 'Lengre rekkevidde.' },
+        { count: 2, range: 125, help: 16, interval: 1.5, speed: 220, text: '+1 tast.' },
+        { count: 2, range: 140, help: 22, interval: 1.4, speed: 220, text: 'Lengre rekkevidde og mer hjelp.' },
+        { count: 2, range: 140, help: 22, interval: 1.3, speed: 230, text: 'Kortere tid mellom hvert kast.' },
+        { count: 3, range: 150, help: 22, interval: 1.3, speed: 230, text: '+1 tast.' },
+        { count: 3, range: 160, help: 24, interval: 1.2, speed: 240, text: 'Mer hjelp og lengre rekkevidde.' },
+        { count: 3, range: 170, help: 28, interval: 1.1, speed: 250, text: 'Mer hjelp, raskere kast.' },
       ],
-      kombinasjon: {
-        passiv: 'hurtigtaster', navn: 'Ctrl+Alt+Del',
-        tekst: 'Flere taster går i en spiral ut og inn rundt deg.',
-        /** radius = hvor langt ut spiralen går, periode = sekunder ut og inn, rotasjon = radianer per sekund. */
-        tall: { antall: 5, radius: 100, periode: 2.4, rotasjon: 3, hjelp: 30, treffPause: 0.4 },
+      combination: {
+        passive: 'shortcuts', name: 'Ctrl+Alt+Del',
+        text: 'Flere taster går i en spiral ut og inn rundt deg.',
+        /** radius = how far out the spiral goes, period = seconds out and in, rotation = radians per second. */
+        stats: { count: 5, radius: 100, period: 2.4, rotation: 3, help: 30, hitPause: 0.4 },
       },
     },
-    straale: {
-      navn: 'Oppdateringsstrålen',
-      beskrivelse: 'En lang fremdriftsindikator skyter ut som en stråle dit du går.',
-      nivaaer: [
-        /** hjelp gis hvert «tikk» sekund mens strålen varer. pause = tid mellom hver stråle. */
-        { lengde: 140, bredde: 10, varighet: 1.0, pause: 2.6, hjelp: 11, tikk: 0.2, tekst: 'En lang fremdriftsindikator skyter ut som en stråle dit du går.' },
-        { lengde: 155, bredde: 10, varighet: 1.0, pause: 2.5, hjelp: 12, tikk: 0.2, tekst: 'Lengre stråle.' },
-        { lengde: 155, bredde: 12, varighet: 1.1, pause: 2.4, hjelp: 12, tikk: 0.2, tekst: 'Bredere stråle som varer lenger.' },
-        { lengde: 170, bredde: 12, varighet: 1.1, pause: 2.2, hjelp: 15, tikk: 0.2, tekst: 'Lengre stråle og mer hjelp.' },
-        { lengde: 170, bredde: 14, varighet: 1.2, pause: 2.0, hjelp: 16, tikk: 0.2, tekst: 'Bredere stråle, kortere pause.' },
-        { lengde: 190, bredde: 14, varighet: 1.3, pause: 1.8, hjelp: 18, tikk: 0.2, tekst: 'Lengre stråle som varer lenger.' },
-        { lengde: 200, bredde: 16, varighet: 1.4, pause: 1.6, hjelp: 21, tikk: 0.2, tekst: 'Bredere stråle og mer hjelp.' },
-        { lengde: 220, bredde: 18, varighet: 1.5, pause: 1.4, hjelp: 24, tikk: 0.2, tekst: 'Lengst og bredest, kortest pause.' },
+    beam: {
+      name: 'Oppdateringsstrålen',
+      description: 'En lang fremdriftsindikator skyter ut som en stråle dit du går.',
+      levels: [
+        /** help is given every "tick" seconds while the beam lasts. pause = time between each beam. */
+        { lengthPx: 140, width: 10, duration: 1.0, pause: 2.6, help: 11, tick: 0.2, text: 'En lang fremdriftsindikator skyter ut som en stråle dit du går.' },
+        { lengthPx: 155, width: 10, duration: 1.0, pause: 2.5, help: 12, tick: 0.2, text: 'Lengre stråle.' },
+        { lengthPx: 155, width: 12, duration: 1.1, pause: 2.4, help: 12, tick: 0.2, text: 'Bredere stråle som varer lenger.' },
+        { lengthPx: 170, width: 12, duration: 1.1, pause: 2.2, help: 15, tick: 0.2, text: 'Lengre stråle og mer hjelp.' },
+        { lengthPx: 170, width: 14, duration: 1.2, pause: 2.0, help: 16, tick: 0.2, text: 'Bredere stråle, kortere pause.' },
+        { lengthPx: 190, width: 14, duration: 1.3, pause: 1.8, help: 18, tick: 0.2, text: 'Lengre stråle som varer lenger.' },
+        { lengthPx: 200, width: 16, duration: 1.4, pause: 1.6, help: 21, tick: 0.2, text: 'Bredere stråle og mer hjelp.' },
+        { lengthPx: 220, width: 18, duration: 1.5, pause: 1.4, help: 24, tick: 0.2, text: 'Lengst og bredest, kortest pause.' },
       ],
-      kombinasjon: {
-        passiv: 'sertifisering', navn: 'Tvungen oppdatering',
-        tekst: 'To stråler sveiper sakte rundt deg hele tiden.',
-        tall: { lengde: 200, bredde: 18, rotasjon: 0.9, hjelp: 14, tikk: 0.2 },
+      combination: {
+        passive: 'certification', name: 'Tvungen oppdatering',
+        text: 'To stråler sveiper sakte rundt deg hele tiden.',
+        stats: { lengthPx: 200, width: 18, rotation: 0.9, help: 14, tick: 0.2 },
       },
     },
     teams: {
-      navn: 'Teams-varsel',
-      beskrivelse: 'Et Teams-varsel flyr til nærmeste advokat og spretter videre.',
-      nivaaer: [
-        /** sprett = hvor mange advokater varselet treffer, rekkevidde = maks avstand mellom hvert sprett. */
-        { sprett: 2, hjelp: 18, intervall: 1.5, rekkevidde: 90, fart: 260, tekst: 'Et Teams-varsel flyr til nærmeste advokat og spretter videre.' },
-        { sprett: 3, hjelp: 18, intervall: 1.5, rekkevidde: 90, fart: 260, tekst: '+1 sprett.' },
-        { sprett: 3, hjelp: 24, intervall: 1.4, rekkevidde: 90, fart: 260, tekst: 'Mer hjelp per treff.' },
-        { sprett: 4, hjelp: 24, intervall: 1.3, rekkevidde: 95, fart: 270, tekst: '+1 sprett og kortere intervall.' },
-        { sprett: 4, hjelp: 30, intervall: 1.2, rekkevidde: 95, fart: 270, tekst: 'Mer hjelp, kortere intervall.' },
-        { sprett: 5, hjelp: 30, intervall: 1.1, rekkevidde: 100, fart: 280, tekst: '+1 sprett.' },
-        { sprett: 5, hjelp: 36, intervall: 1.0, rekkevidde: 100, fart: 280, tekst: 'Mer hjelp, kortere intervall.' },
-        { sprett: 6, hjelp: 40, intervall: 0.9, rekkevidde: 105, fart: 290, tekst: '+1 sprett og mer hjelp.' },
+      name: 'Teams-varsel',
+      description: 'Et Teams-varsel flyr til nærmeste advokat og spretter videre.',
+      levels: [
+        /** bounces = how many lawyers the alert hits, range = max distance between each bounce. */
+        { bounces: 2, help: 18, interval: 1.5, range: 90, speed: 260, text: 'Et Teams-varsel flyr til nærmeste advokat og spretter videre.' },
+        { bounces: 3, help: 18, interval: 1.5, range: 90, speed: 260, text: '+1 sprett.' },
+        { bounces: 3, help: 24, interval: 1.4, range: 90, speed: 260, text: 'Mer hjelp per treff.' },
+        { bounces: 4, help: 24, interval: 1.3, range: 95, speed: 270, text: '+1 sprett og kortere intervall.' },
+        { bounces: 4, help: 30, interval: 1.2, range: 95, speed: 270, text: 'Mer hjelp, kortere intervall.' },
+        { bounces: 5, help: 30, interval: 1.1, range: 100, speed: 280, text: '+1 sprett.' },
+        { bounces: 5, help: 36, interval: 1.0, range: 100, speed: 280, text: 'Mer hjelp, kortere intervall.' },
+        { bounces: 6, help: 40, interval: 0.9, range: 105, speed: 290, text: '+1 sprett og mer hjelp.' },
       ],
-      kombinasjon: {
-        passiv: 'dobbelSkjerm', navn: 'Allmøte på Teams',
-        tekst: 'Varslet deler seg i to ved hvert sprett.',
-        /** maksTreff = tak på antall treff per varsel (alle grener til sammen). */
-        tall: { sprett: 4, hjelp: 38, intervall: 1.0, rekkevidde: 100, fart: 290, maksTreff: 24 },
+      combination: {
+        passive: 'dualMonitor', name: 'Allmøte på Teams',
+        text: 'Varslet deler seg i to ved hvert sprett.',
+        /** maxHits = cap on the number of hits per alert (all branches combined). */
+        stats: { bounces: 4, help: 38, interval: 1.0, range: 100, speed: 290, maxHits: 24 },
       },
     },
     headset: {
-      navn: 'Støydempende headset',
-      beskrivelse: 'Et skjold som blokkerer ett treff og sender ut en puls. Lades opp igjen.',
-      nivaaer: [
-        /** lading = sekunder før skjoldet er klart igjen, ladninger = treff det tåler før lading. */
-        { lading: 20, pulsRadius: 50, hjelp: 30, ladninger: 1, tekst: 'Et skjold som blokkerer ett treff og sender ut en puls. Lades opp igjen.' },
-        { lading: 18.5, pulsRadius: 55, hjelp: 35, ladninger: 1, tekst: 'Raskere oppladning, større puls.' },
-        { lading: 17, pulsRadius: 60, hjelp: 40, ladninger: 1, tekst: 'Raskere oppladning, mer hjelp.' },
-        { lading: 15, pulsRadius: 65, hjelp: 45, ladninger: 1, tekst: 'Raskere oppladning.' },
-        { lading: 13.5, pulsRadius: 70, hjelp: 52, ladninger: 1, tekst: 'Større puls og mer hjelp.' },
-        { lading: 12, pulsRadius: 75, hjelp: 60, ladninger: 1, tekst: 'Raskere oppladning.' },
-        { lading: 10, pulsRadius: 82, hjelp: 70, ladninger: 1, tekst: 'Raskere oppladning, større puls.' },
-        { lading: 8, pulsRadius: 90, hjelp: 80, ladninger: 1, tekst: 'Lades på 8 sekunder.' },
+      name: 'Støydempende headset',
+      description: 'Et skjold som blokkerer ett treff og sender ut en puls. Lades opp igjen.',
+      levels: [
+        /** charge = seconds before the shield is ready again, charges = hits it can take before recharging. */
+        { charge: 20, pulseRadius: 50, help: 30, charges: 1, text: 'Et skjold som blokkerer ett treff og sender ut en puls. Lades opp igjen.' },
+        { charge: 18.5, pulseRadius: 55, help: 35, charges: 1, text: 'Raskere oppladning, større puls.' },
+        { charge: 17, pulseRadius: 60, help: 40, charges: 1, text: 'Raskere oppladning, mer hjelp.' },
+        { charge: 15, pulseRadius: 65, help: 45, charges: 1, text: 'Raskere oppladning.' },
+        { charge: 13.5, pulseRadius: 70, help: 52, charges: 1, text: 'Større puls og mer hjelp.' },
+        { charge: 12, pulseRadius: 75, help: 60, charges: 1, text: 'Raskere oppladning.' },
+        { charge: 10, pulseRadius: 82, help: 70, charges: 1, text: 'Raskere oppladning, større puls.' },
+        { charge: 8, pulseRadius: 90, help: 80, charges: 1, text: 'Lades på 8 sekunder.' },
       ],
-      kombinasjon: {
-        passiv: 'ergonomisk', navn: 'Hjemmekontor',
-        tekst: 'Skjoldet blokkerer to treff før det må lades, og pulsen blir mye større.',
-        tall: { lading: 9, pulsRadius: 130, hjelp: 80, ladninger: 2 },
+      combination: {
+        passive: 'ergonomicChair', name: 'Hjemmekontor',
+        text: 'Skjoldet blokkerer to treff før det må lades, og pulsen blir mye større.',
+        stats: { charge: 9, pulseRadius: 130, help: 80, charges: 2 },
       },
     },
   },
 
-  /** De fire nye passive (lagt til i versjon 3). */
-  nyePassiver: {
-    dobbelSkjerm: { navn: 'Dobbel skjerm', verdi: 0.05, tekst: '+5 % sjanse for at et våpen aktiveres to ganger på rad.' },
-    hurtigtaster: { navn: 'Hurtigtaster', verdi: 0.12, tekst: '+12 % fart på prosjektiler, bumeranger og kjeder.' },
-    ergonomisk: { navn: 'Ergonomisk stol', verdi: 0.06, tekst: '−6 % skade fra treff.' },
-    sertifisering: { navn: 'Sertifisering', verdi: 0.08, tekst: '+8 % erfaring fra ticket-lapper.' },
+  /** The four new passives (added in version 3). */
+  newPassives: {
+    dualMonitor: { name: 'Dobbel skjerm', value: 0.05, text: '+5 % sjanse for at et våpen aktiveres to ganger på rad.' },
+    shortcuts: { name: 'Hurtigtaster', value: 0.12, text: '+12 % fart på prosjektiler, bumeranger og kjeder.' },
+    ergonomicChair: { name: 'Ergonomisk stol', value: 0.06, text: '−6 % skade fra treff.' },
+    certification: { name: 'Sertifisering', value: 0.08, text: '+8 % erfaring fra ticket-lapper.' },
   },
 
   /**
-   * PASSIVE. «verdi» er effekten per nivå (0.10 = 10 %).
-   * nivaaTekst (valgfri) gir egen korttekst per nivå.
+   * PASSIVES. "value" is the effect per level (0.10 = 10 %).
+   * levelText (optional) gives a separate card text per level.
    */
-  passiver: {
-    ram: { navn: 'Ekstra RAM', verdi: 0.10, tekst: '+10 % større område på alle våpen.' },
-    papir: {
-      navn: 'Papirskuff', verdi: 0.05, tekst: '+5 % hjelp på alle våpen.',
-      /** Nivåene som gir +1 prosjektil (Toner-kast og Passord-reset). De andre gir +verdi hjelp. */
-      prosjektilNivaaer: [2, 4],
-      nivaaTekst: ['+5 % hjelp på alle våpen.', '+1 prosjektil (Toner-kast og Passord-reset).', '+5 % hjelp på alle våpen.', '+1 prosjektil (Toner-kast og Passord-reset).', '+5 % hjelp på alle våpen.'],
+  passives: {
+    ram: { name: 'Ekstra RAM', value: 0.10, text: '+10 % større område på alle våpen.' },
+    paperTray: {
+      name: 'Papirskuff', value: 0.05, text: '+5 % hjelp på alle våpen.',
+      /** The levels that give +1 projectile (Toner-kast and Passord-reset). The others give +value help. */
+      projectileLevels: [2, 4],
+      levelText: ['+5 % hjelp på alle våpen.', '+1 prosjektil (Toner-kast og Passord-reset).', '+5 % hjelp på alle våpen.', '+1 prosjektil (Toner-kast og Passord-reset).', '+5 % hjelp på alle våpen.'],
     },
-    batteri: { navn: 'Nye batterier', verdi: 0.10, tekst: '+10 % varighet og hastighet på våpen.' },
-    ssd: { navn: 'Raskere SSD', verdi: 0.08, tekst: '−8 % tid mellom hver aktivering av våpen.' },
-    joggesko: { navn: 'Joggesko', verdi: 0.08, tekst: '+8 % bevegelseshastighet.' },
-    boks: { navn: 'Større boks', verdi: 20, tekst: '+20 maks energi og fyller opp 20 energi.' },
-    skjote: { navn: 'Lang skjøteledning', verdi: 0.25, tekst: '+25 % større radius for å plukke opp ticket-lapper.' },
-    admin: { navn: 'Admin-rettigheter', verdi: 0.10, tekst: '+10 % hjelp på alle våpen.' },
+    batteries: { name: 'Nye batterier', value: 0.10, text: '+10 % varighet og hastighet på våpen.' },
+    ssd: { name: 'Raskere SSD', value: 0.08, text: '−8 % tid mellom hver aktivering av våpen.' },
+    sneakers: { name: 'Joggesko', value: 0.08, text: '+8 % bevegelseshastighet.' },
+    biggerCan: { name: 'Større boks', value: 20, text: '+20 maks energi og fyller opp 20 energi.' },
+    extensionCord: { name: 'Lang skjøteledning', value: 0.25, text: '+25 % større radius for å plukke opp ticket-lapper.' },
+    admin: { name: 'Admin-rettigheter', value: 0.10, text: '+10 % hjelp på alle våpen.' },
   },
 
-  /** Snakkebobler (maks 3 samtidig). */
-  bobler: [
+  /** Speech bubbles (max 3 at a time). */
+  bubbles: [
     'Hvor er Teams-lenka?', 'Skjermen er svart!', 'Printeren virker ikke!', 'Jeg har glemt passordet',
     'Det funket i går!', 'Jeg rørte ingenting!', 'Har du to minutter?', 'Musa har hengt seg!',
     'Hvor ble filen av?', 'Jeg har møte nå!', 'Wi-Fi-en er treg!', 'Den bare piper!',
   ],
 
-  /** Skjerm og HUD (bare utseende – påvirker aldri spillet). */
-  grensesnitt: {
-    /** Faktor for hver UI-størrelse i innstillingene. */
-    uiStoerrelser: { liten: 0.8, middels: 1, stor: 1.25, ekstraStor: 1.5 },
-    /** Minikartets bredde som andel av skjermbredden. */
-    minikart: { liten: 0.14, stor: 0.22, oppdateringerPerSekund: 10 },
-    /** Energibaren skal være minst så stor andel av skjermbredden. */
-    energiBredde: 0.25,
-    /** Energibaren blinker rødt under denne andelen. */
-    energiLav: 0.25,
+  /** Screen and HUD (looks only – never affects the game). */
+  display: {
+    /** Factor for each UI size in the settings. */
+    uiSizes: { small: 0.8, medium: 1, large: 1.25, extraLarge: 1.5 },
+    /** Width of the minimap as a fraction of the screen width. */
+    minimap: { small: 0.14, large: 0.22, updatesPerSecond: 10 },
+    /** The energy bar should be at least this large a fraction of the screen width. */
+    energyWidth: 0.25,
+    /** The energy bar flashes red below this fraction. */
+    energyLow: 0.25,
   },
 
-  /** Automatisk kvalitet: skrur ned rene visuelle effekter når maskinen sliter. Påvirker aldri spillogikken. */
-  kvalitet: {
-    /** Gjennomsnittlig tid per bilde (ms) som regnes som «for tregt». */
-    grenseMs: 16.5,
-    /** Sekunder med for treg tid før kvaliteten senkes, og sekunder med god tid før den økes igjen. */
-    nedEtter: 1.5, oppEtter: 8,
+  /** Automatic quality: turns down purely visual effects when the machine is struggling. Never affects the game logic. */
+  quality: {
+    /** Average time per frame (ms) that counts as "too slow". */
+    limitMs: 16.5,
+    /** Seconds of too-slow time before the quality is lowered, and seconds of good time before it is raised again. */
+    downAfter: 1.5, upAfter: 8,
   },
 
-  /** Grenser som toppliste-serveren bruker for å avvise urealistiske innsendinger. */
-  toppliste: {
-    maksNavn: 20,
-    /** Maks poeng per overlevd sekund (romslig). */
-    maksPoengPerSekund: 5000,
-    /** Maks hjulpne advokater per overlevd sekund. */
-    maksHjulpnePerSekund: 50,
-    /** Maks innsendinger per minutt fra samme adresse (romslig, i tilfelle hele huset deler adresse bak en proxy). */
-    maksInnsendingerPerMinutt: 30,
-    /** Antall som vises. */
-    vis: 20,
+  /** Limits the leaderboard server uses to reject unrealistic submissions. */
+  leaderboard: {
+    maxName: 20,
+    /** Max points per second survived (generous). */
+    maxPointsPerSecond: 5000,
+    /** Max lawyers helped per second survived. */
+    maxHelpedPerSecond: 50,
+    /** Max submissions per minute from the same address (generous, in case a whole household shares an address behind a proxy). */
+    maxSubmissionsPerMinute: 30,
+    /** Number shown. */
+    show: 20,
   },
 };
 
-// De nye våpnene og passivene slås sammen med de gamle, så resten av spillet ser 10 våpen og 12 passive.
-Object.assign(CONFIG.vaapen, CONFIG.nyeVaapen);
-Object.assign(CONFIG.passiver, CONFIG.nyePassiver);
-// Avsenderen bruker samme felter som de andre advokattypene.
-/** @type {any} */ (CONFIG.fiender).avsender = CONFIG.avsender;
+// The new weapons and passives are merged with the old ones, so the rest of the game sees 10 weapons and 12 passives.
+Object.assign(CONFIG.weapons, CONFIG.newWeapons);
+Object.assign(CONFIG.passives, CONFIG.newPassives);
+// The sender uses the same fields as the other lawyer types.
+/** @type {any} */ (CONFIG.enemies).sender = CONFIG.sender;
 
-/** Snakkebobler for «Haster!»-avsenderen. */
-export const AVSENDER_BOBLER = ['Sendte deg en mail!', 'Svarte du på mailen min?', 'HASTER!!!', 'Så du mailen?'];
+/** Speech bubbles for the «Haster!» ("Urgent!") sender. */
+export const SENDER_BUBBLES = ['Sendte deg en mail!', 'Svarte du på mailen min?', 'HASTER!!!', 'Så du mailen?'];
 
-/** Fast tidssteg i sekunder. */
-export const DT = 1 / CONFIG.tikkPerSekund;
+/** Fixed time step in seconds. */
+export const DT = 1 / CONFIG.ticksPerSecond;

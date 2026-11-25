@@ -1,32 +1,32 @@
 // @ts-check
-// Styring: tastatur (WASD + piltaster) og virtuell joystick for touch.
+// Input: keyboard (WASD + arrow keys) and virtual joystick for touch.
 
-export class Styring {
-  /** @param {HTMLElement | Window} flate der touch fanges opp (hele vinduet) */
-  constructor(flate) {
+export class Input {
+  /** @param {HTMLElement | Window} surface where touch is captured (the whole window) */
+  constructor(surface) {
     /** @type {Set<string>} */
-    this.taster = new Set();
-    /** Joysticken dukker opp der man legger fingeren. */
-    this.joystick = { aktiv: false, id: -1, x0: 0, y0: 0, x: 0, y: 0 };
+    this.keys = new Set();
+    /** The joystick appears where you put your finger. */
+    this.joystick = { active: false, id: -1, x0: 0, y0: 0, x: 0, y: 0 };
     this.radius = 52;
-    /** Joysticken virker bare mens man spiller. */
-    this.aktiv = false;
+    /** The joystick only works while you are playing. */
+    this.active = false;
 
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLInputElement) return;
-      this.taster.add(e.code);
+      this.keys.add(e.code);
       if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
     });
-    window.addEventListener('keyup', (e) => this.taster.delete(e.code));
-    window.addEventListener('blur', () => this.nullstill());
+    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+    window.addEventListener('blur', () => this.reset());
 
-    flate.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'mouse' || this.joystick.aktiv || !this.aktiv) return;
-      // Joysticken dukker opp der man legger fingeren – også i rammen rundt spillet, men ikke på knapper og menyer.
+    surface.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' || this.joystick.active || !this.active) return;
+      // The joystick appears where you put your finger – also in the frame around the game, but not on buttons and menus.
       const t = /** @type {HTMLElement} */ (e.target);
       if (t && t.tagName !== 'CANVAS' && t.tagName !== 'BODY' && t.tagName !== 'HTML') return;
       const j = this.joystick;
-      j.aktiv = true;
+      j.active = true;
       j.id = e.pointerId;
       j.x0 = j.x = e.clientX;
       j.y0 = j.y = e.clientY;
@@ -34,7 +34,7 @@ export class Styring {
     });
     window.addEventListener('pointermove', (e) => {
       const j = this.joystick;
-      if (!j.aktiv || e.pointerId !== j.id) return;
+      if (!j.active || e.pointerId !== j.id) return;
       let dx = e.clientX - j.x0, dy = e.clientY - j.y0;
       const d = Math.hypot(dx, dy);
       if (d > this.radius) {
@@ -44,24 +44,24 @@ export class Styring {
       j.x = j.x0 + dx;
       j.y = j.y0 + dy;
     });
-    const slipp = (e) => {
-      if (e.pointerId === this.joystick.id) this.joystick.aktiv = false;
+    const release = (e) => {
+      if (e.pointerId === this.joystick.id) this.joystick.active = false;
     };
-    window.addEventListener('pointerup', slipp);
-    window.addEventListener('pointercancel', slipp);
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
   }
 
-  nullstill() {
-    this.taster.clear();
-    this.joystick.aktiv = false;
+  reset() {
+    this.keys.clear();
+    this.joystick.active = false;
   }
 
   /**
-   * Ønsket retning akkurat nå. Lengden er maks 1 (diagonal normaliseres i spiller.js).
+   * Desired direction right now. The length is at most 1 (diagonal is normalized in player.js).
    * @returns {[number, number]}
    */
-  retning() {
-    const t = this.taster;
+  direction() {
+    const t = this.keys;
     let x = 0, y = 0;
     if (t.has('KeyA') || t.has('ArrowLeft')) x -= 1;
     if (t.has('KeyD') || t.has('ArrowRight')) x += 1;
@@ -69,9 +69,9 @@ export class Styring {
     if (t.has('KeyS') || t.has('ArrowDown')) y += 1;
     if (x !== 0 || y !== 0) return [x, y];
     const j = this.joystick;
-    if (j.aktiv) {
+    if (j.active) {
       const dx = (j.x - j.x0) / this.radius, dy = (j.y - j.y0) / this.radius;
-      // Liten dødsone, og full fart litt før kanten
+      // Small dead zone, and full speed a little before the edge
       const d = Math.hypot(dx, dy);
       if (d < 0.15) return [0, 0];
       const f = Math.min(1, d / 0.8) / d;

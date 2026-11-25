@@ -1,6 +1,6 @@
 KontorPiksel – pikselfont laget for «Har du prøvd å skru den av og på?» (Help Desk Survivors)
 
-Fonten er egenprodusert for dette prosjektet (glyfene står i js/pikselfont.js, fila lages av tools/lagfont.js).
+Fonten er egenprodusert for dette prosjektet (glyfene står i js/pixelfont.js, fila lages av tools/build-font.js).
 Den er gitt bort til fri bruk etter CC0 1.0 Universal (Public Domain Dedication):
 https://creativecommons.org/publicdomain/zero/1.0/
 

@@ -1,5 +1,23 @@
 # Endringslogg
 
+## Versjon 3.1 – 25. november 2026 (koden på engelsk)
+
+All kode og alle kommentarer er oversatt til engelsk. **Teksten i selve spillet er uendret** (norsk), og spillet
+oppfører seg nøyaktig likt: simulatoren gir identiske resultater før og etter, og fonten blir byte-for-byte lik.
+
+- Variabler, funksjoner, klasser, id-er (våpen, passiver, fiender, lyder, hendelser), HTML-id-er, CSS-klasser og
+  CSS-variabler har engelske navn. Kommentarer i JS, HTML og CSS er oversatt.
+- Filene har nye navn, f.eks. `js/spill.js` → `js/game.js`, `js/vaapen.js` → `js/weapons.js`,
+  `js/tegning.js` → `js/renderer.js`, `css/stil.css` → `css/style.css` (full liste i README.md, «Project structure»).
+- npm-skript: `npm run simulate`, `npm run measure-weapons`, `npm run build-font`.
+- Topplisten: API-et heter nå `/api/leaderboard` med engelske feltnavn. Databasen heter `server/data/leaderboard.db`
+  med tabellen `entries`. **Eksisterende innslag flyttes automatisk over** første gang serveren starter.
+- Lagrede innstillinger og oppdagede kombinasjoner i nettleseren (localStorage) oversettes automatisk, så ingen
+  mister noe. Advokatenes utseende er det samme som før.
+- Ikke oversatt med vilje: lagringsnøklene i nettleseren (`hds_…`), debug-adressene `?debug=karakterer` og
+  `?debug&utenGPU`, meldinger serveren skriver i konsollen og feilmeldinger fra API-et (de vises i spillet), og
+  dokumentasjonen på norsk (`DOKUMENTASJON.md`, denne fila).
+
 ## Versjon 3.0 – 25. november 2026 (endringsprompt 2)
 
 ### 1. Vanskelighet: tregere levling, svakere kombinasjoner, overtid fra 13:00

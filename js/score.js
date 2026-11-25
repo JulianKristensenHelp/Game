@@ -1,61 +1,61 @@
 // @ts-check
-// Poeng og multiplikator (streak).
+// Points and multiplier (streak).
 import { CONFIG } from './config.js';
 
-const M = CONFIG.multiplikator;
-/** Høyeste antall steg over startverdien. */
-const MAKS_STEG = Math.round((M.maks - M.start) / M.steg);
+const M = CONFIG.multiplier;
+/** Highest number of steps above the starting value. */
+const MAX_STEPS = Math.round((M.max - M.start) / M.step);
 
-/** Gjeldende multiplikator som tall, f.eks. 1.4. Internt lagres den som antall steg (heltall). */
-export function multiplikator(s) {
-  return M.start + s.multSteg * M.steg;
+/** Current multiplier as a number, e.g. 1.4. Internally it is stored as a number of steps (integer). */
+export function multiplier(s) {
+  return M.start + s.multStep * M.step;
 }
 
 /** "x1,4" */
-export function multTekst(verdi) {
-  return 'x' + verdi.toFixed(1).replace('.', ',');
+export function multText(value) {
+  return 'x' + value.toFixed(1).replace('.', ',');
 }
 
 /**
- * Gir poeng ganget med multiplikatoren akkurat nå.
- * @returns {number} poengene som ble gitt
+ * Gives points multiplied by the multiplier right now.
+ * @returns {number} the points that were given
  */
-export function giPoeng(s, basis) {
-  const p = Math.round(basis * multiplikator(s));
+export function givePoints(s, basis) {
+  const p = Math.round(basis * multiplier(s));
   s.score += p;
   return p;
 }
 
-/** Kalles for hver advokat som blir glad. Øker multiplikatoren for hver 25. */
-export function registrerHjulpet(s) {
-  if (s.multSteg >= MAKS_STEG) {
-    s.multTeller = 0;
+/** Called for every lawyer who becomes happy. Raises the multiplier for every 25th. */
+export function registerHelped(s) {
+  if (s.multStep >= MAX_STEPS) {
+    s.multCounter = 0;
     return;
   }
-  s.multTeller++;
-  if (s.multTeller >= M.perHjulpne) {
-    s.multTeller = 0;
-    s.multSteg++;
-    if (s.multSteg > s.stat.maksMultSteg) s.stat.maksMultSteg = s.multSteg;
-    s.hendelser.push('multOpp');
+  s.multCounter++;
+  if (s.multCounter >= M.perHelped) {
+    s.multCounter = 0;
+    s.multStep++;
+    if (s.multStep > s.stat.maxMultStep) s.stat.maxMultStep = s.multStep;
+    s.events.push('multUp');
   }
 }
 
 /**
- * Kalles når spilleren blir truffet: halvparten av det som er bygget opp over start mistes.
- * Halve steg rundes ned (x1,5 → x1,2), slik at et treff alltid koster noe.
+ * Called when the player is hit: half of what has been built up above the start is lost.
+ * Half steps are rounded down (x1,5 → x1,2), so that a hit always costs something.
  */
-export function multTreff(s) {
-  const ny = Math.floor(s.multSteg / 2);
-  if (ny < s.multSteg) {
-    s.multSteg = ny;
-    s.hendelser.push('multNed');
+export function multHits(s) {
+  const newStep = Math.floor(s.multStep / 2);
+  if (newStep < s.multStep) {
+    s.multStep = newStep;
+    s.events.push('multDown');
   }
-  s.multTeller = 0;
+  s.multCounter = 0;
 }
 
-/** Erfaring som kreves for å gå opp fra dette nivået. */
-export function xpBehov(nivaa) {
-  const n = CONFIG.nivaa;
-  return Math.round(n.base + n.perNivaa * nivaa + n.kvadrat * nivaa * nivaa);
+/** Experience required to go up from this level. */
+export function xpNeeded(level) {
+  const n = CONFIG.level;
+  return Math.round(n.base + n.perLevel * level + n.square * level * level);
 }

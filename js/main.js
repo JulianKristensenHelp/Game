@@ -1,610 +1,610 @@
 // @ts-check
-// Inngangspunktet: binder sammen spill, tegning, HUD, styring, lyd, innstillinger, menyer og toppliste.
+// Entry point: ties together game, renderer, HUD, input, sound, settings, menus and leaderboard.
 import { CONFIG, DT } from './config.js';
-import { datoOslo, penDato, mmss, tall } from './verktoy.js';
-import { Spill } from './spill.js';
-import { Tegner } from './tegning.js';
+import { dateOslo, prettyDate, mmss, formatNumber } from './utils.js';
+import { Game } from './game.js';
+import { Renderer } from './renderer.js';
 import { Hud } from './hud.js';
-import { Styring } from './styring.js';
-import { Lyd } from './lyd.js';
-import { Innstillinger } from './innstillinger.js';
-import { hentToppliste, sendInnScore } from './toppliste.js';
-import { multiplikator } from './score.js';
-import { spawnFiende, spawnRate, frustrasjonsfaktor } from './fiender.js';
-import { ikon, ikonElement } from './ikoner.js';
-import { xpBehov } from './score.js';
+import { Input } from './input.js';
+import { Sound } from './sound.js';
+import { Settings } from './settings.js';
+import { fetchLeaderboard, submitScore } from './leaderboard.js';
+import { multiplier } from './score.js';
+import { spawnEnemy, spawnRate, frustrationFactor } from './enemies.js';
+import { icon, iconElement } from './icons.js';
+import { xpNeeded } from './score.js';
 import * as ui from './ui.js';
 
 const { el } = ui;
 const DEBUG = new URLSearchParams(location.search).has('debug');
 
-// ?utenGPU: all tegning skjer på prosessoren, som på en kontor-PC uten grafikkort (verste fall for ytelsen).
+// ?utenGPU: all drawing happens on the CPU, as on an office PC without a graphics card (worst case for performance).
 if (new URLSearchParams(location.search).has('utenGPU')) {
   const original = HTMLCanvasElement.prototype.getContext;
-  HTMLCanvasElement.prototype.getContext = /** @type {any} */ (function (type, valg) {
-    return type === '2d' ? original.call(this, type, { ...(valg || {}), willReadFrequently: true }) : original.call(this, type, valg);
+  HTMLCanvasElement.prototype.getContext = /** @type {any} */ (function (type, options) {
+    return type === '2d' ? original.call(this, type, { ...(options || {}), willReadFrequently: true }) : original.call(this, type, options);
   });
 }
-const NAVN_NOEKKEL = 'hds_navn';
-const KARAKTER_NOEKKEL = 'hds_karakter';
-const VB = CONFIG.visning.bredde, VH = CONFIG.visning.hoeyde;
+const NAME_KEY = 'hds_navn';
+const CHARACTER_KEY = 'hds_karakter';
+const VB = CONFIG.view.width, VH = CONFIG.view.height;
 
-const innst = new Innstillinger();
-const lyd = new Lyd(innst);
-const spillLerret = /** @type {HTMLCanvasElement} */ (el('spill'));
-const hudLerret = /** @type {HTMLCanvasElement} */ (el('hud'));
-const tegner = new Tegner(spillLerret, innst);
-const hud = new Hud(hudLerret);
-const styring = new Styring(window);
+const settings = new Settings();
+const sound = new Sound(settings);
+const gameCanvas = /** @type {HTMLCanvasElement} */ (el('game'));
+const hudCanvas = /** @type {HTMLCanvasElement} */ (el('hud'));
+const renderer = new Renderer(gameCanvas, settings);
+const hud = new Hud(hudCanvas);
+const input = new Input(window);
 
-/** @type {Spill | null} */
-let spill = null;
-/** 'start' | 'spill' | 'pause' | 'nivaaopp' | 'innstillinger' | 'slutter' | 'slutt' */
-let modus = 'start';
-/** Hvor innstillingene ble åpnet fra (for «Tilbake»). */
-let innstFra = 'start';
-let dato = datoOslo();
-let akk = 0;
-let forrige = 0;
-/** Klokke som bare går mens spillet går – brukes til animasjoner. */
-let animTid = 0;
-let kortKlare = 0;
-let sendt = false;
-/** Valgt karakter (huskes lokalt til neste gang). */
-let valgtKarakter = (() => {
+/** @type {Game | null} */
+let game = null;
+/** 'start' | 'game' | 'pause' | 'levelUp' | 'settings' | 'ending' | 'gameOver' */
+let mode = 'start';
+/** Where the settings were opened from (for «Tilbake» ("Back")). */
+let settingsFrom = 'start';
+let date = dateOslo();
+let acc = 0;
+let previous = 0;
+/** Clock that only runs while the game is running – used for animations. */
+let animTime = 0;
+let cardsReady = 0;
+let sent = false;
+/** Selected character (remembered locally for next time). */
+let selectedCharacter = (() => {
   try {
-    const i = Number(localStorage.getItem(KARAKTER_NOEKKEL));
-    return i >= 0 && i < CONFIG.karakterer.length ? i : 0;
+    const i = Number(localStorage.getItem(CHARACTER_KEY));
+    return i >= 0 && i < CONFIG.characters.length ? i : 0;
   } catch {
     return 0;
   }
 })();
 
-function hentNavn() {
+function loadName() {
   try {
-    return localStorage.getItem(NAVN_NOEKKEL) || '';
+    return localStorage.getItem(NAME_KEY) || '';
   } catch {
     return '';
   }
 }
 
-// ---------- Skjermstørrelse ----------
+// ---------- Screen size ----------
 
 /**
- * Plasserer spillet: alle ser nøyaktig 640 × 360 logiske piksler av kartet.
- * Skaleringen er i hele device-piksler der det går (skarpe, like store piksler), og kantene fylles med ramme.
+ * Positions the game: everyone sees exactly 640 × 360 logical pixels of the map.
+ * Scaling uses whole device pixels where possible (sharp, equally sized pixels), and the edges are filled with a frame.
  */
-function tilpass() {
+function fit() {
   const dpr = window.devicePixelRatio || 1;
   const W = window.innerWidth, H = window.innerHeight;
-  const plass = Math.min((W * dpr) / VB, (H * dpr) / VH);
+  const spot = Math.min((W * dpr) / VB, (H * dpr) / VH);
   let k;
-  const valg = innst.v.spillStoerrelse;
-  if (valg === 'tilpass') {
-    k = plass >= 1 && Math.floor(plass) / plass >= 0.85 ? Math.floor(plass) : plass;
+  const options = settings.v.gameSize;
+  if (options === 'fit') {
+    k = spot >= 1 && Math.floor(spot) / spot >= 0.85 ? Math.floor(spot) : spot;
   } else {
-    k = Math.min(Number(valg) * dpr, plass);
-    if (k >= 1 && k < plass) k = Math.floor(k);
+    k = Math.min(Number(options) * dpr, spot);
+    if (k >= 1 && k < spot) k = Math.floor(k);
   }
   const wDev = Math.round(VB * k), hDev = Math.round(VH * k);
   const x = Math.round((W * dpr - wDev) / 2) / dpr, y = Math.round((H * dpr - hDev) / 2) / dpr;
   const w = wDev / dpr, h = hDev / dpr;
-  spillLerret.style.width = w + 'px';
-  spillLerret.style.height = h + 'px';
-  spillLerret.style.left = x + 'px';
-  spillLerret.style.top = y + 'px';
+  gameCanvas.style.width = w + 'px';
+  gameCanvas.style.height = h + 'px';
+  gameCanvas.style.left = x + 'px';
+  gameCanvas.style.top = y + 'px';
 
-  // UI-størrelse
-  const v = innst.v.ui;
-  const faktor = v === 'auto' ? (h < 600 ? 1.25 : 1) : CONFIG.grensesnitt.uiStoerrelser[v];
-  const base = 4 * Math.max(4, Math.round(4.5 * faktor * Math.min(1.6, Math.max(0.8, H / 1080))));
+  // UI size
+  const v = settings.v.ui;
+  const factor = v === 'auto' ? (h < 600 ? 1.25 : 1) : CONFIG.display.uiSizes[v];
+  const base = 4 * Math.max(4, Math.round(4.5 * factor * Math.min(1.6, Math.max(0.8, H / 1080))));
   document.documentElement.style.setProperty('--ui', base + 'px');
-  hud.tilpass(W, H, { x, y, w, h }, dpr, faktor, innst.v.minikart);
-  tegner.marg = hud.margLogisk;
+  hud.fit(W, H, { x, y, w, h }, dpr, factor, settings.v.minimap);
+  renderer.margin = hud.marginLogical;
 
-  const knapper = el('hudknapper');
-  knapper.style.right = Math.max(8, W - (x + w) + 8) + 'px';
-  knapper.style.bottom = Math.max(8, H - (y + h) + 8) + 'px';
+  const buttons = el('hudButtons');
+  buttons.style.right = Math.max(8, W - (x + w) + 8) + 'px';
+  buttons.style.bottom = Math.max(8, H - (y + h) + 8) + 'px';
 }
 
-// ---------- Flyt mellom skjermene ----------
+// ---------- Flow between screens ----------
 
-function tilStart() {
-  modus = 'start';
-  spill = null;
-  styring.aktiv = false;
-  dato = datoOslo();
-  el('vaktdato').textContent = penDato(dato);
-  ui.tegnOppslagstavle();
-  ui.visSkjerm('start');
-  el('hudknapper').hidden = true;
-  lastToppliste(el('startliste'));
+function toStart() {
+  mode = 'start';
+  game = null;
+  input.active = false;
+  date = dateOslo();
+  el('shiftDate').textContent = prettyDate(date);
+  ui.drawNoticeBoard();
+  ui.showScreen('start');
+  el('hudButtons').hidden = true;
+  loadLeaderboard(el('startList'));
 }
 
-/** Karaktervalget vises etter «Start vakt». */
-function visKaraktervalg() {
-  modus = 'karaktervalg';
-  ui.visKaraktervalg(valgtKarakter, velgKarakter);
-  ui.visSkjerm('karaktervalg');
-  /** @type {HTMLElement | null} */ (document.querySelectorAll('.karakter')[valgtKarakter])?.focus();
+/** Character select is shown after «Start vakt» ("Start shift"). */
+function showCharacterSelect() {
+  mode = 'characterSelect';
+  ui.showCharacterSelect(selectedCharacter, selectCharacter);
+  ui.showScreen('characterSelect');
+  /** @type {HTMLElement | null} */ (document.querySelectorAll('.character')[selectedCharacter])?.focus();
 }
 
-/** Velger karakter nr. i (og starter vakta hvis start = true). Valget huskes lokalt. */
-function velgKarakter(i, start) {
-  valgtKarakter = (i + CONFIG.karakterer.length) % CONFIG.karakterer.length;
-  ui.markerKarakter(valgtKarakter);
+/** Selects character no. i (and starts the shift if start = true). The choice is remembered locally. */
+function selectCharacter(i, start) {
+  selectedCharacter = (i + CONFIG.characters.length) % CONFIG.characters.length;
+  ui.markCharacter(selectedCharacter);
   try {
-    localStorage.setItem(KARAKTER_NOEKKEL, String(valgtKarakter));
+    localStorage.setItem(CHARACTER_KEY, String(selectedCharacter));
   } catch {
-    /* ignorer */
+    /* ignore */
   }
-  if (start) startVakt();
+  if (start) startShift();
 }
 
-function startVakt() {  // Dagens dato i norsk tid er seeden: alle får samme vakt samme dag.
-  dato = datoOslo();
-  // Gjør ferdig figurene som ikke er laget ennå (normalt allerede ferdig mens startskjermen vises).
-  tegner.fig.lagNoen(1e9);
-  spill = new Spill(dato, valgtKarakter);
-  hud.portrett = tegner.fig.portrett(valgtKarakter);
-  akk = 0;
-  sendt = false;
+function startShift() {  // Today's date in Norwegian time is the seed: everyone gets the same shift on the same day.
+  date = dateOslo();
+  // Finish the figures that are not made yet (normally already done while the start screen is shown).
+  renderer.fig.makeSome(1e9);
+  game = new Game(date, selectedCharacter);
+  hud.portrait = renderer.fig.portrait(selectedCharacter);
+  acc = 0;
+  sent = false;
   stress = null;
-  styring.nullstill();
-  styring.aktiv = true;
-  hud.ikonerEndret();
-  ui.visSkjerm('');
-  el('hudknapper').hidden = false;
-  modus = 'spill';
-  lyd.spill('klikk');
+  input.reset();
+  input.active = true;
+  hud.iconsChanged();
+  ui.showScreen('');
+  el('hudButtons').hidden = false;
+  mode = 'game';
+  sound.play('click');
 }
 
 function pause() {
-  if (modus !== 'spill' || stress) return;
-  modus = 'pause';
-  styring.aktiv = false;
-  ui.visSkjerm('pause');
+  if (mode !== 'game' || stress) return;
+  mode = 'pause';
+  input.active = false;
+  ui.showScreen('pause');
 }
 
-function fortsett() {
-  if (modus !== 'pause') return;
-  modus = 'spill';
-  akk = 0;
-  styring.nullstill();
-  styring.aktiv = true;
-  ui.visSkjerm('');
+function resume() {
+  if (mode !== 'pause') return;
+  mode = 'game';
+  acc = 0;
+  input.reset();
+  input.active = true;
+  ui.showScreen('');
 }
 
-let visInnstillinger = () => {};
-function aapneInnstillinger(fra) {
-  innstFra = fra;
-  modus = 'innstillinger';
-  visInnstillinger();
-  ui.visSkjerm('innstillinger');
-  /** @type {HTMLElement} */ (el('innsttilbake')).focus();
+let showSettings = () => {};
+function openSettings(from) {
+  settingsFrom = from;
+  mode = 'settings';
+  showSettings();
+  ui.showScreen('settings');
+  /** @type {HTMLElement} */ (el('settingsBack')).focus();
 }
-function lukkInnstillinger() {
-  modus = innstFra;
-  ui.visSkjerm(innstFra);
-}
-
-function aapneNivaaopp() {
-  if (!spill) return;
-  modus = 'nivaaopp';
-  styring.aktiv = false;
-  kortKlare = performance.now() + 350; // hindrer at man velger kort ved et uhell
-  ui.visKort(spill, velgKort);
-  ui.visSkjerm('nivaaopp');
-  lyd.spill('nivaa');
+function closeSettings() {
+  mode = settingsFrom;
+  ui.showScreen(settingsFrom);
 }
 
-function velgKort(i) {
-  if (!spill || modus !== 'nivaaopp' || performance.now() < kortKlare) return;
-  spill.velgKort(i);
-  behandleHendelser();
-  if (spill.status === 'nivaaopp') {
-    aapneNivaaopp(); // flere nivåer på én gang
+function openLevelUp() {
+  if (!game) return;
+  mode = 'levelUp';
+  input.active = false;
+  cardsReady = performance.now() + 350; // prevents picking a card by accident
+  ui.showCards(game, chooseCard);
+  ui.showScreen('levelUp');
+  sound.play('level');
+}
+
+function chooseCard(i) {
+  if (!game || mode !== 'levelUp' || performance.now() < cardsReady) return;
+  game.chooseCard(i);
+  handleEvents();
+  if (game.status === 'levelUp') {
+    openLevelUp(); // several levels at once
     return;
   }
-  modus = 'spill';
-  akk = 0;
-  styring.nullstill();
-  styring.aktiv = true;
-  ui.visSkjerm('');
+  mode = 'game';
+  acc = 0;
+  input.reset();
+  input.active = true;
+  ui.showScreen('');
 }
 
-/** Vakta er over: vis slutt-skjermen med statistikk og toppliste. */
-function visSlutt() {
-  if (!spill) return;
-  modus = 'slutt';
-  styring.aktiv = false;
-  el('hudknapper').hidden = true;
-  // Lagring skjer først nå – aldri under spill.
-  if (!spill.debug.brukt) ui.lagreKombinasjoner(spill.stat.kombinasjoner);
-  const k = CONFIG.karakterer[spill.karakter];
-  const sp = /** @type {HTMLCanvasElement} */ (el('sluttportrett'));
+/** The shift is over: show the end screen with stats and leaderboard. */
+function showEnd() {
+  if (!game) return;
+  mode = 'gameOver';
+  input.active = false;
+  el('hudButtons').hidden = true;
+  // Saving only happens now – never during play.
+  if (!game.debug.used) ui.saveCombinations(game.stat.combinations);
+  const k = CONFIG.characters[game.character];
+  const sp = /** @type {HTMLCanvasElement} */ (el('endPortrait'));
   const spc = /** @type {CanvasRenderingContext2D} */ (sp.getContext('2d'));
   spc.clearRect(0, 0, 64, 64);
-  spc.drawImage(tegner.fig.portrett(spill.karakter), 0, 0);
-  el('sluttkarakter').textContent = `${k.navn} – ${k.tittel}`;
-  el('sluttscore').textContent = tall(spill.score);
-  el('slutttid').textContent = mmss(spill.tid);
-  ui.tegnStatistikk(spill);
-  const navn = /** @type {HTMLInputElement} */ (el('navn'));
-  navn.value = hentNavn();
-  navn.maxLength = CONFIG.toppliste.maksNavn;
-  const kanSende = !spill.debug.brukt;
-  el('navneskjema').hidden = !kanSende;
-  /** @type {HTMLButtonElement} */ (el('sendknapp')).disabled = false;
-  el('sendstatus').textContent = kanSende ? '' : 'Debug-runder sendes ikke inn til topplisten.';
-  ui.visSkjerm('slutt');
-  lastToppliste(el('sluttliste'));
+  spc.drawImage(renderer.fig.portrait(game.character), 0, 0);
+  el('endCharacter').textContent = `${k.name} – ${k.title}`;
+  el('endScore').textContent = formatNumber(game.score);
+  el('endTime').textContent = mmss(game.time);
+  ui.drawStats(game);
+  const name = /** @type {HTMLInputElement} */ (el('name'));
+  name.value = loadName();
+  name.maxLength = CONFIG.leaderboard.maxName;
+  const canSend = !game.debug.used;
+  el('nameForm').hidden = !canSend;
+  /** @type {HTMLButtonElement} */ (el('submitButton')).disabled = false;
+  el('submitStatus').textContent = canSend ? '' : 'Debug-runder sendes ikke inn til topplisten.';
+  ui.showScreen('gameOver');
+  loadLeaderboard(el('endList'));
 }
 
-async function lastToppliste(holder) {
-  const navn = hentNavn();
+async function loadLeaderboard(holder) {
+  const name = loadName();
   try {
-    ui.tegnToppliste(holder, await hentToppliste(datoOslo(), navn), navn);
+    ui.drawLeaderboard(holder, await fetchLeaderboard(dateOslo(), name), name);
   } catch {
-    ui.tegnToppliste(holder, null, navn);
+    ui.drawLeaderboard(holder, null, name);
   }
 }
 
-async function sendInn(e) {
+async function submit(e) {
   e.preventDefault();
-  if (!spill || sendt || spill.debug.brukt) return;
-  const felt = /** @type {HTMLInputElement} */ (el('navn'));
-  const navn = felt.value.trim().slice(0, CONFIG.toppliste.maksNavn);
-  if (!navn) {
-    el('sendstatus').textContent = 'Skriv inn navnet ditt først.';
-    felt.focus();
+  if (!game || sent || game.debug.used) return;
+  const field = /** @type {HTMLInputElement} */ (el('name'));
+  const name = field.value.trim().slice(0, CONFIG.leaderboard.maxName);
+  if (!name) {
+    el('submitStatus').textContent = 'Skriv inn navnet ditt først.';
+    field.focus();
     return;
   }
   try {
-    localStorage.setItem(NAVN_NOEKKEL, navn);
+    localStorage.setItem(NAME_KEY, name);
   } catch {
-    /* ignorer */
+    /* ignore */
   }
-  const knapp = /** @type {HTMLButtonElement} */ (el('sendknapp'));
-  knapp.disabled = true;
-  el('sendstatus').textContent = 'Sender …';
+  const button = /** @type {HTMLButtonElement} */ (el('submitButton'));
+  button.disabled = true;
+  el('submitStatus').textContent = 'Sender …';
   try {
-    const svar = await sendInnScore({
-      navn, dato: spill.dato, karakter: CONFIG.karakterer[spill.karakter].id, score: spill.score, tid: Math.round(spill.tid), hjulpne: spill.hjulpne,
-      maksMult: CONFIG.multiplikator.start + spill.stat.maksMultSteg * CONFIG.multiplikator.steg,
+    const response = await submitScore({
+      name, date: game.date, character: CONFIG.characters[game.character].id, score: game.score, time: Math.round(game.time), helped: game.helped,
+      maxMult: CONFIG.multiplier.start + game.stat.maxMultStep * CONFIG.multiplier.step,
     });
-    sendt = true;
-    el('sendstatus').textContent = svar.forbedret
-      ? `Registrert! Du ligger på ${svar.plass}. plass i dag.`
-      : `Du har en bedre runde fra før i dag (${svar.plass}. plass). Den står fortsatt.`;
-    lastToppliste(el('sluttliste'));
-  } catch (feil) {
-    knapp.disabled = false;
-    el('sendstatus').textContent = feil instanceof TypeError || /** @type {any} */ (feil)?.name === 'AbortError'
+    sent = true;
+    el('submitStatus').textContent = response.improved
+      ? `Registrert! Du ligger på ${response.spot}. plass i dag.`
+      : `Du har en bedre runde fra før i dag (${response.spot}. plass). Den står fortsatt.`;
+    loadLeaderboard(el('endList'));
+  } catch (error) {
+    button.disabled = false;
+    el('submitStatus').textContent = error instanceof TypeError || /** @type {any} */ (error)?.name === 'AbortError'
       ? 'Topplisten er utilgjengelig akkurat nå. Prøv igjen om litt.'
-      : String(/** @type {any} */ (feil)?.message || 'Noe gikk galt. Prøv igjen.');
+      : String(/** @type {any} */ (error)?.message || 'Noe gikk galt. Prøv igjen.');
   }
 }
 
-// ---------- Hendelser fra spillet → lyd og HUD ----------
+// ---------- Events from the game → sound and HUD ----------
 
-function behandleHendelser() {
-  if (!spill) return;
-  const h = spill.hendelser;
+function handleEvents() {
+  if (!game) return;
+  const h = game.events;
   for (let i = 0; i < h.length; i++) {
-    const navn = h[i];
-    switch (navn) {
-      case 'lapp': lyd.spill('lapp'); break;
-      case 'glad': lyd.spill('glad'); break;
-      case 'treff':
-        lyd.spill('treff');
-        tegner.rist = 0.2;
+    const name = h[i];
+    switch (name) {
+      case 'ticket': sound.play('ticket'); break;
+      case 'happy': sound.play('happy'); break;
+      case 'hit':
+        sound.play('hit');
+        renderer.shake = 0.2;
         break;
-      case 'multOpp': lyd.spill('multOpp'); hud.multEffekt(1); break;
-      case 'multNed': lyd.spill('multNed'); hud.multEffekt(-1); break;
-      case 'fase': hud.visBanner(spill.faseNavn); break;
-      case 'boss': lyd.spill('boss'); hud.visBanner('Fristen er om 2 minutter!', 'boss', 4000); break;
-      case 'bossGlad': lyd.spill('bonus'); hud.visBanner('Fristen ble holdt!', 'gull'); break;
-      case 'bossTapt': hud.visBanner('Fristen gikk ut – bonusen røk'); break;
-      case 'hastesakKom': hud.visBanner('Hastesak! Ta igjen den gylne advokaten', 'gull'); break;
-      case 'hastesakGlad': lyd.spill('bonus'); break;
-      case 'ring': hud.visBanner('De omringer deg – finn åpningen!'); break;
-      case 'drikk': lyd.spill('drikk'); hud.visBanner('Sukkerkick!', 'gull', 1500); break;
-      case 'drikkKom': if (spill.stat.drikker === 0 && spill.tid < 60) hud.visBanner('Energidrikk på kartet – følg den grønne pilen!', 'gull', 3500); break;
-      case 'nypc': lyd.spill('nypc'); hud.visBanner('Ny PC! Alle på skjermen er fornøyde', 'gull'); break;
-      case 'oppgradert': hud.ikonerEndret(); break;
-      case 'ferdig': lyd.spill('ferdig'); break;
+      case 'multUp': sound.play('multUp'); hud.multEffect(1); break;
+      case 'multDown': sound.play('multDown'); hud.multEffect(-1); break;
+      case 'phase': hud.showBanner(game.phaseName); break;
+      case 'boss': sound.play('boss'); hud.showBanner('Fristen er om 2 minutter!', 'boss', 4000); break;
+      case 'bossHappy': sound.play('bonus'); hud.showBanner('Fristen ble holdt!', 'gold'); break;
+      case 'bossLost': hud.showBanner('Fristen gikk ut – bonusen røk'); break;
+      case 'urgentSpawned': hud.showBanner('Hastesak! Ta igjen den gylne advokaten', 'gold'); break;
+      case 'urgentHappy': sound.play('bonus'); break;
+      case 'ring': hud.showBanner('De omringer deg – finn åpningen!'); break;
+      case 'drink': sound.play('drink'); hud.showBanner('Sukkerkick!', 'gold', 1500); break;
+      case 'drinkSpawned': if (game.stat.drinks === 0 && game.time < 60) hud.showBanner('Energidrikk på kartet – følg den grønne pilen!', 'gold', 3500); break;
+      case 'newPcFx': sound.play('newPcFx'); hud.showBanner('Ny PC! Alle på skjermen er fornøyde', 'gold'); break;
+      case 'upgraded': hud.iconsChanged(); break;
+      case 'done': sound.play('done'); break;
       default:
-        if (navn.startsWith('kombinasjon:')) {
-          const id = navn.slice(12);
-          lyd.spill('bonus');
-          hud.visBanner(`Kombinasjon: ${CONFIG.vaapen[id].kombinasjon.navn}!`, 'gull', 3500);
+        if (name.startsWith('kombinasjon:')) {
+          const id = name.slice(12);
+          sound.play('bonus');
+          hud.showBanner(`Kombinasjon: ${CONFIG.weapons[id].combination.name}!`, 'gold', 3500);
         }
     }
   }
   h.length = 0;
 }
 
-// ---------- Hovedløkka ----------
+// ---------- Main loop ----------
 
-/** Ytelsesmåling (vises i debug-modus og brukes av automatisk kvalitet). */
-const ytelse = {
-  fps: 60, minFps: 60, snittFps: 60, msOppd: 0, msTegn: 0,
-  bilder: 0, tid: 0, sumDt: 0, antallDt: 0, vindu: /** @type {number[]} */ ([]),
-  tregTid: 0, godTid: 0,
+/** Performance measurement (shown in debug mode and used by automatic quality). */
+const perf = {
+  fps: 60, minFps: 60, avgFps: 60, msUpdate: 0, msDraw: 0,
+  frames: 0, time: 0, sumDt: 0, dtCount: 0, fpsWindow: /** @type {number[]} */ ([]),
+  slowTime: 0, goodTime: 0,
 };
 
-function ramme(ms) {
-  const naa = ms / 1000;
-  const dt = Math.min(0.25, Math.max(0, naa - forrige));
-  forrige = naa;
+function onFrame(ms) {
+  const now = ms / 1000;
+  const dt = Math.min(0.25, Math.max(0, now - previous));
+  previous = now;
   const t0 = performance.now();
 
-  if (modus === 'spill' && spill) {
-    // Spillogikken går på fast tidssteg (60 per sekund), uavhengig av skjermens bildefrekvens.
-    akk += dt;
-    let steg = 0;
-    while (akk >= DT && steg < CONFIG.maksTikkPerBilde) {
-      let [ix, iy] = styring.retning();
-      if (stress) [ix, iy] = stressStyring();
-      spill.tikk(ix, iy);
-      akk -= DT;
-      steg++;
-      behandleHendelser();
-      if (spill.status !== 'spiller') {
-        akk = 0;
+  if (mode === 'game' && game) {
+    // Game logic runs on a fixed time step (60 per second), independent of the screen's frame rate.
+    acc += dt;
+    let step = 0;
+    while (acc >= DT && step < CONFIG.maxTicksPerFrame) {
+      let [ix, iy] = input.direction();
+      if (stress) [ix, iy] = stressInput();
+      game.tick(ix, iy);
+      acc -= DT;
+      step++;
+      handleEvents();
+      if (game.status !== 'running') {
+        acc = 0;
         break;
       }
     }
-    // Treg maskin: ikke prøv å ta igjen alt (unngår at spillet henger seg opp mer og mer).
-    if (steg === CONFIG.maksTikkPerBilde) akk = 0;
-    animTid += dt;
-    if (stress) stressTikk(dt);
-    if (spill.status === 'nivaaopp') {
-      if (stress) spill.velgKort(0);
-      else aapneNivaaopp();
-    } else if (spill.status === 'ferdig') {
-      modus = 'slutter';
-      styring.aktiv = false;
-      setTimeout(visSlutt, 900);
+    // Slow machine: don't try to catch up on everything (avoids the game bogging down more and more).
+    if (step === CONFIG.maxTicksPerFrame) acc = 0;
+    animTime += dt;
+    if (stress) stressTick(dt);
+    if (game.status === 'levelUp') {
+      if (stress) game.chooseCard(0);
+      else openLevelUp();
+    } else if (game.status === 'done') {
+      mode = 'ending';
+      input.active = false;
+      setTimeout(showEnd, 900);
     }
-  } else if (modus === 'start') {
-    animTid += dt;
+  } else if (mode === 'start') {
+    animTime += dt;
   }
   const t1 = performance.now();
 
-  tegner.tegn(modus === 'start' ? null : spill, animTid, modus === 'spill' ? dt : 0);
-  hud.oppdater(modus === 'start' || modus === 'slutt' ? null : spill, innst, styring.joystick);
+  renderer.draw(mode === 'start' ? null : game, animTime, mode === 'game' ? dt : 0);
+  hud.update(mode === 'start' || mode === 'gameOver' ? null : game, settings, input.joystick);
   const t2 = performance.now();
 
-  maalYtelse(dt, t1 - t0, t2 - t1);
-  requestAnimationFrame(ramme);
+  measurePerf(dt, t1 - t0, t2 - t1);
+  requestAnimationFrame(onFrame);
 }
 
-/** Holder styr på FPS og justerer automatisk kvalitet (bare visuelt – aldri spillogikken). */
-function maalYtelse(dt, msOppd, msTegn) {
-  const y = ytelse;
-  y.bilder++;
-  y.tid += dt;
-  y.msOppd = y.msOppd * 0.95 + msOppd * 0.05;
-  y.msTegn = y.msTegn * 0.95 + msTegn * 0.05;
-  if (y.tid >= 0.5) {
-    y.fps = Math.round(y.bilder / y.tid);
-    y.vindu.push(y.fps);
-    if (y.vindu.length > 20) y.vindu.shift();
-    y.minFps = Math.min(...y.vindu);
-    y.snittFps = Math.round(y.vindu.reduce((a, b) => a + b, 0) / y.vindu.length);
-    y.bilder = 0;
-    y.tid = 0;
-    if (DEBUG) visDebug();
+/** Keeps track of FPS and adjusts quality automatically (visual only – never the game logic). */
+function measurePerf(dt, msUpdate, msDraw) {
+  const y = perf;
+  y.frames++;
+  y.time += dt;
+  y.msUpdate = y.msUpdate * 0.95 + msUpdate * 0.05;
+  y.msDraw = y.msDraw * 0.95 + msDraw * 0.05;
+  if (y.time >= 0.5) {
+    y.fps = Math.round(y.frames / y.time);
+    y.fpsWindow.push(y.fps);
+    if (y.fpsWindow.length > 20) y.fpsWindow.shift();
+    y.minFps = Math.min(...y.fpsWindow);
+    y.avgFps = Math.round(y.fpsWindow.reduce((a, b) => a + b, 0) / y.fpsWindow.length);
+    y.frames = 0;
+    y.time = 0;
+    if (DEBUG) showDebug();
   }
-  if (modus !== 'spill' || document.hidden) return;
-  const K = CONFIG.kvalitet;
+  if (mode !== 'game' || document.hidden) return;
+  const K = CONFIG.quality;
   const ms = dt * 1000;
-  if (ms > K.grenseMs) {
-    y.tregTid += dt;
-    y.godTid = 0;
+  if (ms > K.limitMs) {
+    y.slowTime += dt;
+    y.goodTime = 0;
   } else {
-    y.godTid += dt;
-    y.tregTid = Math.max(0, y.tregTid - dt * 0.5);
+    y.goodTime += dt;
+    y.slowTime = Math.max(0, y.slowTime - dt * 0.5);
   }
-  if (y.tregTid > K.nedEtter && tegner.kvalitet < 2) {
-    tegner.kvalitet++;
-    y.tregTid = 0;
-  } else if (y.godTid > K.oppEtter && tegner.kvalitet > 0) {
-    tegner.kvalitet--;
-    y.godTid = 0;
+  if (y.slowTime > K.downAfter && renderer.quality < 2) {
+    renderer.quality++;
+    y.slowTime = 0;
+  } else if (y.goodTime > K.upAfter && renderer.quality > 0) {
+    renderer.quality--;
+    y.goodTime = 0;
   }
 }
 
-// ---------- Knapper og taster ----------
+// ---------- Buttons and keys ----------
 
-function oppdaterLydknapper() {
-  const paa = lyd.paa;
-  const knapp = el('lydknapp');
-  knapp.replaceChildren(ikonElement(paa ? 'lydPaa' : 'lydAv'));
-  el('startlyd').textContent = `Lyd er ${paa ? 'på' : 'av'}`;
-  el('pauselyd').textContent = `Lyd er ${paa ? 'på' : 'av'}`;
+function updateSoundButtons() {
+  const on = sound.on;
+  const button = el('soundButton');
+  button.replaceChildren(iconElement(on ? 'soundOn' : 'soundOff'));
+  el('startSound').textContent = `Lyd er ${on ? 'på' : 'av'}`;
+  el('pauseSound').textContent = `Lyd er ${on ? 'på' : 'av'}`;
 }
-function byttLyd() {
-  innst.sett('demp', !innst.v.demp);
-  if (lyd.paa) lyd.spill('test');
+function swapSound() {
+  settings.set('mute', !settings.v.mute);
+  if (sound.on) sound.play('test');
 }
 
-el('pauseknapp').replaceChildren(ikonElement('pause'));
+el('pauseButton').replaceChildren(iconElement('pause'));
 const logo = /** @type {HTMLCanvasElement} */ (el('logo'));
-/** @type {CanvasRenderingContext2D} */ (logo.getContext('2d')).drawImage(ikon('avpaa'), 0, 0);
+/** @type {CanvasRenderingContext2D} */ (logo.getContext('2d')).drawImage(icon('powerCycle'), 0, 0);
 
-el('startknapp').addEventListener('click', visKaraktervalg);
-el('karakterstart').addEventListener('click', () => startVakt());
-el('karaktertilbake').addEventListener('click', tilStart);
-el('nyvaktknapp').addEventListener('click', startVakt);
-el('tilstartknapp').addEventListener('click', tilStart);
-el('pauseknapp').addEventListener('click', pause);
-el('fortsettknapp').addEventListener('click', fortsett);
-el('avsluttknapp').addEventListener('click', () => {
-  if (!spill) return;
-  spill.status = 'ferdig';
-  visSlutt();
+el('startButton').addEventListener('click', showCharacterSelect);
+el('characterStart').addEventListener('click', () => startShift());
+el('characterBack').addEventListener('click', toStart);
+el('newShiftButton').addEventListener('click', startShift);
+el('toStartButton').addEventListener('click', toStart);
+el('pauseButton').addEventListener('click', pause);
+el('resumeButton').addEventListener('click', resume);
+el('quitButton').addEventListener('click', () => {
+  if (!game) return;
+  game.status = 'done';
+  showEnd();
 });
-el('lydknapp').addEventListener('click', byttLyd);
-el('startlyd').addEventListener('click', byttLyd);
-el('pauselyd').addEventListener('click', byttLyd);
-el('startinnst').addEventListener('click', () => aapneInnstillinger('start'));
-el('pauseinnst').addEventListener('click', () => aapneInnstillinger('pause'));
-el('innsttilbake').addEventListener('click', lukkInnstillinger);
-el('navneskjema').addEventListener('submit', sendInn);
+el('soundButton').addEventListener('click', swapSound);
+el('startSound').addEventListener('click', swapSound);
+el('pauseSound').addEventListener('click', swapSound);
+el('startSettings').addEventListener('click', () => openSettings('start'));
+el('pauseSettings').addEventListener('click', () => openSettings('pause'));
+el('settingsBack').addEventListener('click', closeSettings);
+el('nameForm').addEventListener('submit', submit);
 
-const erFullskjerm = () => !!document.fullscreenElement;
-visInnstillinger = ui.kobleInnstillinger(innst, {
-  testlyd: () => {
-    lyd.start();
-    lyd.spill('test');
+const isFullscreen = () => !!document.fullscreenElement;
+showSettings = ui.bindSettings(settings, {
+  testSound: () => {
+    sound.start();
+    sound.play('test');
   },
-  fullskjerm: (paa) => {
+  fullscreen: (on) => {
     try {
-      if (paa && !erFullskjerm()) document.documentElement.requestFullscreen?.().catch(() => {});
-      else if (!paa && erFullskjerm()) document.exitFullscreen?.().catch(() => {});
+      if (on && !isFullscreen()) document.documentElement.requestFullscreen?.().catch(() => {});
+      else if (!on && isFullscreen()) document.exitFullscreen?.().catch(() => {});
     } catch {
-      /* fullskjerm støttes ikke */
+      /* fullscreen is not supported */
     }
   },
-  erFullskjerm,
+  isFullscreen,
 });
 
-innst.vedEndring((v, endret) => {
-  oppdaterLydknapper();
-  if (endret === '*' || endret === 'spillStoerrelse' || endret === 'ui' || endret === 'minikart') tilpass();
+settings.onChange((v, changed) => {
+  updateSoundButtons();
+  if (changed === '*' || changed === 'gameSize' || changed === 'ui' || changed === 'minimap') fit();
 });
 
 window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement && e.target.type === 'text') return;
   if (e.code === 'Escape' || e.code === 'KeyP') {
-    if (modus === 'spill') pause();
-    else if (modus === 'pause') fortsett();
-    else if (modus === 'innstillinger' && e.code === 'Escape') lukkInnstillinger();
-  } else if (modus === 'nivaaopp' && /^(Digit|Numpad)[1-3]$/.test(e.code)) {
-    velgKort(Number(e.code.slice(-1)) - 1);
-  } else if (modus === 'karaktervalg') {
-    if (/^(Digit|Numpad)[1-4]$/.test(e.code)) velgKarakter(Number(e.code.slice(-1)) - 1, true);
-    else if (e.code === 'ArrowRight' || e.code === 'ArrowDown' || e.code === 'KeyD' || e.code === 'KeyS') { e.preventDefault(); velgKarakter(valgtKarakter + 1, false); /** @type {HTMLElement | null} */ (document.querySelectorAll('.karakter')[valgtKarakter])?.focus(); }
-    else if (e.code === 'ArrowLeft' || e.code === 'ArrowUp' || e.code === 'KeyA' || e.code === 'KeyW') { e.preventDefault(); velgKarakter(valgtKarakter - 1, false); /** @type {HTMLElement | null} */ (document.querySelectorAll('.karakter')[valgtKarakter])?.focus(); }
-    else if (e.code === 'Enter' && !e.repeat) { e.preventDefault(); startVakt(); }
-    else if (e.code === 'Escape') tilStart();
-  } else if (e.code === 'Enter' && !e.repeat && modus === 'start' && document.activeElement === document.body) {
-    visKaraktervalg();
+    if (mode === 'game') pause();
+    else if (mode === 'pause') resume();
+    else if (mode === 'settings' && e.code === 'Escape') closeSettings();
+  } else if (mode === 'levelUp' && /^(Digit|Numpad)[1-3]$/.test(e.code)) {
+    chooseCard(Number(e.code.slice(-1)) - 1);
+  } else if (mode === 'characterSelect') {
+    if (/^(Digit|Numpad)[1-4]$/.test(e.code)) selectCharacter(Number(e.code.slice(-1)) - 1, true);
+    else if (e.code === 'ArrowRight' || e.code === 'ArrowDown' || e.code === 'KeyD' || e.code === 'KeyS') { e.preventDefault(); selectCharacter(selectedCharacter + 1, false); /** @type {HTMLElement | null} */ (document.querySelectorAll('.character')[selectedCharacter])?.focus(); }
+    else if (e.code === 'ArrowLeft' || e.code === 'ArrowUp' || e.code === 'KeyA' || e.code === 'KeyW') { e.preventDefault(); selectCharacter(selectedCharacter - 1, false); /** @type {HTMLElement | null} */ (document.querySelectorAll('.character')[selectedCharacter])?.focus(); }
+    else if (e.code === 'Enter' && !e.repeat) { e.preventDefault(); startShift(); }
+    else if (e.code === 'Escape') toStart();
+  } else if (e.code === 'Enter' && !e.repeat && mode === 'start' && document.activeElement === document.body) {
+    showCharacterSelect();
   }
 });
 
-// Pause automatisk når fanen eller vinduet mister fokus (også når fullskjerm avsluttes med Esc).
+// Pause automatically when the tab or window loses focus (also when fullscreen is exited with Esc).
 window.addEventListener('blur', pause);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) pause();
 });
 document.addEventListener('fullscreenchange', () => {
-  if (!erFullskjerm()) pause();
-  setTimeout(tilpass, 50);
+  if (!isFullscreen()) pause();
+  setTimeout(fit, 50);
 });
-window.addEventListener('resize', tilpass);
-window.addEventListener('orientationchange', () => setTimeout(tilpass, 100));
-spillLerret.addEventListener('contextmenu', (e) => e.preventDefault());
+window.addEventListener('resize', fit);
+window.addEventListener('orientationchange', () => setTimeout(fit, 100));
+gameCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-// ---------- Debug-modus (?debug) ----------
+// ---------- Debug mode (?debug) ----------
 
-/** Stresstest: minutt 15, fullt bygg med kombinasjoner, maks advokater, 5 minutter uten å kunne dø. */
-let stress = /** @type {null | {tid: number, bilder: number, minFps: number, sumFps: number, maalinger: number, heapStart: number, heapMaks: number, heapSlutt: number, logg: string[]}} */ (null);
+/** Stress test: minute 15, full build with combinations, max lawyers, 5 minutes without being able to die. */
+let stress = /** @type {null | {time: number, frames: number, minFps: number, sumFps: number, measurements: number, heapStart: number, heapMax: number, heapEnd: number, log: string[]}} */ (null);
 const heap = () => (/** @type {any} */ (performance).memory ? /** @type {any} */ (performance).memory.usedJSHeapSize / 1048576 : -1);
 
-function startStresstest() {
-  startVakt();
-  if (!spill) return;
-  const s = spill;
-  s.debugHopp(15 * 60 - 1);
-  // De tyngste våpnene for ytelsen: mange prosjektiler, kjeder og stråler (alle som kombinasjoner)
-  s.debugMaksBygg(['teams', 'ctrlz', 'straale', 'toner'], true);
-  s.debug.udoedelig = true;
-  hud.ikonerEndret();
-  stress = { tid: 0, bilder: 0, minFps: 999, sumFps: 0, maalinger: 0, heapStart: heap(), heapMaks: heap(), heapSlutt: 0, logg: [] };
+function startStressTest() {
+  startShift();
+  if (!game) return;
+  const s = game;
+  s.debugSkip(15 * 60 - 1);
+  // The weapons that are heaviest on performance: many projectiles, chains and beams (all as combinations)
+  s.debugMaxBuild(['teams', 'ctrlz', 'beam', 'toner'], true);
+  s.debug.immortal = true;
+  hud.iconsChanged();
+  stress = { time: 0, frames: 0, minFps: 999, sumFps: 0, measurements: 0, heapStart: heap(), heapMax: heap(), heapEnd: 0, log: [] };
   console.log('[stresstest] start: minutt 15, 4 våpen med kombinasjoner, maks advokater, 5 minutter');
 }
 
-function stressStyring() {
-  const a = animTid * 0.6;
+function stressInput() {
+  const a = animTime * 0.6;
   return [Math.cos(a), Math.sin(a * 1.3)];
 }
 
-function stressTikk(dt) {
-  if (!stress || !spill) return;
-  const s = spill;
-  // Hold antallet på taket hele tiden
-  const p = s.spiller;
-  for (let i = 0; s.fiender.n < CONFIG.spawn.maksSamtidige && i < 40; i++) {
-    const v = (s.nesteUid * 2.399) % (Math.PI * 2);
-    const type = i % 6 === 0 ? 'senior' : i % 7 === 0 ? 'printer' : i % 5 === 0 && s.antallAvsendere < 30 ? 'avsender' : 'junior';
-    spawnFiende(s, type, p.x + Math.cos(v) * 260, p.y + Math.sin(v) * 200);
+function stressTick(dt) {
+  if (!stress || !game) return;
+  const s = game;
+  // Keep the count at the cap at all times
+  const p = s.player;
+  for (let i = 0; s.enemies.n < CONFIG.spawn.maxConcurrent && i < 40; i++) {
+    const v = (s.nextUid * 2.399) % (Math.PI * 2);
+    const type = i % 6 === 0 ? 'senior' : i % 7 === 0 ? 'printer' : i % 5 === 0 && s.senderCount < 30 ? 'sender' : 'junior';
+    spawnEnemy(s, type, p.x + Math.cos(v) * 260, p.y + Math.sin(v) * 200);
   }
-  stress.tid += dt;
-  stress.bilder++;
-  if (Math.floor(stress.tid) !== Math.floor(stress.tid - dt)) {
-    stress.minFps = Math.min(stress.minFps, ytelse.fps);
-    stress.sumFps += ytelse.fps;
-    stress.maalinger++;
+  stress.time += dt;
+  stress.frames++;
+  if (Math.floor(stress.time) !== Math.floor(stress.time - dt)) {
+    stress.minFps = Math.min(stress.minFps, perf.fps);
+    stress.sumFps += perf.fps;
+    stress.measurements++;
     const h = heap();
-    stress.heapMaks = Math.max(stress.heapMaks, h);
-    if (Math.floor(stress.tid) % 30 === 0) {
-      const linje = `${mmss(stress.tid)}: ${ytelse.fps} FPS, oppdatering ${ytelse.msOppd.toFixed(2)} ms, tegning ${ytelse.msTegn.toFixed(2)} ms, advokater ${s.fiender.n}, effekter ${s.effekter.n}, minne ${h.toFixed(1)} MB, kvalitet ${tegner.kvalitet}`;
-      stress.logg.push(linje);
-      console.log('[stresstest] ' + linje);
+    stress.heapMax = Math.max(stress.heapMax, h);
+    if (Math.floor(stress.time) % 30 === 0) {
+      const line = `${mmss(stress.time)}: ${perf.fps} FPS, oppdatering ${perf.msUpdate.toFixed(2)} ms, tegning ${perf.msDraw.toFixed(2)} ms, advokater ${s.enemies.n}, effekter ${s.effects.n}, minne ${h.toFixed(1)} MB, kvalitet ${renderer.quality}`;
+      stress.log.push(line);
+      console.log('[stresstest] ' + line);
     }
   }
-  if (stress.tid >= 300) {
-    stress.heapSlutt = heap();
-    const res = `Stresstest ferdig: snitt ${Math.round(stress.sumFps / Math.max(1, stress.maalinger))} FPS, laveste ${stress.minFps} FPS, minne start ${stress.heapStart.toFixed(1)} MB → maks ${stress.heapMaks.toFixed(1)} MB → slutt ${stress.heapSlutt.toFixed(1)} MB`;
+  if (stress.time >= 300) {
+    stress.heapEnd = heap();
+    const res = `Stresstest ferdig: snitt ${Math.round(stress.sumFps / Math.max(1, stress.measurements))} FPS, laveste ${stress.minFps} FPS, minne start ${stress.heapStart.toFixed(1)} MB → maks ${stress.heapMax.toFixed(1)} MB → slutt ${stress.heapEnd.toFixed(1)} MB`;
     console.log('[stresstest] ' + res);
-    console.log('[stresstest] e-poster nå: ' + s.fiendeSkudd.n + ', avsendere: ' + s.antallAvsendere);
-    stress.logg.push(res);
-    /** @type {any} */ (window).stressResultat = stress;
-    s.status = 'ferdig';
+    console.log('[stresstest] e-poster nå: ' + s.enemyShots.n + ', avsendere: ' + s.senderCount);
+    stress.log.push(res);
+    /** @type {any} */ (window).stressResult = stress;
+    s.status = 'done';
     stress = null;
   }
 }
 
 /** @type {{t: number, h: Record<string, number>}[]} */
-const hjelpLogg = [];
+const helpLog = [];
 
-function visDebug() {
-  const y = ytelse;
-  const minne = heap();
-  let t = `FPS ${y.fps} (min ${y.minFps}, snitt ${y.snittFps})  kvalitet ${['full', 'middels', 'lav'][tegner.kvalitet]}\n` +
-    `ms/bilde: oppdatering ${y.msOppd.toFixed(2)}  tegning ${y.msTegn.toFixed(2)}\n` +
-    (minne >= 0 ? `minne ${minne.toFixed(1)} MB\n` : 'minne: ikke tilgjengelig i denne nettleseren\n');
-  if (spill) {
-    const s = spill;
-    t += `tid ${mmss(s.tid)}  ${s.faseNavn}\n` +
-      `advokater ${s.fiender.n}  prosjektiler ${s.prosjektiler.n}  effekter ${s.effekter.n}\n` +
-      `lapper ${s.lapper.n}  glade (animasjon) ${tegner.gladeVist}  spart ${s.spart}\n` +
-      `inn/sek ${spawnRate(s.tid).toFixed(1)}  frustrasjon ×${frustrasjonsfaktor(s.tid).toFixed(2)}\n` +
-      `mult x${multiplikator(s).toFixed(1)}  hjulpne ${s.hjulpne}  nivå ${s.nivaa}\n` +
-      `udødelig: ${s.debug.udoedelig ? 'JA' : 'nei'}  seed: ${s.dato}`;
+function showDebug() {
+  const y = perf;
+  const memory = heap();
+  let t = `FPS ${y.fps} (min ${y.minFps}, snitt ${y.avgFps})  kvalitet ${['full', 'middels', 'lav'][renderer.quality]}\n` +
+    `ms/bilde: oppdatering ${y.msUpdate.toFixed(2)}  tegning ${y.msDraw.toFixed(2)}\n` +
+    (memory >= 0 ? `minne ${memory.toFixed(1)} MB\n` : 'minne: ikke tilgjengelig i denne nettleseren\n');
+  if (game) {
+    const s = game;
+    t += `tid ${mmss(s.time)}  ${s.phaseName}\n` +
+      `advokater ${s.enemies.n}  prosjektiler ${s.projectiles.n}  effekter ${s.effects.n}\n` +
+      `lapper ${s.tickets.n}  glade (animasjon) ${renderer.happyShown}  spart ${s.spared}\n` +
+      `inn/sek ${spawnRate(s.time).toFixed(1)}  frustrasjon ×${frustrationFactor(s.time).toFixed(2)}\n` +
+      `mult x${multiplier(s).toFixed(1)}  hjulpne ${s.helped}  nivå ${s.level}\n` +
+      `udødelig: ${s.debug.immortal ? 'JA' : 'nei'}  seed: ${s.date}`;
   }
-  if (spill) {
-    // Hjelp per sekund per våpen (siste ca. 10 sekunder) – brukes til å sammenligne våpen og kombinasjoner
-    const naa = spill.tid;
-    hjelpLogg.push({ t: naa, h: { ...spill.stat.hjelpPerVaapen } });
-    while (hjelpLogg.length > 2 && naa - hjelpLogg[0].t > 10) hjelpLogg.shift();
-    const forst = hjelpLogg[0];
-    const dt = naa - forst.t;
+  if (game) {
+    // Help per second per weapon (last ca. 10 seconds) – used to compare weapons and combinations
+    const now = game.time;
+    helpLog.push({ t: now, h: { ...game.stat.helpPerWeapon } });
+    while (helpLog.length > 2 && now - helpLog[0].t > 10) helpLog.shift();
+    const atFirst = helpLog[0];
+    const dt = now - atFirst.t;
     if (dt > 1) {
       t += '\nhjelp/s siste ' + Math.round(dt) + ' s:';
-      for (const w of spill.spiller.vaapen) {
+      for (const w of game.player.weapons) {
         const id = w.id;
-        const hps = ((spill.stat.hjelpPerVaapen[id] ?? 0) - (forst.h[id] ?? 0)) / dt;
-        t += `\n  ${w.evo ? CONFIG.vaapen[id].kombinasjon.navn : CONFIG.vaapen[id].navn}: ${Math.round(hps)}`;
+        const hps = ((game.stat.helpPerWeapon[id] ?? 0) - (atFirst.h[id] ?? 0)) / dt;
+        t += `\n  ${w.evo ? CONFIG.weapons[id].combination.name : CONFIG.weapons[id].name}: ${Math.round(hps)}`;
       }
     }
   }
-  if (stress) t += `\nSTRESSTEST ${mmss(stress.tid)} / 05:00  laveste FPS ${stress.minFps === 999 ? '-' : stress.minFps}`;
-  else if (/** @type {any} */ (window).stressResultat) t += '\n' + /** @type {any} */ (window).stressResultat.logg.slice(-1)[0];
+  if (stress) t += `\nSTRESSTEST ${mmss(stress.time)} / 05:00  laveste FPS ${stress.minFps === 999 ? '-' : stress.minFps}`;
+  else if (/** @type {any} */ (window).stressResult) t += '\n' + /** @type {any} */ (window).stressResult.log.slice(-1)[0];
   el('debuginfo').textContent = t;
 }
 
@@ -614,50 +614,50 @@ if (DEBUG) {
     const d = /** @type {HTMLElement} */ (e.target).dataset?.d;
     if (!d) return;
     if (d === 'stress') {
-      startStresstest();
+      startStressTest();
       return;
     }
-    if (!spill) return;
-    if (d === 't60') spill.debugHopp(60);
-    else if (d === 't180') spill.debugHopp(180);
-    else if (d === 'nivaa') spill.debugNivaaOpp();
-    else if (d === 'nivaa10') {
-      spill.debug.brukt = true;
-      for (let n = spill.nivaa, i = 0; i < 10; i++) spill.xp += xpBehov(n + i);
-      spill.sjekkNivaa();
-    } else if (d === 'maks') spill.debugMaksBygg();
-    else if (d === 'komb') spill.debugMaksBygg(spill.spiller.vaapen.map((w) => w.id).concat(['avpaa', 'mus', 'toner', 'fjern']).filter((v, i, a) => a.indexOf(v) === i), true);
-    else if (d === 'udoed') {
-      spill.debug.brukt = true;
-      spill.debug.udoedelig = !spill.debug.udoedelig;
-    } else if (d === 'sverm') {
-      spill.debug.brukt = true;
-      const p = spill.spiller;
+    if (!game) return;
+    if (d === 't60') game.debugSkip(60);
+    else if (d === 't180') game.debugSkip(180);
+    else if (d === 'level') game.debugLevelUp();
+    else if (d === 'level10') {
+      game.debug.used = true;
+      for (let n = game.level, i = 0; i < 10; i++) game.xp += xpNeeded(n + i);
+      game.checkLevel();
+    } else if (d === 'max') game.debugMaxBuild();
+    else if (d === 'combo') game.debugMaxBuild(game.player.weapons.map((w) => w.id).concat(['powerCycle', 'mouse', 'toner', 'remote']).filter((v, i, a) => a.indexOf(v) === i), true);
+    else if (d === 'immortal') {
+      game.debug.used = true;
+      game.debug.immortal = !game.debug.immortal;
+    } else if (d === 'swarm') {
+      game.debug.used = true;
+      const p = game.player;
       for (let i = 0; i < 100; i++) {
         const a = (i / 100) * Math.PI * 2;
-        spawnFiende(spill, i % 7 === 0 ? 'senior' : 'junior', p.x + Math.cos(a) * (200 + (i % 5) * 20), p.y + Math.sin(a) * (200 + (i % 5) * 20));
+        spawnEnemy(game, i % 7 === 0 ? 'senior' : 'junior', p.x + Math.cos(a) * (200 + (i % 5) * 20), p.y + Math.sin(a) * (200 + (i % 5) * 20));
       }
-    } else spill.debugSpawn(d);
-    hud.ikonerEndret();
-    behandleHendelser();
-    if (spill.status === 'nivaaopp' && modus === 'spill') aapneNivaaopp();
+    } else game.debugSpawn(d);
+    hud.iconsChanged();
+    handleEvents();
+    if (game.status === 'levelUp' && mode === 'game') openLevelUp();
   });
-  // Gjør spillet tilgjengelig i konsollen for testing.
-  Object.defineProperty(window, 'hds', { get: () => ({ spill, CONFIG, modus, tegner, hud, styring, innst, ytelse, startStresstest }) });
+  // Make the game available in the console for testing.
+  Object.defineProperty(window, 'hds', { get: () => ({ game, CONFIG, mode, renderer, hud, input, settings, perf, startStressTest }) });
 }
 
-ui.settPortrettKilde((i) => tegner.fig.portrett(i));
-tilpass();
-oppdaterLydknapper();
-tilStart();
-if (new URLSearchParams(location.search).get('debug') === 'karakterer') ui.visKarakterForhaandsvisning(tegner.fig);
+ui.setPortraitSource((i) => renderer.fig.portrait(i));
+fit();
+updateSoundButtons();
+toStart();
+if (new URLSearchParams(location.search).get('debug') === 'karakterer') ui.showCharacterPreview(renderer.fig);
 
-// Lag alle figurvariantene mens startskjermen vises. Atlasene skal aldri endres under spill
-// (det tvinger nettleseren til å kopiere hele atlaset på nytt og gir hakking).
-setTimeout(function lagNoen() {
-  if (!tegner.fig.lagNoen(8)) setTimeout(lagNoen, 16);
+// Make all the figure variants while the start screen is shown. The atlases must never change during play
+// (that forces the browser to copy the whole atlas again and causes stutter).
+setTimeout(function makeSome() {
+  if (!renderer.fig.makeSome(8)) setTimeout(makeSome, 16);
 }, 50);
 requestAnimationFrame((ms) => {
-  forrige = ms / 1000;
-  requestAnimationFrame(ramme);
+  previous = ms / 1000;
+  requestAnimationFrame(onFrame);
 });

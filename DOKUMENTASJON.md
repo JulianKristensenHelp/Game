@@ -18,7 +18,7 @@ node server/server.js
 Åpne deretter <http://localhost:3000>. Annen port: sett miljøvariabelen `PORT`.
 
 På Windows uten Node installert kan du kjøre `start.ps1` – den bruker Node-en som følger med VS Code.
-Det samme gjelder verktøyene: `powershell -File tools/node.ps1 tools/simuler.js`.
+Det samme gjelder verktøyene: `powershell -File tools/node.ps1 tools/simulate.js`.
 
 > Spillet må åpnes via en webserver (http/https). Å dobbeltklikke på `index.html` virker ikke,
 > fordi nettlesere ikke laster ES-moduler fra `file://`.
@@ -28,7 +28,7 @@ Det samme gjelder verktøyene: `powershell -File tools/node.ps1 tools/simuler.js
 **Enklest – alt på én server:** legg hele mappen på en intern maskin og start `node server/server.js`
 (gjerne som en tjeneste). Serveren leverer både spillet og topplisten. Del lenken, ferdig.
 
-- Topplisten lagres i `server/data/toppliste.db` (SQLite). Mappen kan flyttes med `DATA_DIR`.
+- Topplisten lagres i `server/data/leaderboard.db` (SQLite). Mappen kan flyttes med `DATA_DIR`.
   **Ikke legg databasen i en OneDrive-/SharePoint-synkronisert mappe** – synkroniseringen kan låse fila.
 - Bare `index.html`, `css/`, `js/` og `fonts/` ligger åpent på nett. Server-mappen og databasen gjør det ikke.
 - Bak en omvendt proxy (IIS, nginx): send både `/` og `/api/` videre til Node-serveren.
@@ -36,7 +36,7 @@ Det samme gjelder verktøyene: `powershell -File tools/node.ps1 tools/simuler.js
 **Bare statiske filer:** `index.html`, `css/`, `js/` og `fonts/` kan legges på hvilken som helst webserver.
 Spillet virker da fullt ut, men viser «Topplisten er utilgjengelig» til `api/toppliste` og `api/score`
 svarer. Vil dere bruke en annen lagring, bytter dere bare innholdet i de to funksjonene
-`hentToppliste(dato)` og `sendInnScore(innslag)` i `js/toppliste.js`.
+`fetchLeaderboard(date)` og `submitScore(entry)` i `js/leaderboard.js`.
 
 Topplisten gjelder dagens dato i norsk tid og nullstilles ved midnatt. Hver person står med sin beste
 runde (ett innslag per navn, uavhengig av store/små bokstaver). Serveren avviser urealistiske
@@ -73,9 +73,9 @@ hvert innslag i topplisten (portrett ved navnet). Topplisten er felles for alle 
 | 3 | HDMI-kabelen | +10 % bevegelseshastighet |
 | 4 | Trådløse mus | +25 % radius for å plukke opp ticket-lapper |
 
-- **Navn og tittel** fylles inn i js/config.js under CONFIG.karakterer (nå står det «Karakter 1–4» og
+- **Navn og tittel** fylles inn i js/config.js under CONFIG.characters (nå står det «Karakter 1–4» og
   «Tittel fylles inn»). Der står også startvåpen og bonus.
-- **Utseendet** står i js/figurer.js (SPILLERE for figuren og 	egnPortrett for portrettet på 64 × 64).
+- **Utseendet** står i js/figures.js (PLAYERS for figuren og drawPortrait for portrettet på 64 × 64).
 - **Forhåndsvisning til godkjenning:** <http://localhost:3000/?debug=karakterer> viser alle fire med portrett,
   animert gangsyklus, glad bilde, navn, tittel, startvåpen og bonus.
 - Bildene av personene er bare brukt som forelegg. De ligger ikke i prosjektet og publiseres ikke.
@@ -92,13 +92,13 @@ riktig passiv gir en kombinasjon. Fire våpen, fire passive og fire kombinasjone
 | Teams-varsel (spretter fra advokat til advokat) | Dobbel skjerm | Allmøte på Teams |
 | Støydempende headset (skjold som blokkerer ett treff) | Ergonomisk stol | Hjemmekontor |
 
-De nye tallene står i CONFIG.nyeVaapen og CONFIG.nyePassiver. «Dobbel skjerm» bruker en egen
+De nye tallene står i CONFIG.newWeapons og CONFIG.newPassives. «Dobbel skjerm» bruker en egen
 tilfeldighetsstrøm, så samme valg gir samme runde for alle.
 
 **«Haster!»-avsenderen** (fra 2:30) holder seg 150–200 piksler unna og sender e-poster mot der spilleren
 står. Laptopen lyser og et «!» vises 0,5 sekunder før hvert skudd. Maks 15 % av advokatene og maks 30 samtidig,
 og maks 60 e-poster på kartet. Fra og med boss nummer tre sender bossen en vifte med tre e-poster.
-Tallene står i CONFIG.avsender, CONFIG.fiendeSkudd og CONFIG.bossSkudd.
+Tallene står i CONFIG.sender, CONFIG.enemyShots og CONFIG.bossShots.
 
 ## Slik justerer du balansen
 
@@ -118,7 +118,7 @@ siden på nytt. De viktigste:
 | endre karakterene | `karakterer` (navn, tittel, startvåpen, bonus) |
 | endre «Haster!»-avsenderen | `avsender`, `fiendeSkudd`, `bossSkudd` |
 
-**Test endringene uten å spille:** `node tools/simuler.js [dato] [maks minutter]` lar enkle roboter
+**Test endringene uten å spille:** `node tools/simulate.js [dato] [maks minutter]` lar enkle roboter
 spille hele runder på noen sekunder og skriver ut hvor lenge de holder ut og når de får første kombinasjon.
 Den sjekker også at to like runder gir nøyaktig samme resultat (også med «Dobbel skjerm»), og at utseendet på
 advokatene ikke påvirker spillet. Med tallene som ligger inne nå (tre forskjellige datoer):
@@ -132,7 +132,7 @@ advokatene ikke påvirker spillet. Med tallene som ligger inne nå (tre forskjel
 
 Robotene svinger mye fra runde til runde og er ikke mennesker. Prøvespill gjerne med noen kolleger.
 
-**Sammenlign våpen og kombinasjoner:** `node tools/maalvaapen.js` måler hjelp per sekund for alle 10 våpen
+**Sammenlign våpen og kombinasjoner:** `node tools/measure-weapons.js` måler hjelp per sekund for alle 10 våpen
 på nivå 8 og som kombinasjon under like forhold. I debug-modus viser overlegget det samme i spillet
 (hjelp per sekund per våpen, siste 10 sekunder).
 
@@ -141,27 +141,27 @@ på nivå 8 og som kombinasjon under like forhold. I debug-modus viser overlegge
 Kartet er én kontoretasje på 2560 × 1440 piksler med yttervegger, og oppsettet er likt for alle.
 
 - **Soner** (kontorlandskap, kantine, heiser, møterom, printerrom, resepsjon, sofakrok) står i `SONER` i
-  `js/kart.js`: navn, gulvtype, plassering og farge på minikartet.
+  `js/map.js`: navn, gulvtype, plassering og farge på minikartet.
 - **Pynt** (pulter, stoler, planter, printere, vannkjølere …) står i `lagPynt()` i samme fil, som en liste
   med navn og koordinater. Pynt blokkerer aldri bevegelse – bare ytterveggene gjør det.
 - **Dører og heiser** der advokater kommer inn når det er trangt, står i `DOERER`.
 - **Glassvegger** (bare pynt) står i `GLASS`.
-- Kartets størrelse og veggtykkelse står i `CONFIG.kart`.
+- Kartets størrelse og veggtykkelse står i `CONFIG.map`.
 
 ## Slik endrer du grafikken
 
-All grafikk tegnes med kode som fargeindekserte pikselrutenett (`js/piksel.js`) – ingen bildefiler.
+All grafikk tegnes med kode som fargeindekserte pikselrutenett (`js/pixel.js`) – ingen bildefiler.
 
-- **Advokatene** lages i `js/figurer.js`. Hver figur settes sammen av lag: hudfarge (7), alder, kropp,
+- **Advokatene** lages i `js/figures.js`. Hver figur settes sammen av lag: hudfarge (7), alder, kropp,
   frisyre (10), hårfarge (6), briller, skjegg/bart, øreringer, slips/skjerf, skjørt eller bukser.
   Fargene står øverst i fila (`HUDFARGER`, `HAARFARGER`, `KLAER` osv.), og alle egenskaper fordeles jevnt.
   Typene kjennes igjen på klær, størrelse og det de bærer (laptop, papirbunke, dokumentmappe).
-  Antall varianter per type står i `CONFIG.figurVarianter`. Utseendet trekkes fra en egen
+  Antall varianter per type står i `CONFIG.figureVariants`. Utseendet trekkes fra en egen
   tilfeldighetsstrøm og påvirker aldri spillet.
 - **Gjenstander, pynt, gulv og effekter** står i `js/sprites.js`.
-- **Ikonene** (16 × 16) står i `js/ikoner.js`.
-- **Pikselfonten** «KontorPiksel» (med æ, ø og å) er egenprodusert. Glyfene står i `js/pikselfont.js`.
-  Endrer du dem, lag font-fila på nytt med `node tools/lagfont.js` (den brukes i menyene).
+- **Ikonene** (16 × 16) står i `js/icons.js`.
+- **Pikselfonten** «KontorPiksel» (med æ, ø og å) er egenprodusert. Glyfene står i `js/pixelfont.js`.
+  Endrer du dem, lag font-fila på nytt med `node tools/build-font.js` (den brukes i menyene).
   Lisens: CC0 (fri bruk), se `fonts/LISENS.txt`.
 
 ## Debug-modus
@@ -190,17 +190,17 @@ Runder der debug-knappene er brukt, kan ikke sendes inn til topplisten.
 | Fil | Innhold |
 | --- | --- |
 | `js/config.js` | **Alle balansetall** |
-| `js/spill.js` | Spilltilstanden og én oppdatering per fast tidssteg (60 per sekund) |
-| `js/spiller.js`, `js/fiender.js`, `js/vaapen.js` | Spilleren, advokatene (inkl. spawning på kartet) og IT-løsningene |
-| `js/oppgraderinger.js`, `js/lapper.js`, `js/score.js` | Nivåopp-kort, lapper/energidrikk/Ny PC, poeng og multiplikator |
-| `js/kart.js` | Kartets soner, pynt, dører og vegger |
-| `js/tegning.js` | Spillverdenen i pixel art (640 × 360) |
+| `js/game.js` | Spilltilstanden og én oppdatering per fast tidssteg (60 per sekund) |
+| `js/player.js`, `js/enemies.js`, `js/weapons.js` | Spilleren, advokatene (inkl. spawning på kartet) og IT-løsningene |
+| `js/upgrades.js`, `js/tickets.js`, `js/score.js` | Nivåopp-kort, lapper/energidrikk/Ny PC, poeng og multiplikator |
+| `js/map.js` | Kartets soner, pynt, dører og vegger |
+| `js/renderer.js` | Spillverdenen i pixel art (640 × 360) |
 | `js/hud.js` | HUD og minikart |
-| `js/figurer.js`, `js/sprites.js`, `js/ikoner.js`, `js/piksel.js`, `js/pikselfont.js` | Grafikken |
-| `js/innstillinger.js`, `js/lyd.js`, `js/styring.js` | Innstillinger, lyd (Web Audio) og tastatur/touch |
+| `js/figures.js`, `js/sprites.js`, `js/icons.js`, `js/pixel.js`, `js/pixelfont.js` | Grafikken |
+| `js/settings.js`, `js/sound.js`, `js/input.js` | Innstillinger, lyd (Web Audio) og tastatur/touch |
 | `js/ui.js`, `js/main.js` | Menyer, hovedløkka, automatisk kvalitet, debug og stresstest |
-| `js/toppliste.js`, `server/server.js` | Toppliste-klient og Node-server med SQLite |
-| `tools/simuler.js`, `tools/maalvaapen.js`, `tools/lagfont.js`, `tools/node.ps1` | Balansetest, våpenmåling, font-generator og hjelpeskript |
+| `js/leaderboard.js`, `server/server.js` | Toppliste-klient og Node-server med SQLite |
+| `tools/simulate.js`, `tools/measure-weapons.js`, `tools/build-font.js`, `tools/node.ps1` | Balansetest, våpenmåling, font-generator og hjelpeskript |
 
 **Dagens vakt:** all tilfeldighet kommer fra en seedet generator (mulberry32) med dagens dato i norsk tid
 som seed, i separate strømmer: når advokater kommer, hvor de kommer inn, hastesak/boss, oppgraderingskort,
