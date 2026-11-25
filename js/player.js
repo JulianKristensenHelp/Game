@@ -19,6 +19,10 @@ export function makePlayer() {
     dirX: 1, dirY: 0,
     moving: false,
     inPaper: false,
+    /** Ink puddle from the printer boss (slows down). */
+    inInk: false,
+    /** Hold music from the Nørdic consultant: seconds left of slowdown, and how much (0.4 = 40 %). */
+    slow: 0, slowBy: 0,
     /** @type {{id:string, level:number, evo:boolean, cd:number, angle:number}[]} */
     weapons: [],
     /** @type {{id:string, level:number}[]} */
@@ -66,9 +70,21 @@ export function updatePlayer(s, dt, ix, iy) {
     if (dx * dx + dy * dy < rr * rr) p.inPaper = true;
   }
 
+  // Ink puddles from the printer boss's cartridges slow the player down too.
+  const ink = CONFIG.bosses.printerBoss.cmyk;
+  p.inInk = false;
+  for (let i = 0; i < s.puddles.n; i++) {
+    const h = s.puddles.items[i];
+    const dx = h.x - p.x, dy = h.y - p.y, rr = ink.puddleRadius + p.r * 0.5;
+    if (dx * dx + dy * dy < rr * rr) p.inInk = true;
+  }
+  if (p.slow > 0) p.slow -= dt;
+
   let speed = CONFIG.player.speed * p.mod.speed;
   if (p.kick > 0) speed *= 1 + CONFIG.energyDrink.kickSpeed;
   if (p.inPaper) speed *= 1 - pk.paperSlow;
+  if (p.inInk) speed *= 1 - ink.puddleSlow;
+  if (p.slow > 0) speed *= 1 - p.slowBy;
   p.x = Math.min(INSIDE.x1 - p.r, Math.max(INSIDE.x0 + p.r, p.x + ix * speed * dt));
   p.y = Math.min(INSIDE.y1 - p.r, Math.max(INSIDE.y0 + p.r, p.y + iy * speed * dt));
 }

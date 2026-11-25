@@ -5,10 +5,10 @@
 import { CONFIG, SENDER_BUBBLES } from './config.js';
 import { ZONES, GLASS, makeDecor, INSIDE } from './map.js';
 import { makeSprites, ring, splash, drawSprite } from './sprites.js';
-import { Figures, TILE } from './figures.js';
-import { TYPE_NAMES } from './enemies.js';
+import { Figures, TILE, POSE } from './figures.js';
+import { TYPE_NAMES, figureType } from './enemies.js';
 import { BitmapFont, textWidth, HEIGHT as FONT_H } from './pixelfont.js';
-import { weaponStats, spiralPos } from './weapons.js';
+import { weaponStats, spiralPos, angelPos } from './weapons.js';
 import { Rng, TAU, mmss } from './utils.js';
 import { makeCanvas, ctx2d } from './pixel.js';
 
@@ -203,6 +203,14 @@ export class Renderer {
     }
     ctx.globalAlpha = 1;
 
+    // Ink puddles from the printer boss
+    for (let i = 0; i < s.puddles.n; i++) {
+      const h = s.puddles.items[i];
+      ctx.globalAlpha = Math.min(1, h.life / 0.8);
+      drawSprite(ctx, item.puddle[h.color], h.x, h.y);
+    }
+    ctx.globalAlpha = 1;
+
     this.drawEffectsUnder(s, now);
 
     // Tickets (blink in the last seconds)
@@ -249,6 +257,10 @@ export class Renderer {
     const shadows = item.shadows;
     for (let i = 0; i < n; i++) {
       const e = sorted[i];
+      if (e.type === 'boss') {
+        this.drawBoss(s, e, now);
+        continue;
+      }
       const sheet = this.fig.sheet(e.type, e.variant);
       if (e.type === 'urgent') {
         ctx.globalAlpha = fewerFlashes ? 0.8 : 0.7 + Math.sin(now * 8) * 0.2;
@@ -273,13 +285,31 @@ export class Renderer {
     }
     this.drawBossClocks(s, n);
 
-    // Emails (above the lawyers, with a red glow so they stand out from the player's own effects)
+    // Emails and the bosses' projectiles (above the lawyers, with a red glow so they stand out from the player's own effects)
     for (let i = 0; i < s.enemyShots.n; i++) {
       const q = s.enemyShots.items[i];
-      ctx.globalAlpha = 0.55;
+      const wobble = fewerFlashes ? 0 : Math.round(Math.sin(now * 10 + i));
+      if (q.kind === 'note') {
+        // hold music: harmless, so no red glow
+        drawSprite(ctx, item.note, q.x, q.y + wobble);
+        continue;
+      }
+      if (q.kind === 'cartridge') {
+        // The landing spot is marked, and the cartridge blinks just before it lands
+        const left = q.life;
+        const lx = q.x + q.vx * left, ly = q.y + q.vy * left;
+        ctx.globalAlpha = 0.6;
+        drawSprite(ctx, ring(7, ['#19b5c9', '#e0409a', '#f5cf3a', '#2b2f38'][q.color], 1), lx, ly);
+        ctx.globalAlpha = 1;
+        if (left < 0.4 && !fewerFlashes && Math.floor(now * 16) % 2 === 0) continue;
+        drawSprite(ctx, item.cartridge[q.color], q.x, q.y - Math.round(Math.sin((q.t / q.flight) * Math.PI) * 14));
+        continue;
+      }
+      ctx.globalAlpha = 0.45;
       drawSprite(ctx, item.emailGlow, q.x, q.y);
       ctx.globalAlpha = 1;
-      drawSprite(ctx, item.email, q.x, q.y + (fewerFlashes ? 0 : Math.round(Math.sin(now * 10 + i))));
+      const spr = q.kind === 'ticket' ? item.ticketShot : q.kind === 'ticketSmall' ? item.ticketSmall : q.kind === 'paper' ? item.sheet : q.kind === 'calendar' ? item.calendar : item.email;
+      drawSprite(ctx, spr, q.x, q.y + wobble);
     }
 
     this.drawWeapons(s, now);
@@ -309,7 +339,7 @@ export class Renderer {
       const sheet = this.fig.sheet(type, e.b);
       if (e.t < smile) {
         const f = e.t / smile;
-        const bounce = Math.round(Math.sin(f * Math.PI) * (type === 'boss' ? 8 : 4));
+        const bounce = Math.round(Math.sin(f * Math.PI) * (sheet.h >= 64 ? 8 : 4));
         const frame = TILE.happy + (e.c < 0 ? TILE.left : 0);
         ctx.drawImage(sheet.canvas, frame * sheet.w, sheet.sy, sheet.w, sheet.h, Math.round(e.x - sheet.ax), Math.round(e.y - sheet.ay - bounce), sheet.w, sheet.h);
         if (this.quality < 2 && !this.settings.fewerFlashes) {
@@ -355,6 +385,32 @@ export class Renderer {
         ctx.globalAlpha = 1;
       } else if (e.type === 'swing') {
         this.drawCable(x, y, e.r, e.a, e.b, f);
+      } else if (e.type === 'flash' && e.b === 3) {
+        // Passord-reset (password reset) chain hits: a small golden spark
+        ctx.globalAlpha = 1 - f;
+        drawSprite(ctx, ring(e.r * 0.6 + f * 5, '#f5cf3a', 1), x, y);
+        drawSprite(ctx, this.spr.item.glitter[0], x, y - 4);
+        ctx.globalAlpha = 1;
+      } else if (e.type === 'paperBurst') {
+        // The mini printer shoots out sheets of paper in all directions
+        ctx.globalAlpha = 1 - f;
+        for (let j = 0; j < 6; j++) {
+          const a = j * 1.047 + e.r;
+          const d = 4 + f * e.r;
+          drawSprite(ctx, this.spr.item.sheet, x + Math.cos(a) * d, y + Math.sin(a) * d * 0.7);
+        }
+        ctx.globalAlpha = 1;
+      } else if (e.type === 'confetti') {
+        // Himmelsk serviceavtale (heavenly service agreement): paper confetti
+        const colors = ['#f5cf3a', '#e0409a', '#19b5c9', '#2fd06a', '#ffffff'];
+        ctx.globalAlpha = 1 - f * 0.8;
+        for (let j = 0; j < 24; j++) {
+          const a = j * 2.39996;
+          const d = (0.3 + 0.7 * ((j * 7) % 10) / 10) * e.r * Math.min(1, f * 2.2);
+          ctx.fillStyle = colors[j % 5];
+          ctx.fillRect(Math.round(x + Math.cos(a) * d), Math.round(y + Math.sin(a) * d * 0.8 + f * 6), 2, 2);
+        }
+        ctx.globalAlpha = 1;
       } else if (e.type === 'flash' && e.b === 2) {
         // Teams alert hits: small purple ring
         ctx.globalAlpha = 1 - f;
@@ -471,14 +527,48 @@ export class Renderer {
       if (pr.type === 'teams') {
         drawSprite(ctx, item.teams, pr.x, pr.y);
         continue;
-      }      if (pr.type === 'toner') {
+      }
+      if (pr.type === 'mini') {
+        // Mini printer: in the air in an arc, then shuffling on small legs
+        const set = pr.evo ? item.miniEvo : item.mini;
+        const frame = pr.goBack ? Math.floor(now * 8 + i) & 1 : 0;
+        if (pr.goBack) drawSprite(ctx, item.shadows.small, pr.x, pr.y + 4);
+        drawSprite(ctx, set[frame], pr.x, pr.y);
+        continue;
+      }
+      if (pr.type === 'toner') {
         const set = pr.evo ? item.tonerEvo : item.toner;
         drawSprite(ctx, set[(Math.floor(now * 14) + i) & 7], pr.x, pr.y);
       } else {
+        // Passord-reset (password reset): a glittering key with a short streak of light behind it
+        const len = Math.hypot(pr.vx, pr.vy) > 1 ? 16 : 0;
+        if (len) {
+          const cx = Math.cos(pr.angle), sy = Math.sin(pr.angle);
+          ctx.fillStyle = pr.evo ? '#a8dcff' : '#fff6c8';
+          for (let t = 2; t < len; t += 2) {
+            ctx.globalAlpha = 1 - t / len;
+            ctx.fillRect(Math.round(pr.x - cx * t), Math.round(pr.y - sy * t), 2, 2);
+          }
+          ctx.globalAlpha = 1;
+        }
         const set = pr.evo ? item.keyEvo : item.key;
         const idx = ((Math.round((pr.angle / TAU) * 16) % 16) + 16) % 16;
         drawSprite(ctx, set[idx], pr.x, pr.y);
+        if (this.quality < 2 && Math.floor(now * 12 + i) % 3 === 0) drawSprite(ctx, item.glitter[2], pr.x + 4, pr.y - 4);
       }
+    }
+    // Skytsengelen (the guardian angel) hovers around the player
+    for (let i = 0; i < p.weapons.length; i++) {
+      const w = p.weapons[i];
+      if (w.id !== 'angel') continue;
+      const [ax, ay] = angelPos(w, p);
+      if (w.evo) {
+        ctx.globalAlpha = this.settings.fewerFlashes ? 0.6 : 0.5 + Math.sin(now * 3) * 0.2;
+        drawSprite(ctx, item.angelGlow, ax, ay - 2);
+        ctx.globalAlpha = 1;
+      }
+      const set = w.evo ? item.angelEvo : item.angel;
+      drawSprite(ctx, set[Math.floor(now * 5) & 3], ax, ay);
     }
   }
 
@@ -550,6 +640,12 @@ export class Renderer {
         const c = this.textCanvas(e.text);
         ctx.drawImage(c, Math.round(e.x - c.width / 2), Math.round(e.y - f * 20));
         ctx.globalAlpha = 1;
+      } else if (e.type === 'bubble') {
+        // A happy boss's speech bubble («Sak lukket!», «Utskrift fullført», «Bra jobba!»)
+        const c = this.bubbleCanvas(e.text);
+        ctx.globalAlpha = Math.min(1, (1 - f) * 4);
+        ctx.drawImage(c, Math.round(e.x - c.width / 2), Math.round(e.y - c.height - f * 6));
+        ctx.globalAlpha = 1;
       } else if (e.type === 'newPcFx') {
         ctx.globalAlpha = (1 - f) * (this.settings.fewerFlashes ? 0.25 : 0.55);
         ctx.fillStyle = '#c8ecff';
@@ -572,17 +668,66 @@ export class Renderer {
     return c;
   }
 
+  /**
+   * A boss: its own figure, the pose for the current attack, and the warning before each attack
+   * (a «!», plus a calendar over Johan's head, a line for his sprint, the ticket box, the printer's lamps …).
+   */
+  drawBoss(s, e, now) {
+    const ctx = this.ctx;
+    const item = this.spr.item;
+    const fewerFlashes = this.settings.fewerFlashes;
+    const type = figureType(e);
+    const sheet = this.fig.sheet(type, e.variant);
+    drawSprite(ctx, item.shadows.boss, e.x, e.y + sheet.h - sheet.ay - 3);
+    // Johan's sprint: a line shows the direction during the warning
+    if (e.tell && e.attack === 'sprint') {
+      ctx.globalAlpha = fewerFlashes ? 0.6 : 0.4 + Math.abs(Math.sin(now * 12)) * 0.4;
+      ctx.fillStyle = '#e5484d';
+      const dx = e.aimX - e.x, dy = e.aimY - e.y, d = Math.hypot(dx, dy) || 1;
+      for (let t = 12; t < Math.min(d + 20, 300); t += 6) ctx.fillRect(Math.round(e.x + (dx / d) * t) - 1, Math.round(e.y + (dy / d) * t) - 1, 3, 3);
+      ctx.globalAlpha = 1;
+    }
+    let x = Math.round(e.x - sheet.ax), y = Math.round(e.y - sheet.ay);
+    // The printer shakes while it «warms up», and while the stream of paper comes out
+    if (type === 'printerBoss' && e.attack === 'printJob' && !fewerFlashes) x += Math.round(Math.sin(now * 60) * 1.5);
+    const flash = e.blink > 0 && e.invuln <= 0;
+    if (e.invuln > 0) ctx.globalAlpha = 0.75;
+    if (e.pose >= 0) {
+      const ps = this.fig.poses(type, e.variant);
+      const frame = e.pose + (e.direction < 0 ? POSE.count : 0);
+      ctx.drawImage(ps.canvas, frame * ps.w, flash ? ps.h : 0, ps.w, ps.h, x, y, ps.w, ps.h);
+    } else {
+      const frame = (Math.floor(now * 8 + e.uid * 0.37) & 3) + (flash ? TILE.blink : 0) + (e.direction < 0 ? TILE.left : 0);
+      ctx.drawImage(sheet.canvas, frame * sheet.w, sheet.sy, sheet.w, sheet.h, x, y, sheet.w, sheet.h);
+    }
+    ctx.globalAlpha = 1;
+    const head = e.y - sheet.ay;
+    if (e.tell || e.alert) {
+      const blink = fewerFlashes || Math.floor(now * 10) % 2 === 0;
+      if (e.attack === 'calendar' && blink) drawSprite(ctx, item.calendar, e.x, head - 2);
+      else drawSprite(ctx, item.exclaim, e.x, head + 6);
+    }
+    if (e.jam > 0) {
+      // «Papirstopp!» (paper jam): it takes double help now
+      if (fewerFlashes || Math.floor(now * 4) % 2 === 0) this.font.draw(ctx, 'PAPIRSTOPP!', e.x, head - 6, '#ffe066', 1, '#1d1626', 'center');
+    } else if (e.invuln > 0) {
+      this.font.draw(ctx, 'Vi ringer deg tilbake …', e.x, head - 6, '#c8d6e5', 1, '#1d1626', 'center');
+    }
+  }
+
   /** The countdown clock and the boss's frustration bar. */
   drawBossClocks(s, n) {
     const ctx = this.ctx;
+    const W = CONFIG.bosses;
     for (let i = 0; i < n; i++) {
       const e = this.sorted[i];
       if (e.type !== 'boss') continue;
-      const sheet = this.fig.sheet('boss', e.variant);
+      const sheet = this.fig.sheet(figureType(e), e.variant);
       const y = Math.round(e.y - sheet.ay - 16);
-      const fraction = e.leaving ? 0 : Math.max(0, e.timer / CONFIG.enemies.boss.deadline);
-      drawSprite(ctx, this.spr.clocks[Math.round(fraction * 40)], e.x, y);
-      this.font.draw(ctx, e.leaving ? 'For sent!' : mmss(Math.ceil(e.timer)), e.x, y - 24, e.leaving ? '#ffffff' : fraction < 0.25 ? '#ff8f8f' : '#ffffff', 1, '#1d1626', 'center');
+      const fraction = Math.max(0, e.timer / Math.max(1, e.deadline));
+      drawSprite(ctx, this.spr.clocks[Math.round(fraction * 40)], e.x + 26, y + 8);
+      const color = e.timer <= W.warnRed ? '#ff8f8f' : e.timer <= W.warnYellow ? '#ffe066' : '#ffffff';
+      this.font.draw(ctx, mmss(Math.ceil(e.timer)), e.x + 26, y - 14, color, 1, '#1d1626', 'center');
       if (!e.leaving) {
         const bx = Math.round(e.x - 24), by = Math.round(e.y + sheet.h - sheet.ay + 2);
         ctx.fillStyle = '#1d1626';
@@ -651,7 +796,8 @@ export class Renderer {
     for (let i = 0; i < s.enemies.n; i++) {
       const e = s.enemies.items[i];
       if (!e.active || e.leaving || (e.type !== 'urgent' && e.type !== 'boss')) continue;
-      this.arrow(e.x - kx, e.y - ky, e.type === 'boss' ? this.spr.arrows.boss : this.spr.arrows.urgentSprite, e.type === 'boss' ? 'FRIST' : 'HASTESAK', now, null);
+      const label = e.type === 'boss' ? CONFIG.bosses[e.bossType]?.short ?? 'BOSS' : 'HASTESAK';
+      this.arrow(e.x - kx, e.y - ky, e.type === 'boss' ? this.spr.arrows.boss : this.spr.arrows.urgentSprite, label, now, null);
     }
     let best = null, bestD = 1e12;
     for (let i = 0; i < s.pickups.n; i++) {

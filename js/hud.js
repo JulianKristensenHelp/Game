@@ -37,10 +37,15 @@ export class Hud {
     this.dirty = true;
     this.lastDraw = 0;
     this.signature = '';
-    this.values = new Float64Array(7);
+    this.values = new Float64Array(9);
     this.multAnim = 0;
     this.multDirection = 1;
-    this.banner = { text: '', style: '', end: 0, start: 0 };
+    this.banner = { text: '', style: '', end: 0, start: 0, sub: '' };
+    /** Johan's big introduction (darkened screen and portrait). @type {null | {portrait: HTMLCanvasElement, title: string, line: string, start: number, end: number}} */
+    this.intro = null;
+    /** Set when the player has been fired («DU HAR FÅTT SPARKEN!»). */
+    this.firedText = '';
+    this.firedStart = 0;
     /** @type {HTMLCanvasElement | null} */
     this.minimapBase = null;
     /** @type {HTMLCanvasElement | null} */
@@ -89,9 +94,23 @@ export class Hud {
   }
 
   /** Shows a short text in the middle of the screen (phase change, boss, etc.). */
-  showBanner(text, style = '', ms = 2800) {
+  showBanner(text, style = '', ms = 2800, sub = '') {
     const now = performance.now();
-    this.banner = { text, style, start: now, end: now + ms };
+    this.banner = { text, style, start: now, end: now + ms, sub };
+    this.dirty = true;
+  }
+
+  /** The final boss's introduction: the screen darkens a little and the portrait is shown with title and line. */
+  showIntro(portrait, title, line, ms = 3600) {
+    const now = performance.now();
+    this.intro = { portrait, title, line, start: now, end: now + ms };
+    this.dirty = true;
+  }
+
+  /** «DU HAR FÅTT SPARKEN!» (you are fired) in big letters, or '' to remove it. */
+  showFired(text) {
+    this.firedText = text;
+    this.firedStart = performance.now();
     this.dirty = true;
   }
 
@@ -199,14 +218,19 @@ export class Hud {
     const v = this.values;
     const new0 = Math.floor(s.time), new1 = s.score, new2 = Math.ceil(p.energy), new3 = p.maxEnergy, new4 = s.multStep * 1000 + s.multCounter;
     const new5 = Math.round((s.xp / s.xpNeeded) * 100) * 1000 + s.level, new6 = blinkPhase * 1e6 + this.iconVersion;
-    const changed = this.signature !== 'game' || v[0] !== new0 || v[1] !== new1 || v[2] !== new2 || v[3] !== new3 || v[4] !== new4 || v[5] !== new5 || v[6] !== new6;
+    // The boss clock: whole seconds, plus the blink phase in the last seconds
+    const boss = s.boss && s.boss.active ? s.boss : null;
+    const red = boss && boss.timer <= CONFIG.bosses.warnRed;
+    const new7 = boss ? Math.ceil(boss.timer) * 4 + (red && !settings.fewerFlashes ? Math.floor(now / 250) % 2 : 0) : -1;
+    const new8 = (this.firedText ? 1 : 0) + (this.intro && now < this.intro.end + 400 ? 2 : 0);
+    const changed = this.signature !== 'game' || v[0] !== new0 || v[1] !== new1 || v[2] !== new2 || v[3] !== new3 || v[4] !== new4 || v[5] !== new5 || v[6] !== new6 || v[7] !== new7 || v[8] !== new8;
     const sig = 'game';
-    const animating = bannerActive || joystick.active;
+    const animating = bannerActive || joystick.active || !!this.firedText || (!!this.intro && now < this.intro.end + 400);
     const limit = animating ? 1000 / 60 : 1000 / 20;
     if (!forced && !this.dirty && !changed && !animating) return;
     if (!forced && now - this.lastDraw < limit - 1) return;
     this.signature = sig;
-    v[0] = new0; v[1] = new1; v[2] = new2; v[3] = new3; v[4] = new4; v[5] = new5; v[6] = new6;
+    v[0] = new0; v[1] = new1; v[2] = new2; v[3] = new3; v[4] = new4; v[5] = new5; v[6] = new6; v[7] = new7; v[8] = new8;
     this.dirty = false;
     this.lastDraw = now;
     this.draw(s, now, blinkPhase, settings, joystick);
@@ -295,8 +319,16 @@ export class Hud {
     if (this.iconDrawn !== this.iconVersion) this.drawIconRow(s);
     if (this.iconRow) ctx.drawImage(this.iconRow, rx + m, ry + rh - m - this.iconRow.height);
 
+    // The big boss clock (under the score) while a boss is out
+    const boss = s.boss && s.boss.active ? s.boss : null;
+    if (boss) this.drawBossClock(ctx, now, mid, ey + FH * (s3 + 1) + FH * (s3 + 2) + 3 * s3, boss, settings);
+
     // Banner
-    if (now < this.banner.end + 400) this.drawBanner(ctx, now, mid, ry + Math.round(rh * 0.26));
+    if (now < this.banner.end + 400) this.drawBanner(ctx, now, mid, ry + Math.round(rh * 0.3));
+
+    // Johan's introduction and «DU HAR FÅTT SPARKEN!»
+    if (this.intro && now < this.intro.end + 400) this.drawIntro(ctx, now);
+    if (this.firedText) this.drawFired(ctx, now, settings);
 
     // Joystick (touch)
     if (joystick.active) {
@@ -405,9 +437,13 @@ export class Hud {
     const b = this.banner;
     const s = this.s;
     const fs = s + 1;
+    const fsSub = Math.max(1, s - 1);
     const inner = Math.min(1, (now - b.start) / 200), out = Math.max(0, Math.min(1, (b.end + 400 - now) / 400));
     ctx.globalAlpha = Math.min(inner, out);
-    const bw = textWidth(b.text) * fs + 8 * s, bh = FH * fs + 4 * s;
+    // A second, smaller line (the boss's line) – wrapped so it never gets wider than the screen
+    const subW = b.sub ? textWidth(b.sub) * fsSub : 0;
+    const bw = Math.min(this.rect.w - 4 * s, Math.max(textWidth(b.text) * fs, subW) + 8 * s);
+    const bh = FH * fs + 4 * s + (b.sub ? FH * fsSub + 2 * s : 0);
     const bx = Math.round(x - bw / 2), by = Math.round(y);
     ctx.fillStyle = '#1d1626';
     ctx.fillRect(bx, by + s, bw, bh - 2 * s);
@@ -415,6 +451,77 @@ export class Hud {
     ctx.fillStyle = b.style === 'boss' ? '#c0392b' : b.style === 'gold' ? '#f5cf3a' : '#2a3140';
     ctx.fillRect(bx + s, by + s, bw - 2 * s, bh - 2 * s);
     this.font.draw(ctx, b.text, x, by + 2 * s, b.style === 'gold' ? '#1d1626' : '#ffffff', fs, b.style === 'gold' ? null : '#1d1626', 'center');
+    if (b.sub) this.font.draw(ctx, b.sub, x, by + 2 * s + FH * fs + 2 * s, b.style === 'gold' ? '#3a2a00' : '#ffe9c8', fsSub, b.style === 'gold' ? null : '#1d1626', 'center');
+    ctx.globalAlpha = 1;
+  }
+
+  /** The big countdown under the score: white, yellow at 30 seconds, red and blinking at 10 (calm with reduced flashes). */
+  drawBossClock(ctx, now, x, y, boss, settings) {
+    const s = this.s;
+    const W = CONFIG.bosses;
+    const t = Math.max(0, boss.timer);
+    const red = t <= W.warnRed, yellow = t <= W.warnYellow;
+    const blinkOff = red && !settings.fewerFlashes && Math.floor(now / 250) % 2 === 1;
+    const fs = s + 2, fsS = Math.max(1, s - 1);
+    const name = CONFIG.bosses[boss.bossType]?.name ?? '';
+    const time = mmss(Math.ceil(t));
+    const bw = Math.max(textWidth(time) * fs + 16 * s, textWidth(name) * fsS + 8 * s), bh = FH * fs + FH * fsS + 6 * s;
+    const bx = Math.round(x - bw / 2);
+    ctx.fillStyle = '#1d1626';
+    ctx.fillRect(bx, y, bw, bh);
+    ctx.fillStyle = red ? (blinkOff ? '#5d1a22' : '#c0392b') : yellow ? '#8a6d00' : '#2a3140';
+    ctx.fillRect(bx + s, y + s, bw - 2 * s, bh - 2 * s);
+    this.font.draw(ctx, name, x, y + 2 * s, '#ffe9c8', fsS, '#1d1626', 'center');
+    // a small clock face in front of the time
+    const cy = y + 3 * s + FH * fsS, cx0 = x - (textWidth(time) * fs) / 2 - 7 * s;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(cx0, cy + s, 5 * s, 5 * s);
+    ctx.fillStyle = '#1d1626';
+    ctx.fillRect(cx0 + 2 * s, cy + 2 * s, s, 2 * s);
+    ctx.fillRect(cx0 + 2 * s, cy + 3 * s, 2 * s, s);
+    this.font.draw(ctx, time, x + 3 * s, cy, red ? (blinkOff ? '#ff8f8f' : '#ffffff') : yellow ? '#ffe066' : '#ffffff', fs, '#1d1626', 'center');
+  }
+
+  /** Johan's introduction: the screen darkens a little, the portrait with «SISTE BOSS: JOHAN» and his line. */
+  drawIntro(ctx, now) {
+    const it = /** @type {NonNullable<Hud['intro']>} */ (this.intro);
+    const { x: rx, y: ry, w: rw, h: rh } = this.rect;
+    const s = this.s;
+    const a = Math.min(1, (now - it.start) / 300, Math.max(0, (it.end + 400 - now) / 400));
+    ctx.globalAlpha = 0.45 * a;
+    ctx.fillStyle = '#05070c';
+    ctx.fillRect(rx, ry, rw, rh);
+    ctx.globalAlpha = a;
+    const ps = Math.min(Math.round(rh * 0.3), 64 * s);
+    const cx = rx + rw / 2, top = ry + Math.round(rh * 0.2);
+    ctx.fillStyle = '#f5cf3a';
+    ctx.fillRect(cx - ps / 2 - 2 * s, top - 2 * s, ps + 4 * s, ps + 4 * s);
+    ctx.fillStyle = '#a9b8c8';
+    ctx.fillRect(cx - ps / 2, top, ps, ps);
+    ctx.drawImage(it.portrait, Math.round(cx - ps / 2), top, ps, ps);
+    this.font.draw(ctx, it.title, cx, top + ps + 4 * s, '#f5cf3a', s + 3, '#1d1626', 'center');
+    this.font.draw(ctx, '«' + it.line + '»', cx, top + ps + 6 * s + FH * (s + 3), '#ffffff', s + 1, '#1d1626', 'center');
+    ctx.globalAlpha = 1;
+  }
+
+  /** «DU HAR FÅTT SPARKEN!» across the screen. */
+  drawFired(ctx, now, settings) {
+    const { x: rx, y: ry, w: rw, h: rh } = this.rect;
+    const s = this.s;
+    const a = Math.min(1, (now - this.firedStart) / 250);
+    ctx.globalAlpha = 0.4 * a;
+    ctx.fillStyle = '#2a0508';
+    ctx.fillRect(rx, ry, rw, rh);
+    ctx.globalAlpha = a;
+    const fs = Math.max(s + 3, Math.floor(rw / (textWidth(this.firedText) + 12)));
+    const shake = settings.fewerFlashes ? 0 : Math.round(Math.sin(now / 30) * s * Math.max(0, 1 - (now - this.firedStart) / 600));
+    const y = ry + Math.round(rh * 0.42);
+    const bw = textWidth(this.firedText) * fs + 12 * s, bh = FH * fs + 8 * s;
+    ctx.fillStyle = '#1d1626';
+    ctx.fillRect(rx + rw / 2 - bw / 2 + shake, y - 4 * s, bw, bh);
+    ctx.fillStyle = '#c0392b';
+    ctx.fillRect(rx + rw / 2 - bw / 2 + s + shake, y - 3 * s, bw - 2 * s, bh - 2 * s);
+    this.font.draw(ctx, this.firedText, rx + rw / 2 + shake, y, '#ffffff', fs, '#1d1626', 'center');
     ctx.globalAlpha = 1;
   }
 }

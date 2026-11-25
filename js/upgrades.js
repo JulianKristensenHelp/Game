@@ -85,7 +85,7 @@ export function giveCombination(s, id) {
   w.cd = 0.2;
   if (id === 'headset') w.charges = V.headset.combination.stats.charges;
   s.stat.combinations.push(id);
-  s.events.push('kombinasjon:' + id);
+  s.events.push('combination:' + id);
   s.events.push('upgraded');
 }
 

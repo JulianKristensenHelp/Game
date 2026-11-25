@@ -14,8 +14,12 @@ export function makeProjectile() {
     type: 'toner', x: 0, y: 0, vx: 0, vy: 0, life: 0, help: 0, splash: 0, through: 0, angle: 0, evo: false,
     /** The uids of lawyers the key has already hit (reused list). */
     struck: /** @type {number[]} */ ([]), nHit: 0,
-    /** Ctrl+Z: on its way out or back, and how far it has flown. Teams: target, bounce again and «budget». */
+    /** Ctrl+Z: on its way out or back, and how far it has flown. Chains: target and hops left. */
     goBack: false, stretch: 0, range: 0, targetUid: 0, bounces: 0, budget: 0, speed: 0,
+    /** Teams alert: steering (radians per second) and how many new alerts it splits into on a hit. */
+    turn: 0, split: 0,
+    /** Mini printer: thrown from (sx, sy) to (tx, ty); t = time since the throw, burst = time to the next paper burst. */
+    sx: 0, sy: 0, tx: 0, ty: 0, t: 0, burst: 0, radius: 0, confetti: 0, confettiRadius: 0,
   };
 }
 
@@ -71,29 +75,55 @@ function activateToner(s, w, t) {
   }
 }
 
-/** Passord-reset (password reset): keys straight ahead that pass through several lawyers. */
+/**
+ * Passord-reset (password reset): a chain like chain lightning. A key flies to the nearest lawyer, helps it, and hops on
+ * to the nearest lawyer within range that this chain has not hit yet. Tofaktor: two chains at once, in different directions.
+ */
 function activatePassword(s, w, t) {
   const p = s.player;
-  const n = t.count + p.mod.extraProj * (w.evo ? 2 : 1);
-  const speed = t.speed * p.mod.duration * p.mod.projSpeed;
-  for (let i = 0; i < n; i++) {
+  const chains = (t.chains ?? 1) + p.mod.extraProj;
+  const reach = t.reach * p.mod.area;
+  /** @type {any} */
+  let first = null;
+  for (let i = 0; i < chains; i++) {
     if (s.projCounter.key >= MAX_PROJ) break;
-    const side = (i - (n - 1) / 2) * 8;
-    const back = -Math.abs(side) * 0.7;
+    let target = closest(s, p.x, p.y, reach, null, 0, first);
+    // The second chain (Tofaktor) starts in the opposite direction if there is a lawyer there
+    if (first && i === 1) {
+      const out = s.hitList2, f = s.enemies.items;
+      const n = s.grid.find(p.x, p.y, reach, out);
+      const fx = first.x - p.x, fy = first.y - p.y;
+      let best = null, bestD = 1e12;
+      for (let j = 0; j < n; j++) {
+        const e = f[out[j]];
+        if (!e.active || e.leaving || e === first || (e.x - p.x) * fx + (e.y - p.y) * fy > 0) continue;
+        const d = (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
+        if (d < bestD) {
+          bestD = d;
+          best = e;
+        }
+      }
+      if (best) target = best;
+    }
+    if (!target) break;
+    if (!first) first = target;
     const pr = s.projectiles.acquire();
     s.projCounter.key++;
     pr.type = 'key';
-    pr.x = p.x - p.dirY * side + p.dirX * back;
-    pr.y = p.y + p.dirX * side + p.dirY * back;
-    pr.vx = p.dirX * speed;
-    pr.vy = p.dirY * speed;
-    pr.life = t.range / t.speed;
+    pr.x = p.x;
+    pr.y = p.y - 4;
+    pr.speed = (t.range / t.hopTime) * p.mod.projSpeed;
+    pr.vx = 0;
+    pr.vy = 0;
+    pr.life = 4;
     pr.help = t.help;
-    pr.splash = 0;
-    pr.through = t.through;
-    pr.angle = Math.atan2(p.dirY, p.dirX);
+    pr.bounces = t.hops;
+    pr.range = t.range * p.mod.area;
+    pr.angle = Math.atan2(target.y - pr.y, target.x - pr.x);
     pr.evo = w.evo;
     pr.nHit = 0;
+    pr.targetUid = target.uid;
+    s.teamsTargets.set(pr, target);
   }
 }
 
@@ -207,29 +237,100 @@ function activateCtrlz(s, w, t) {
   }
 }
 
-/** Teams-varsel (Teams alert): flies to the nearest lawyer and bounces on (splits as a combination). */
+/** Reused list of the lawyers already picked as targets in one volley. */
+const PICKED = /** @type {number[]} */ ([]);
+
+/**
+ * Teams-varsel (Teams alert): homing alerts. Each alert is shot out in a fan and steers toward its own lawyer.
+ * Allmøte på Teams (town hall): each alert splits into three new homing alerts when it hits.
+ */
 function activateTeams(s, w, t) {
   const p = s.player;
-  if (s.projCounter.teams >= MAX_PROJ) return;
-  const target = closest(s, p.x, p.y, 240);
-  if (!target) return;
+  const reach = t.reach * p.mod.area;
+  let picked = 0;
+  const base = Math.atan2(p.dirY, p.dirX);
+  for (let i = 0; i < t.count; i++) {
+    if (s.projCounter.teams >= MAX_PROJ) break;
+    const target = closest(s, p.x, p.y, reach, PICKED, picked) ?? closest(s, p.x, p.y, reach);
+    if (!target) break;
+    PICKED[picked++] = target.uid;
+    launchAlert(s, p.x, p.y - 6, base + (i - (t.count - 1) / 2) * 0.7, t, target, w.evo ? t.split : 0, w.evo);
+  }
+}
+
+function launchAlert(s, x, y, angle, t, target, split, evo) {
+  const p = s.player;
   const pr = s.projectiles.acquire();
   s.projCounter.teams++;
   pr.type = 'teams';
-  pr.x = p.x;
-  pr.y = p.y - 6;
+  pr.x = x;
+  pr.y = y;
   pr.speed = t.speed * p.mod.projSpeed;
-  pr.vx = 0;
-  pr.vy = 0;
-  pr.life = 4;
+  pr.vx = Math.cos(angle) * pr.speed;
+  pr.vy = Math.sin(angle) * pr.speed;
+  pr.turn = t.turn;
+  pr.life = 3;
   pr.help = t.help;
-  pr.targetUid = target.uid;
-  pr.bounces = t.bounces;
-  pr.budget = w.evo ? t.maxHits : t.bounces;
-  pr.range = t.range * p.mod.area;
-  pr.evo = w.evo;
+  pr.split = split;
+  pr.range = t.reach * p.mod.area;
+  pr.evo = evo;
   pr.nHit = 0;
+  pr.targetUid = target.uid;
   s.teamsTargets.set(pr, target);
+}
+
+/** Where the guardian angel hovers right now (follows the player, bobs gently up and down). */
+export function angelPos(w, p) {
+  ANGEL[0] = p.x + Math.cos(w.angle) * 24;
+  ANGEL[1] = p.y - 18 + Math.sin(w.angle * 2) * 4;
+  return ANGEL;
+}
+const ANGEL = [0, 0];
+
+/**
+ * Skytsengelen (the guardian angel): hovers around the player and now and then throws mini printers in an arc
+ * toward the nearest lawyers. The number of mini printers at once is fixed and the same for everyone.
+ */
+function updateAngel(s, w, t, dt) {
+  const p = s.player;
+  w.angle = (w.angle + 1.3 * dt) % TAU;
+  w.cd -= dt;
+  if (w.cd > 0) return;
+  w.cd = dualMonitor(s) ? 0.25 : t.interval * p.mod.cd;
+  const [ax, ay] = angelPos(w, p);
+  let picked = 0;
+  for (let i = 0; i < t.perThrow && s.projCounter.mini < t.max; i++) {
+    const target = closest(s, p.x, p.y, 240, PICKED, picked) ?? closest(s, p.x, p.y, 240);
+    let tx = p.x + p.dirX * 70 + (i - (t.perThrow - 1) / 2) * 18, ty = p.y + p.dirY * 70;
+    if (target) {
+      PICKED[picked++] = target.uid;
+      // lands a little in front of the lawyer, on the side facing the angel
+      const d = Math.hypot(target.x - ax, target.y - ay) || 1;
+      tx = target.x - ((target.x - ax) / d) * 12;
+      ty = target.y - ((target.y - ay) / d) * 12;
+    }
+    const pr = s.projectiles.acquire();
+    s.projCounter.mini++;
+    pr.type = 'mini';
+    pr.sx = ax;
+    pr.sy = ay;
+    pr.tx = tx;
+    pr.ty = ty;
+    pr.x = ax;
+    pr.y = ay;
+    pr.t = 0;
+    pr.range = 0.6;
+    pr.goBack = false;
+    pr.life = 0.6 + t.life * p.mod.duration;
+    pr.help = t.help;
+    pr.burst = 0.15;
+    pr.radius = t.radius * p.mod.area;
+    pr.confetti = t.confetti ?? 0;
+    pr.confettiRadius = (t.confettiRadius ?? 0) * p.mod.area;
+    pr.evo = w.evo;
+    pr.angle = 0;
+    pr.nHit = 0;
+  }
 }
 
 /** Oppdateringsstrålen (update beam): one beam in the direction of movement for a while, then a pause. Combination: two beams sweeping around. */
@@ -383,6 +484,10 @@ export function updateWeapons(s, dt) {
       updateSpiral(s, w, t, dt);
       continue;
     }
+    if (w.id === 'angel') {
+      updateAngel(s, w, t, dt);
+      continue;
+    }
     w.cd -= dt;
     if (w.cd <= 0) {
       ACTIVATORS[w.id](s, w, t);
@@ -397,8 +502,11 @@ export function updateWeapons(s, dt) {
 function removeProjectile(s, i) {
   const pr = s.projectiles.items[i];
   if (pr.type === 'toner') s.projCounter.toner--;
-  else if (pr.type === 'key') s.projCounter.key--;
-  else if (pr.type === 'ctrlz') s.projCounter.ctrlz--;
+  else if (pr.type === 'key') {
+    s.projCounter.key--;
+    s.teamsTargets.delete(pr);
+  } else if (pr.type === 'ctrlz') s.projCounter.ctrlz--;
+  else if (pr.type === 'mini') s.projCounter.mini--;
   else if (pr.type === 'teams') {
     s.projCounter.teams--;
     s.teamsTargets.delete(pr);
@@ -449,8 +557,8 @@ export function updateProjectiles(s, dt) {
       continue;
     }
 
-    if (pr.type === 'teams') {
-      // Chain: fly to the target, help, bounce on to the next nearest that has not been hit
+    if (pr.type === 'key') {
+      // Chain: fly fast to the target, help, hop on to the nearest lawyer this chain has not hit yet
       let target = s.teamsTargets.get(pr);
       if (!target || !target.active || target.uid !== pr.targetUid) {
         target = closest(s, pr.x, pr.y, pr.range, pr.struck, Math.min(pr.nHit, 64));
@@ -463,45 +571,21 @@ export function updateProjectiles(s, dt) {
       }
       const dx = target.x - pr.x, dy = target.y - pr.y, d = Math.hypot(dx, dy) || 1;
       const step = pr.speed * dt;
+      pr.angle = Math.atan2(dy, dx);
       if (d <= step + target.r) {
         pr.x = target.x;
         pr.y = target.y;
         newHit(pr, target.uid);
-        help(s, target, pr.help, 'teams');
-        effect(s, 'flash', target.x, target.y, 0.2, target.r, 0, 2);
+        help(s, target, pr.help, 'password');
+        effect(s, 'flash', target.x, target.y, 0.18, target.r, 0, 3);
         pr.bounces--;
-        pr.budget--;
-        const next = pr.bounces > 0 && pr.budget > 0 ? closest(s, pr.x, pr.y, pr.range, pr.struck, Math.min(pr.nHit, 64)) : null;
+        const next = pr.bounces > 0 ? closest(s, pr.x, pr.y, pr.range, pr.struck, Math.min(pr.nHit, 64)) : null;
         if (!next) {
           removeProjectile(s, i);
           continue;
         }
         pr.targetUid = next.uid;
         s.teamsTargets.set(pr, next);
-        // Town hall on Teams: the alert splits in two at each bounce
-        if (pr.evo && pr.budget >= 2 && s.projCounter.teams < MAX_PROJ) {
-          const others = closest(s, pr.x, pr.y, pr.range, pr.struck, Math.min(pr.nHit, 64), next);
-          if (others) {
-            const newBranch = pool.acquire();
-            s.projCounter.teams++;
-            newBranch.type = 'teams';
-            newBranch.x = pr.x;
-            newBranch.y = pr.y;
-            newBranch.speed = pr.speed;
-            newBranch.life = pr.life;
-            newBranch.help = pr.help;
-            newBranch.bounces = pr.bounces;
-            newBranch.range = pr.range;
-            newBranch.evo = true;
-            const half = Math.floor(pr.budget / 2);
-            newBranch.budget = half;
-            pr.budget -= half;
-            newBranch.nHit = Math.min(pr.nHit, 64);
-            for (let k = 0; k < newBranch.nHit; k++) newBranch.struck[k] = pr.struck[k];
-            newBranch.targetUid = others.uid;
-            s.teamsTargets.set(newBranch, others);
-          }
-        }
       } else {
         pr.vx = (dx / d) * pr.speed;
         pr.vy = (dy / d) * pr.speed;
@@ -509,6 +593,92 @@ export function updateProjectiles(s, dt) {
         pr.y += pr.vy * dt;
       }
       if (pr.life <= 0) removeProjectile(s, i);
+      continue;
+    }
+
+    if (pr.type === 'teams') {
+      // Homing alert: steers toward its target (or a new one if the target is gone) and helps on contact
+      let target = s.teamsTargets.get(pr);
+      if (!target || !target.active || target.uid !== pr.targetUid) {
+        target = closest(s, pr.x, pr.y, pr.range);
+        if (target) {
+          pr.targetUid = target.uid;
+          s.teamsTargets.set(pr, target);
+        }
+      }
+      if (target) {
+        const want = Math.atan2(target.y - pr.y, target.x - pr.x);
+        let a = Math.atan2(pr.vy, pr.vx);
+        let diff = want - a;
+        while (diff > Math.PI) diff -= TAU;
+        while (diff < -Math.PI) diff += TAU;
+        const max = pr.turn * dt;
+        a += Math.max(-max, Math.min(max, diff));
+        pr.vx = Math.cos(a) * pr.speed;
+        pr.vy = Math.sin(a) * pr.speed;
+      }
+      pr.x += pr.vx * dt;
+      pr.y += pr.vy * dt;
+      pr.angle = Math.atan2(pr.vy, pr.vx);
+      if (target && (target.x - pr.x) ** 2 + (target.y - pr.y) ** 2 <= (target.r + 4) ** 2) {
+        help(s, target, pr.help, 'teams');
+        effect(s, 'flash', target.x, target.y, 0.2, target.r, 0, 2);
+        // Allmøte på Teams (town hall): splits into new homing alerts (which do not split again)
+        if (pr.split > 0) {
+          let picked = 0;
+          PICKED[picked++] = target.uid;
+          const t = weaponStats({ id: 'teams', evo: true, level: 8 });
+          for (let k = 0; k < pr.split && s.projCounter.teams < MAX_PROJ; k++) {
+            const next = closest(s, pr.x, pr.y, pr.range, PICKED, picked);
+            if (!next) break;
+            PICKED[picked++] = next.uid;
+            launchAlert(s, pr.x, pr.y, pr.angle + (k - 1) * 1.2, t, next, 0, true);
+          }
+        }
+        removeProjectile(s, i);
+        continue;
+      }
+      if (pr.life <= 0 || !inView(s, pr.x, pr.y, 40)) removeProjectile(s, i);
+      continue;
+    }
+
+    if (pr.type === 'mini') {
+      pr.t += dt;
+      if (!pr.goBack) {
+        // In the air: an arc from the angel to the landing spot
+        const fr = Math.min(1, pr.t / pr.range);
+        pr.x = pr.sx + (pr.tx - pr.sx) * fr;
+        pr.y = pr.sy + (pr.ty - pr.sy) * fr - Math.sin(fr * Math.PI) * 26;
+        if (fr >= 1) pr.goBack = true;
+      } else {
+        // On the floor: shuffles toward the nearest lawyer on small legs and shoots out paper sheets
+        const target = closest(s, pr.x, pr.y, 160);
+        if (target) {
+          const dx = target.x - pr.x, dy = target.y - pr.y, d = Math.hypot(dx, dy) || 1;
+          if (d > 10) {
+            pr.x += (dx / d) * 34 * dt;
+            pr.y += (dy / d) * 34 * dt;
+            pr.angle = dx < 0 ? -1 : 1;
+          }
+        }
+        pr.burst -= dt;
+        if (pr.burst <= 0) {
+          pr.burst += 0.5;
+          const n = s.grid.find(pr.x, pr.y, pr.radius, out);
+          for (let j = 0; j < n; j++) help(s, f[out[j]], pr.help, 'angel');
+          effect(s, 'paperBurst', pr.x, pr.y - 4, 0.35, pr.radius, 0, pr.evo ? 1 : 0);
+        }
+      }
+      if (pr.life <= 0) {
+        if (pr.confetti > 0) {
+          // Himmelsk serviceavtale (heavenly service agreement): a final burst of paper confetti
+          const n = s.grid.find(pr.x, pr.y, pr.confettiRadius, out);
+          for (let j = 0; j < n; j++) help(s, f[out[j]], pr.confetti, 'angel');
+          effect(s, 'confetti', pr.x, pr.y, 0.6, pr.confettiRadius);
+        }
+        effect(s, 'poof', pr.x, pr.y, 0.4, 8);
+        removeProjectile(s, i);
+      }
       continue;
     }
 
@@ -522,14 +692,6 @@ export function updateProjectiles(s, dt) {
         for (let j = 0; j < n; j++) help(s, f[out[j]], pr.help, 'toner');
         effect(s, 'splash', pr.x, pr.y, 0.4, pr.splash, pr.angle, pr.evo ? 1 : 0);
         done = true;
-      }
-    } else if (!done) {
-      const n = s.grid.find(pr.x, pr.y, 4, out);
-      for (let j = 0; j < n && !done; j++) {
-        const e = f[out[j]];
-        if (!newHit(pr, e.uid)) continue;
-        help(s, e, pr.help, 'password');
-        if (--pr.through <= 0) done = true;
       }
     }
     if (done) removeProjectile(s, i);

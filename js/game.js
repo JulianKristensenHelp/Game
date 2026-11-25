@@ -6,7 +6,8 @@
 import { CONFIG, DT } from './config.js';
 import { Rng, Pool, Grid } from './utils.js';
 import { makePlayer, updatePlayer } from './player.js';
-import { makeEnemy, makePaper, makeEmail, updateDirector, updateEnemies, updateEmails, pruneEnemies, spawnEnemy } from './enemies.js';
+import { makeEnemy, makePaper, updateDirector, updateEnemies, pruneEnemies, spawnEnemy } from './enemies.js';
+import { makeShot, makePuddle, updateEnemyShots, spawnBoss, bossTypeAt, bossTimeAt } from './bosses.js';
 import { makeProjectile, updateWeapons, updateProjectiles } from './weapons.js';
 import { makeTicket, makePickup, updateTickets, dropPickup, updateDrinks } from './tickets.js';
 import { makeEffect, updateEffects } from './effects.js';
@@ -54,12 +55,14 @@ export class Game {
 
     this.enemies = new Pool(makeEnemy);
     this.projectiles = new Pool(makeProjectile);
-    this.projCounter = { toner: 0, key: 0, ctrlz: 0, teams: 0 };
+    this.projCounter = { toner: 0, key: 0, ctrlz: 0, teams: 0, mini: 0 };
     this.tickets = new Pool(makeTicket);
     this.pickups = new Pool(makePickup);
     this.paper = new Pool(makePaper);
     /** Emails from «Haster!» ("Urgent!") senders and bosses. */
-    this.enemyShots = new Pool(makeEmail);
+    this.enemyShots = new Pool(makeShot);
+    /** Ink puddles from the printer boss's cartridges. */
+    this.puddles = new Pool(makePuddle);
     this.senderCount = 0;
     this.effects = new Pool(makeEffect);
     this.grid = new Grid();
@@ -79,7 +82,11 @@ export class Game {
     this.spared = 0;
     this.nextWave = CONFIG.waves.first;
     this.nextUrgent = CONFIG.enemies.urgent.from;
-    this.nextBoss = CONFIG.enemies.boss.first;
+    this.nextBoss = bossTimeAt(0);
+    /** The boss that is out right now (see bosses.js). @type {any} */
+    this.boss = null;
+    /** Set when the player got fired (a boss's countdown ran out). @type {null | {type: string, name: string, time: number}} */
+    this.fired = null;
     this.nextDrink = CONFIG.energyDrink.first;
     this.bossNo = 0;
     this.phaseIndex = -1;
@@ -103,6 +110,8 @@ export class Game {
       bossesTotal: 0, bossesHelped: 0, maxMultStep: 0, hits: 0,
       ticketsPicked: 0, ticketsLost: 0, drinks: 0, blocked: 0, emails: 0,
       combinations: /** @type {string[]} */ ([]),
+      /** Every boss the player met, and whether it was helped. @type {{type: string, helped: boolean, time: number, helpedAt: number, returnNo: number}[]} */
+      bossLog: [],
     };
     /** Events since last time – read by UI and sound, and cleared there. @type {string[]} */
     this.events = [];
@@ -154,7 +163,7 @@ export class Game {
     if (this.status === 'running') {
       updateWeapons(this, DT);
       updateProjectiles(this, DT);
-      updateEmails(this, DT);
+      updateEnemyShots(this, DT);
       updateTickets(this, DT);
     }
     pruneEnemies(this);
@@ -194,11 +203,8 @@ export class Game {
   debugSkip(sec) {
     this.debug.used = true;
     this.time += sec;
-    const B = CONFIG.enemies.boss;
-    while (this.nextBoss <= this.time) {
-      this.nextBoss += B.interval;
-      this.bossNo++;
-    }
+    while (bossTimeAt(this.bossNo) <= this.time) this.bossNo++;
+    this.nextBoss = bossTimeAt(this.bossNo);
     while (this.nextDrink <= this.time - CONFIG.energyDrink.interval) this.nextDrink += CONFIG.energyDrink.interval;
     if (this.nextWave < this.time) this.nextWave = this.time + 10;
     if (this.nextUrgent < this.time) this.nextUrgent = this.time + 5;
@@ -231,13 +237,42 @@ export class Game {
     this.debug.used = true;
     const p = this.player;
     if (type === 'pc' || type === 'drink') dropPickup(this, type, p.x + 40, p.y);
-    else {
-      spawnEnemy(this, type, p.x + 190, p.y - 50);
-      if (type === 'boss') {
-        this.bossNo++;
-        this.stat.bossesTotal++;
-        this.events.push('boss');
-      }
-    }
+    else if (type === 'boss') {
+      if (!this.boss || !this.boss.active) spawnBoss(this, bossTypeAt(this.bossNo));
+    } else spawnEnemy(this, type, p.x + 190, p.y - 50);
+  }
+
+  /**
+   * Jumps straight to boss no. n (1–4) with a reasonable build for that time, so the bosses can be tested
+   * without playing for 12 minutes (?debug=boss1 … ?debug=boss4).
+   * @param {number} n
+   * @param {string[]} plan the weapons to build (the character's starting weapon first)
+   */
+  debugBossTest(n, plan) {
+    this.debug.used = true;
+    const at = bossTimeAt(n - 1);
+    this.time = at - 3;
+    this.bossNo = n - 1;
+    this.nextBoss = at;
+    this.phaseIndex = -1;
+    while (this.phaseIndex + 1 < CONFIG.phases.length && this.time >= CONFIG.phases[this.phaseIndex + 1].from) this.phaseIndex++;
+    while (this.nextDrink <= this.time - CONFIG.energyDrink.interval) this.nextDrink += CONFIG.energyDrink.interval;
+    this.nextWave = this.time + 15;
+    this.nextUrgent = this.time + 20;
+    // A build that is typical for the time: more weapons and levels the later it is
+    const min = at / 60;
+    const weapons = Math.min(CONFIG.limits.weapons, 1 + Math.floor(min / 3));
+    const level = Math.min(CONFIG.limits.weaponLevel, 2 + Math.floor(min * 0.5));
+    this.player.weapons.length = 0;
+    plan.slice(0, weapons).forEach((id, i) => {
+      const lv = Math.max(1, level - i);
+      for (let j = 0; j < lv; j++) giveWeapon(this, id);
+      for (let j = 0; j < Math.min(CONFIG.limits.passiveLevel, Math.ceil(lv / 2)); j++) givePassive(this, CONFIG.weapons[id].combination.passive);
+      if (min >= 10 && i === 0) giveCombination(this, id);
+    });
+    // Enough experience for the levels a player would normally have by now
+    this.level = Math.max(this.level, 3 + Math.floor(min * 2.2));
+    this.xpNeeded = xpNeeded(this.level);
+    this.updateCamera();
   }
 }

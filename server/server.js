@@ -7,7 +7,8 @@
 //
 // API:
 //   GET  /api/leaderboard?date=YYYY-MM-DD&name=Kari  → { date, top: [...], own, count }
-//   POST /api/score  { name, score, time, helped, maxMult, date } → { ok, improved, spot }
+//   POST /api/score  { name, score, time, helped, maxMult, date, character, fired } → { ok, improved, spot }
+//   (fired = the round ended with «Du har fått sparken!» – a boss's countdown ran out)
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -31,7 +32,7 @@ function dateOslo(now = new Date()) {
 // The storage sits behind two functions (getDay, save), so it is easy to replace.
 
 /**
- * @typedef {{name:string, score:number, time:number, helped:number, maxMult:number, character:string}} Row
+ * @typedef {{name:string, score:number, time:number, helped:number, maxMult:number, character:string, fired?:boolean}} Row
  * @typedef {{getDay:(date:string)=>Row[], save:(date:string, key:string, row:Row)=>boolean, deleteOlder:(date:string)=>void, type:string}} Store
  */
 
@@ -57,6 +58,7 @@ async function makeSqliteStore() {
     date TEXT NOT NULL, name_key TEXT NOT NULL, name TEXT NOT NULL,
     score INTEGER NOT NULL, time INTEGER NOT NULL, helped INTEGER NOT NULL, max_mult REAL NOT NULL,
     character TEXT NOT NULL DEFAULT '',
+    fired INTEGER NOT NULL DEFAULT 0,
     updated TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (date, name_key))`);
   // Databases from older versions used Norwegian table and column names: copy the rows over once.
@@ -70,19 +72,25 @@ async function makeSqliteStore() {
       DROP TABLE innslag;
       COMMIT;`);
   }
-  const load = db.prepare('SELECT name, score, time, helped, max_mult AS maxMult, character FROM entries WHERE date = ? ORDER BY score DESC, time DESC, updated ASC');
+  // Databases from version 3.1 lack the «fired» column (rounds that ended with «Du har fått sparken!»).
+  try {
+    db.exec('ALTER TABLE entries ADD COLUMN fired INTEGER NOT NULL DEFAULT 0');
+  } catch {
+    /* the column already exists */
+  }
+  const load = db.prepare('SELECT name, score, time, helped, max_mult AS maxMult, character, fired FROM entries WHERE date = ? ORDER BY score DESC, time DESC, updated ASC');
   const getOne = db.prepare('SELECT score FROM entries WHERE date = ? AND name_key = ?');
-  const upsert = db.prepare(`INSERT INTO entries (date, name_key, name, score, time, helped, max_mult, character) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  const upsert = db.prepare(`INSERT INTO entries (date, name_key, name, score, time, helped, max_mult, character, fired) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (date, name_key) DO UPDATE SET name = excluded.name, score = excluded.score, time = excluded.time,
-      helped = excluded.helped, max_mult = excluded.max_mult, character = excluded.character, updated = datetime('now')`);
+      helped = excluded.helped, max_mult = excluded.max_mult, character = excluded.character, fired = excluded.fired, updated = datetime('now')`);
   const erase = db.prepare('DELETE FROM entries WHERE date < ?');
   return {
     type: 'SQLite',
-    getDay: (date) => /** @type {any} */ (load.all(date)),
+    getDay: (date) => /** @type {any[]} */ (load.all(date)).map((r) => ({ ...r, fired: !!r.fired })),
     save(date, key, row) {
       const old = /** @type {any} */ (getOne.get(date, key));
       if (old && old.score >= row.score) return false;
-      upsert.run(date, key, row.name, row.score, row.time, row.helped, row.maxMult, row.character);
+      upsert.run(date, key, row.name, row.score, row.time, row.helped, row.maxMult, row.character, row.fired ? 1 : 0);
       return true;
     },
     deleteOlder: (date) => void erase.run(date),
@@ -136,11 +144,17 @@ try {
 /** The highest score that is realistic for a round of `time` seconds. */
 function maxRealisticScore(time) {
   const maxMult = CONFIG.multiplier.max;
-  const B = CONFIG.enemies.boss;
+  const B = CONFIG.bosses;
   let max = 5000 + time * T.maxPointsPerSecond;
-  // Bosses (the points increase with each boss) and urgent cases come in addition.
-  const bosses = time >= B.first ? Math.floor((time - B.first) / B.interval) + 1 : 0;
-  for (let i = 0; i < bosses; i++) max += B.points * Math.pow(B.pointsPerBoss, i) * maxMult;
+  // Bosses (in a fixed order; Johan comes back stronger every 3 minutes) and urgent cases come in addition.
+  let johans = 0;
+  for (let i = 0; i < 200; i++) {
+    const at = i < B.schedule.length ? B.schedule[i].at : B.schedule[B.schedule.length - 1].at + B.repeatEvery * (i - B.schedule.length + 1);
+    if (at > time) break;
+    const type = i < B.schedule.length ? B.schedule[i].type : 'johan';
+    const k = B[type];
+    max += k.points * (type === 'johan' ? Math.pow(k.returns.points, johans++) : 1) * maxMult;
+  }
   max += Math.ceil(time / CONFIG.enemies.urgent.intervalMin) * CONFIG.enemies.urgent.points * maxMult;
   return max;
 }
@@ -167,7 +181,7 @@ function validate(body) {
   return {
     date,
     key: name.toLocaleLowerCase('nb'),
-    row: { name, score, time: Math.round(time), helped, maxMult: Math.round(maxMult * 10) / 10, character },
+    row: { name, score, time: Math.round(time), helped, maxMult: Math.round(maxMult * 10) / 10, character, fired: body.fired === true },
   };
 }
 

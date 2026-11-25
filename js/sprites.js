@@ -199,7 +199,115 @@ function makeObjects() {
     r.rect(6, 3, 2, 3, C.RED);
     r.rect(6, 7, 2, 1, C.RED);
   });
+  // ----- New in version 4: the bosses' projectiles, Skytsengelen (the guardian angel) and the mini printers -----
+  const note = make(10, 12, 5, 6, (r) => {
+    // hold music: a light-blue eighth note
+    r.rect(5, 1, 2, 8, C.LIGHT_BLUE);
+    r.rect(7, 1, 2, 2, C.LIGHT_BLUE);
+    r.rect(8, 3, 1, 2, C.LIGHT_BLUE);
+    r.ellipse(3.5, 9, 3, 2.2, C.LIGHT_BLUE);
+    r.px(2, 8, C.WHITE);
+  });
+  const ticketShot = (w, h) => make(w + 2, h + 2, (w + 2) / 2, (h + 2) / 2, (r) => {
+    r.rect(1, 1, w, h, C.YELLOW);
+    r.rect(1, 1, w, 2, C.GOLD_L);
+    r.rect(3, 4, w - 4, 1, C.OCHRE);
+    if (h > 6) r.rect(3, 6, w - 6, 1, C.OCHRE);
+    r.rect(w - 2, h - 2, 2, 2, C.RED);
+  });
+  const cartridge = [C.CYAN, C.MAGENTA, C.YELLOW, C.NEAR_BLACK].map((col) => make(9, 11, 4, 5, (r) => {
+    r.rect(1, 1, 7, 9, C.DARK_GRAY);
+    r.rect(2, 2, 5, 7, col);
+    r.rect(2, 2, 5, 1, C.WHITE);
+    r.rect(3, 9, 3, 1, C.GRAY);
+  }));
+  /** Ink puddles in the four colours (semi-transparent, dithered edge). */
+  const puddle = ['#19b5c9', '#e0409a', '#f5cf3a', '#2b2f38'].map((col) => {
+    const w = 36, h = 22;
+    const c = makeCanvas(w, h);
+    const ctx = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
+    const frame = ctx.createImageData(w, h);
+    const [cr, cg, cb] = hex(col);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const nx = (x + 0.5 - w / 2) / (w / 2), ny = (y + 0.5 - h / 2) / (h / 2);
+      const d = nx * nx + ny * ny + Math.sin(x * 0.9) * 0.06 + Math.cos(y * 1.3) * 0.06;
+      if (d > 1) continue;
+      const i = (y * w + x) * 4;
+      frame.data[i] = cr;
+      frame.data[i + 1] = cg;
+      frame.data[i + 2] = cb;
+      frame.data[i + 3] = d > 0.8 ? ((x + y) % 2 ? 150 : 0) : 165;
+    }
+    ctx.putImageData(frame, 0, 0);
+    return { canvas: c, w, h, ax: w / 2, ay: h / 2 };
+  });
+  const sheet = make(9, 11, 4, 5, (r) => {
+    r.rect(1, 1, 7, 9, C.PAPER);
+    r.rect(2, 3, 5, 1, C.LIGHT_GRAY2);
+    r.rect(2, 5, 5, 1, C.LIGHT_GRAY2);
+    r.rect(2, 7, 3, 1, C.LIGHT_GRAY2);
+  });
+  const calendar = make(13, 13, 6, 6, (r) => {
+    // calendar invitation: page with a red top bar and a grid of days
+    r.rect(1, 2, 11, 10, C.WHITE);
+    r.rect(1, 2, 11, 3, C.RED);
+    r.rect(3, 1, 1, 2, C.DARK_GRAY);
+    r.rect(9, 1, 1, 2, C.DARK_GRAY);
+    for (let y = 6; y < 11; y += 2) for (let x = 2; x < 11; x += 2) r.px(x, y, C.GRAY);
+    r.rect(6, 8, 2, 2, C.RED);
+  });
+  /** Skytsengelen: a small, old, bald man with glasses, a cardigan, white wings and a halo. 4 wing frames (+ evo). */
+  const angelDraw = (flap, evo) => (r) => {
+    const wy = [0, -1, -2, -1][flap];
+    // wings (bigger as a combination)
+    const ws = evo ? 7 : 5;
+    for (const side of [-1, 1]) {
+      const wx = side < 0 ? 10 - 4 - ws : 10 + 4;
+      r.ellipse(wx + ws / 2, 9 + wy, ws / 2 + 0.5, 3.5 - Math.abs(wy) * 0.5, C.WHITE);
+      r.rect(side < 0 ? wx : wx + ws - 2, 10 + wy, 2, 1, C.LIGHT_GRAY);
+    }
+    // halo
+    r.ellipse(10, 2.5, evo ? 5 : 4, 1.3, evo ? C.GOLD_L : C.GOLD);
+    r.ellipse(10, 2.5, evo ? 3 : 2.4, 0.5, 0);
+    // body: brown cardigan over a light shirt, tiny hands
+    r.rect(7, 11, 7, 6, C.WOOD_M);
+    r.rect(10, 11, 1, 6, C.CREAM);
+    r.rect(6, 13, 1, 2, C.WOOD_L);
+    r.rect(14, 13, 1, 2, C.WOOD_L);
+    r.rect(8, 17, 2, 2, C.DARK_GRAY);
+    r.rect(11, 17, 2, 2, C.DARK_GRAY);
+    // head: bald, a little white hair at the sides, round glasses, kind smile
+    r.ellipse(10.5, 8, 3.6, 3.4, C.WOOD_L);
+    r.px(7, 8, C.LIGHT_GRAY);
+    r.px(14, 8, C.LIGHT_GRAY);
+    r.px(9, 5, C.WHITE);
+    r.rect(8, 7, 2, 2, C.DARKER);
+    r.rect(11, 7, 2, 2, C.DARKER);
+    r.px(8, 7, C.LIGHT_BLUE);
+    r.px(11, 7, C.LIGHT_BLUE);
+    r.px(10, 7, C.DARKER);
+    r.rect(9, 10, 3, 1, C.WOOD);
+  };
+  const angel = [0, 1, 2, 3].map((f) => make(22, 21, 11, 11, angelDraw(f, false)));
+  const angelEvo = [0, 1, 2, 3].map((f) => make(22, 21, 11, 11, angelDraw(f, true)));
+  /** Mini printer on small legs (2 walk frames). */
+  const miniDraw = (step, evo) => (r) => {
+    r.rect(2, 3, 11, 7, evo ? C.GOLD_L : C.NEAR_WHITE);
+    r.rect(11, 3, 2, 7, evo ? C.GOLD : C.LIGHT_GRAY2);
+    r.rect(4, 1, 7, 3, C.PAPER);
+    r.rect(4, 5, 5, 2, C.TEAL);
+    r.px(10, 5, C.RED);
+    r.rect(3, 8, 9, 1, C.DARK_GRAY);
+    r.rect(4, 10, 2, step ? 3 : 2, C.DARK_GRAY);
+    r.rect(9, 10, 2, step ? 2 : 3, C.DARK_GRAY);
+  };
+  const mini = [0, 1].map((f) => make(15, 14, 7, 9, miniDraw(f, false)));
+  const miniEvo = [0, 1].map((f) => make(15, 14, 7, 9, miniDraw(f, true)));
+
   return {
+    note, ticketShot: ticketShot(11, 8), ticketSmall: ticketShot(7, 5), cartridge, puddle, sheet, calendar,
+    angel, angelEvo, mini, miniEvo,
+    angelGlow: glow(14, '#fff2a8', 0.55),
     email,
     emailGlow: glow(10, '#ff4d5a', 0.7),
     exclaim: make(7, 11, 3, 10, (r) => {

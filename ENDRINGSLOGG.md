@@ -1,5 +1,119 @@
 # Endringslogg
 
+## Versjon 4.0 – 25. november 2026 (endringsprompt 3)
+
+### 1. Fire forskjellige bosser i fast rekkefølge, og «Du har fått sparken!»
+
+| Tid | Boss | Nedtelling | Frustrasjon | Poeng |
+| --- | --- | --- | --- | --- |
+| 3:00 | Nørdic-konsulenten | 120 s | 850 | 2 500 |
+| 6:00 | Multifunksjonsmonsteret | 120 s | 2 200 | 4 000 |
+| 9:00 | «Fristen er om 2 minutter!» (med e-postvifta) | 120 s | 4 400 | 6 000 |
+| 12:00 | Johan, siste boss | 150 s | 6 500 | 15 000 |
+| 15:00, 18:00 … | Johan igjen | 150 s | × 1,5 per gang | × 1,4 per gang |
+
+Felles for alle:
+- **Obligatoriske.** Går nedtellingen ut, fryser spillet, bossen ser skuffet ut, og «DU HAR FÅTT SPARKEN!» vises. Slutt-skjermen får overskriften «Du har fått sparken!» og linjen «‹Boss› fikk deg sparket ved m:ss». Scoren kan sendes inn, og topplisten viser en liten flytteeske ved runden. Går energien tom først, er det vanlig game over.
+- **Stor klokke øverst** mens bossen er ute (med navnet), i tillegg til klokka ved bossen. Den blir gul ved 30 sekunder og rød, blinkende og tikkende ved 10. Blinkingen følger innstillingen for reduserte blinkeffekter.
+- **Egen introduksjon** med navn, replikk og egen lyd. Johan får en større intro: skjermen mørkner, og portrettet vises med «SISTE BOSS: JOHAN» og «Har du et lite minutt?».
+- **Varsling.** Alle angrep varsles i 0,65 sekunder (positur, lys eller «!»), og Johans spurt viser en linje. Alle bossprosjektiler teller med i taket på 60.
+- **Glad-animasjon** (tommel opp) og egen snakkeboble: «Sak lukket!», «Utskrift fullført», «Fristen ble holdt!» og «Bra jobba!».
+- **Pilen og minikartet** gjelder for alle bossene. Pilen er merket NØRDIC, PRINTER, FRIST eller JOHAN.
+- **Slutt-skjermen** viser alle bossene spilleren møtte, med små portretter, og hvem som ble hjulpet.
+
+### 2. Nørdic-konsulenten (3:00)
+- **Firmaet er oppdiktet:** «Nørdic», med egen logo (krøllparenteser rundt en N) i skoggrønt og lime, og en enkel pikselskrift. Ingen ekte navn, logo, fargeprofil eller skrifttype er brukt.
+- **Utseende og tone:** headset, laptop og polo med «NØRDIC» på brystet. Han er vennlig og smiler.
+- **«Du er nummer 47 i køen»:** ti noter ventemusikk i en ring. De sinker spilleren med 40 % i 2 sekunder og gir ingen skade.
+- **«Saken er sendt videre»:** en ticket som deler seg i tre i en vifte.
+- **«Vi ringer deg tilbake»:** han står stille i 3 sekunder og kan ikke hjelpes, maks én gang per 20 sekunder.
+
+### 3. Multifunksjonsmonsteret (6:00)
+- **Utseende:** stor printer på små bein, med sint ansikt på displayet, papirskuffer som klaprer og varsellamper.
+- **Fargepatroner (CMYK):** lampene lyser i fire farger før fire patroner skytes ut. Landingsstedet er markert, og patronene blinker før de lander. Da blir de blekkdammer som sinker 30 %, i 4 sekunder, med maks 8 dammer samtidig.
+- **«Utskriftsjobb på 400 sider»:** printeren rister og sender ut en strøm av ark i en sveipende bue i 2 sekunder.
+- **«Papirstopp!»:** omtrent hvert 15. sekund står den fast i 3 sekunder, og «PAPIRSTOPP!» blinker. Da tar den dobbelt så mye hjelp.
+
+### 4. Johan, siste boss (12:00)
+- **Utseende:** laget fra bildet i samme stil som de spillbare karakterene, i dobbel størrelse. Han har kort, lysebrunt hår gredd opp og bakover, mørkegrå dressjakke over royalblå skjorte med åpen krage, og et varmt smil.
+- **Animasjoner:** egne bilder for hvert angrep, et skuffet bilde (for sparken) og et portrett på 64 × 64. Han er godkjent i forhåndsvisningen (`?debug=karakterer`).
+- **Angrep:**
+  - Spurt mot der spilleren stod, med linje som varsel og ×1,6 skade.
+  - Fem kalenderinvitasjoner, med et blinkende kalenderikon over hodet som varsel.
+  - «Alle på møte!»: en ring av juniorfullmektiger med en tydelig åpning, maks én gang per 30 sekunder, innenfor taket på 400.
+  - Fra halv frustrasjon også ticketen og patronene fra de tidligere bossene, sjeldnere enn hos dem.
+- **Andre fase:** «Johan tar av seg dressjakka». Han går i skjorte, blir raskere og angriper oftere.
+- **Johan igjen:** han kommer tilbake hvert 3. minutt etter 12:00. Ingen nye bosstyper etter ham.
+- **Bildet** er bare brukt som forelegg og ligger ingen steder i prosjektet.
+
+### 5. Passord-reset er et kjedevåpen, og Teams-varsel er målsøkende
+- **Passord-reset:** nøkkelen hopper fra advokat til advokat innen 80 piksler, med 0,07 sekunder per hopp og en glitrende lysstripe etter seg. Hver kjede treffer hver advokat maks én gang. Antall hopp er 3 på nivå 1 og 10 på nivå 8, med +10 % hjelp på nivå 4 og 8.
+- **Tofaktor:** to kjeder i hver sin retning, 16 hopp hver.
+- **Teams-varsel:** målsøkende varsler som svinger mot hver sin advokat. Nivåene gir flere varsler (1 til 5), mer hjelp og kortere intervall.
+- **Allmøte på Teams:** hvert varsel deler seg i tre nye målsøkende varsler når det treffer.
+
+### 6. Nytt våpen: Skytsengelen
+- **Utseende:** en liten, gammel, skallet mann med briller, cardigan, glorie og små hvite vinger som flakser. Han svever rundt spilleren og kan ikke treffes.
+- **Mini-printere:** han kaster dem i en bue mot nærmeste advokat. De tusler videre på små bein, skyter ut papirark som hjelper alle rundt, og forsvinner i en papirsky.
+- **Fast tak:** maks 2, 4 eller 6 mini-printere samtidig, og 10 som kombinasjon.
+- **Himmelsk serviceavtale** (Skytsengelen + Større boks): lysende glorie, større vinger, dobbelt så mange mini-printere, og papirkonfetti til slutt.
+- **Ikoner:** egne for våpenet og kombinasjonen. Kombinasjonen vises på oppslagstavla.
+- Det finnes nå 11 våpen, og spilleren kan fortsatt ha 4 samtidig.
+
+### 7. Balanse
+
+Kombinasjonene er målt med `tools/measure-weapons.js` (hjelp per sekund):
+
+| Kombinasjon | Hjelp/s | I forhold til snittet |
+| --- | --- | --- |
+| Tofaktor | 723 | 103 % |
+| Allmøte på Teams | 694 | 99 % |
+| Himmelsk serviceavtale | 710 | 102 % |
+
+Resten ligger mellom 85 og 111 %, som før.
+
+Bossene gjorde robotene mye svakere til å begynne med: de gode robotene hadde median 7 minutter, mot 12 uten bosser. Grunnen var mest at de må gå inn i folkemengden og blir sinket, mer enn skaden. Det ble jevnet ut slik:
+- Færre vanlige advokater mens en boss er ute (55 %).
+- En boss som er langt unna, jogger for å ta igjen spilleren, så kampen faktisk skjer.
+- Lavere skade og litt lavere frustrasjon på bossene.
+
+`tools/simulate.js --statistikk` (10 dager × 4 karakterer):
+
+| Robot | Median | Lengst | Sparket |
+| --- | --- | --- | --- |
+| Ekspert | 10,5 min | 15,5 min | 3 av 40 |
+| God, bygger bevisst | 9,0 min | 14,7 min | 2 av 40 |
+
+Uten bosser er medianen 12,4 og 9,6 minutter. En veldig god spiller ryker fortsatt rundt 15 minutter.
+
+### 8. Ytelse
+
+Stresstest i minutt 15–17,6, med disse forholdene:
+- **Last:** 400 advokater, Johan ute, og våpnene Tofaktor, Himmelsk serviceavtale, Allmøte på Teams og Kontorprinteren fra helvete.
+- **Uten grafikkort:** `?debug&utenGPU`.
+- **Fast takt:** spillet ble stegt med fast takt, fordi forhåndsvisningspanelet struper `requestAnimationFrame`.
+
+Resultat:
+- **Tid per bilde:** 3,5–3,8 ms i snitt (logikk og tegning), og 99 % av bildene under 12 ms.
+- **Trege bilder:** maks 2 av 1 800 bilder over 16,7 ms per 30 sekunder.
+- **Minne:** flatt, 4,5–5,8 MB.
+
+### 9. Annet
+- **Debug-snarveier:** `?debug=boss1` til `?debug=boss4` (og knapper i debug-panelet) hopper rett til en boss med et typisk bygg for tidspunktet.
+- **Toppliste:**
+  - Serveren lagrer om runden endte med sparken (ny kolonne `fired`, som legges til automatisk i eksisterende database).
+  - Kontrollen mot urealistiske poengsummer følger den nye bossrekkefølgen.
+- **Rettet fra oversettelsen til engelsk (3.1):**
+  - Fem kombinasjonsikoner (Full omstart, Tofaktor, Domene-admin, Musematta, Tvungen oppdatering) viste tomt ikon.
+  - Hendelsen for nye kombinasjoner hadde fortsatt norsk navn.
+
+### Antakelser
+- **Nørdic:** «Nørdic» er et oppdiktet firma, og logo og farger er laget fra bunnen av. Bytt gjerne navn eller farger i `CONFIG.bosses.nordic` og `NORDIC` i js/figures.js.
+- **Replikker:** Johans tittel, replikk og fasetekst, og alle bossenes replikker, er plassholdere i `CONFIG.bosses`. «Fristen er om 2 minutter!» fikk replikken «Kan du se på dette før lunsj?», siden prompten ikke ga noen.
+- **Nedtelling:** bossens nedtelling fortsetter under «Vi ringer deg tilbake» og papirstopp.
+- **Under bosskamp:** det kommer færre vanlige advokater, og bossen jogger etter spilleren når den er langt unna. Det er lagt til for balansen og står i `CONFIG.bosses.spawnFactor` og `catchUpFrom`/`catchUpSpeed`.
+- **Debug-modus:** med udødelighet starter nedtellingen på nytt i stedet for å gi sparken (brukes av stresstesten).
+
 ## Versjon 3.1 – 25. november 2026 (koden på engelsk)
 
 All kode og alle kommentarer er oversatt til engelsk. **Teksten i selve spillet er uendret** (norsk), og spillet

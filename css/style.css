@@ -212,6 +212,18 @@ canvas.portrait { image-rendering: pixelated; image-rendering: crisp-edges; back
 .endHeader canvas.portrait { width: 5em; height: 5em; box-shadow: 0 0 0 0.125em var(--border); }
 .endHeader p { margin: 0.2em 0 0; }
 
+/* Fired, and the bosses met this shift */
+.firedLine { color: var(--danger); margin: 0.4em 0 0; font-size: 1.1em; }
+.bossList { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75em; margin: 0.6em 0 0.2em; }
+.bossList .boss { display: flex; flex-direction: column; align-items: center; gap: 0.15em; width: 8.5em; padding: 0.4em; background: #ffffff; box-shadow: 0 0 0 0.125em var(--border); }
+.bossList .boss canvas.portrait { width: 4em; height: 4em; }
+.bossList .boss .name { font-size: 0.85em; text-align: center; line-height: 1.2; }
+.bossList .boss small { color: var(--muted); font-size: 0.75em; }
+.bossList .boss.helped small { color: var(--primary-dark); }
+.bossList .boss.fired { background: #ffe3e3; }
+.bossList .boss.fired small { color: var(--danger); }
+.leaderboard canvas.firedIcon { width: 1.1em; height: 1.1em; vertical-align: middle; margin-left: 0.3em; }
+
 /* ---------- Settings ---------- */
 .settingsSection .row { display: flex; align-items: center; justify-content: space-between; gap: 1em; padding: 0.45em 0; border: none; margin: 0; flex-wrap: wrap; }
 .settingsSection fieldset.row { display: block; }

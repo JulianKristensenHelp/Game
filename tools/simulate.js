@@ -12,6 +12,21 @@ import { INSIDE } from '../js/map.js';
 
 const date = process.argv[2] || '2026-11-25';
 const maxMin = Number(process.argv[3] || 25);
+// --utenbosser: no bosses at all (to see how much of the difficulty comes from them)
+if (process.argv.includes('--utenbosser')) for (const b of CONFIG.bosses.schedule) b.at = 1e7;
+// --ikkejag: the bots ignore the bosses (and the bosses never fire anyone). --ingentreg: no slowdown from notes and ink.
+const NO_CHASE = process.argv.includes('--ikkejag');
+if (NO_CHASE) for (const t of ['nordic', 'printerBoss', 'deadline', 'johan']) /** @type {any} */ (CONFIG.bosses)[t].deadline = 1e7;
+if (process.argv.includes('--ingentreg')) {
+  CONFIG.bosses.nordic.queue.slow = 0;
+  CONFIG.bosses.printerBoss.cmyk.puddleSlow = 0;
+}
+// --ufarligebosser: the bosses do no damage at all (to separate the damage from the time pressure and the chase)
+if (process.argv.includes('--ufarligebosser')) {
+  const B = /** @type {any} */ (CONFIG.bosses);
+  for (const t of ['nordic', 'printerBoss', 'deadline', 'johan']) B[t].damage = 1e-6;
+  B.nordic.forward.damage = B.printerBoss.cmyk.damage = B.printerBoss.printJob.damage = B.johan.calendar.damage = 1e-6;
+}
 
 /**
  * Bot that steers away from lawyers and walls, walks toward tickets and fetches an energy drink when needed.
@@ -96,10 +111,23 @@ function makeRobot(skill, smartBuild, seed, plan = ['powerCycle', 'mouse', 'tone
         tx = (tx / tl0) * (1 - weight) + (ex / el) * weight;
         ty = (ty / tl0) * (1 - weight) + (ey / el) * weight;
       }
+      // The bosses are mandatory (otherwise you get fired): the better bots go after the boss and stay
+      // just within the reach of their shortest weapon – unless they badly need an energy drink.
+      const boss = s.boss && s.boss.active ? s.boss : null;
+      if (boss && !needsDrink && skill >= 0.6 && !NO_CHASE) {
+        const bx = boss.x - p.x, by = boss.y - p.y, bd = Math.hypot(bx, by) || 1;
+        const reach = Math.max(40, wanted * 0.8) + boss.r;
+        // Forward-facing weapons (toner, cable, beam) must face the boss, so the bot keeps moving slowly toward it.
+        const toward = bd > reach ? 1 : 0.2;
+        tx = (bx / bd) * toward;
+        ty = (by / bd) * toward;
+      }
       const tl = Math.hypot(tx, ty) || 1;
       const fl = Math.hypot(fx, fy) || 1;
       const m = (skill > 0.8 ? 0.45 : 1) * Math.min(1, wanted / 80);
-      const fear = nearest < 20 * m ? 1 : nearest < 55 * m ? 0.75 : nearest < 100 * m ? 0.35 : 0.08;
+      let fear = nearest < 20 * m ? 1 : nearest < 55 * m ? 0.75 : nearest < 100 * m ? 0.35 : 0.08;
+      // Little time left on the boss clock: a human would take more risks to get to the boss.
+      if (boss && !needsDrink && skill >= 0.6 && !NO_CHASE && boss.timer < 70) fear *= 0.5;
       ix = (fx / fl) * fear + (tx / tl) * (1 - fear);
       iy = (fy / fl) * fear + (ty / tl) * (1 - fear);
       if (rng.next() > skill) {
@@ -127,8 +155,13 @@ function makeRobot(skill, smartBuild, seed, plan = ['powerCycle', 'mouse', 'tone
 /** The plans the bots build toward, one per character (starting weapon first). */
 const PLANS = [['powerCycle', 'mouse', 'toner', 'remote'], ['toner', 'powerCycle', 'hdmi', 'remote'], ['hdmi', 'powerCycle', 'mouse', 'teams'], ['mouse', 'powerCycle', 'ctrlz', 'beam']];
 
-function playRound(name, skill, smart, seed, log = false, plan = undefined, otherLooks = false, character = seed % 4) {
-  const s = new Game(date, character);
+/** One shift on a given day (used by --statistikk). */
+function playRoundOn(day, name, skill, smart, seed, character) {
+  return playRound(name, skill, smart, seed, false, undefined, false, character, day);
+}
+
+function playRound(name, skill, smart, seed, log = false, plan = undefined, otherLooks = false, character = seed % 4, day = date) {
+  const s = new Game(day, character);
   if (!plan) plan = PLANS[character];
   // Test: a completely different look for the lawyers must give exactly the same round.
   if (otherLooks) s.rng.looks = new Rng('noe helt annet');
@@ -136,24 +169,73 @@ function playRound(name, skill, smart, seed, log = false, plan = undefined, othe
   const maxTicks = maxMin * 60 * CONFIG.ticksPerSecond;
   let maxEnemies = 0, firstEvo = 0;
   const start = Date.now();
+  /** Energy lost with and without a boss out (shown with --skade). */
+  const lost = { boss: 0, other: 0, bossShots: 0 };
   for (let t = 0; t < maxTicks && s.status !== 'done'; t++) {
     const [ix, iy] = robot.steer(s);
+    const before = s.player.energy, shotsBefore = s.enemyShots.n;
+    const bossOut = !!(s.boss && s.boss.active);
     s.tick(ix, iy);
+    const diff = Math.max(0, before - s.player.energy);
+    if (diff > 0) {
+      if (bossOut) lost.boss += diff;
+      else lost.other += diff;
+      if (bossOut && s.enemyShots.n < shotsBefore) lost.bossShots += diff;
+    }
     s.events.length = 0;
     if (s.status === 'levelUp') s.chooseCard(robot.choose(s));
     if (!firstEvo && s.stat.combinations.length) firstEvo = s.time;
     if (s.enemies.n > maxEnemies) maxEnemies = s.enemies.n;
-    if (log && t > 0 && t % (120 * CONFIG.ticksPerSecond) === 0) {
+    const every = process.argv.includes('--tett') ? 15 : 120;
+    if (log && t > 0 && t % (every * CONFIG.ticksPerSecond) === 0) {
       console.log(`     ${mmss(s.time)}: nivå ${s.level}, score ${s.score}, fiender ${s.enemies.n}, energi ${Math.round(s.player.energy)}/${s.player.maxEnergy}, treff ${s.stat.hits}, drikker ${s.stat.drinks}, spart ${s.spared}`);
     }
   }
   const build = s.player.weapons.map((w) => `${weaponName(w)}${w.evo ? '' : ' ' + w.level}`).join(', ');
+  const end = s.fired ? `SPARKET av ${s.fired.name}` : s.status === 'done' ? 'tom for energi' : 'levde ut tiden';
+  const bossesHelped = s.stat.bossLog.filter((b) => b.helped).map((b) => `${CONFIG.bosses[b.type].short} ${Math.round(b.helpedAt - b.time)}s`).join(' ');
   console.log(
     `${name.padEnd(24)} tid ${mmss(s.time)}${s.status === 'done' ? ' ' : '+'} | score ${String(s.score).padStart(8)} | nivå ${String(s.level).padStart(3)} | hjulpne ${String(s.helped).padStart(5)} | ` +
     `maks x${(CONFIG.multiplier.start + s.stat.maxMultStep * CONFIG.multiplier.step).toFixed(1)} | treff ${s.stat.hits} | drikker ${s.stat.drinks} | bosser ${s.stat.bossesHelped}/${s.stat.bossesTotal} | første komb. ${firstEvo ? mmss(firstEvo) : '-'} | maks fiender ${maxEnemies} | ${Date.now() - start} ms`
   );
-  console.log(`   bygg: ${build}`);
+  console.log(`   slutt: ${end} | bosser hjulpet: ${bossesHelped || '-'} | bygg: ${build}`);
+  if (process.argv.includes('--skade')) console.log(`   energi tapt: under boss ${Math.round(lost.boss)} (herav ca. ${Math.round(lost.bossShots)} fra prosjektiler), ellers ${Math.round(lost.other)}`);
   return s;
+}
+
+// --statistikk: many shifts (10 days × 4 characters) for good and expert bots – median, spread and how many got fired.
+if (process.argv.includes('--statistikk')) {
+  const quiet = console.log;
+  const rows = { 'God, planlagt': [], Ekspert: [] };
+  const fired = { 'God, planlagt': 0, Ekspert: 0 };
+  /** @type {Record<string, number>} */
+  const byBoss = {};
+  const details = [];
+  console.log = () => {};
+  for (let d = 0; d < 10; d++) {
+    const day = `2026-12-${String(d + 1).padStart(2, '0')}`;
+    for (let k = 0; k < 4; k++) {
+      for (const [name, skill] of [['God, planlagt', 0.9], ['Ekspert', 1]]) {
+        const s = playRoundOn(day, name, skill, true, 100 + d * 10 + k, k);
+        rows[name].push(s.time / 60);
+        if (s.fired) {
+          fired[name]++;
+          byBoss[s.fired.type] = (byBoss[s.fired.type] || 0) + 1;
+          const b = s.boss;
+          details.push(`${day} k${k + 1} ${name}: igjen ${Math.round((b.hp / b.maxHp) * 100)} % | bygg ${s.player.weapons.map((w) => w.id + w.level).join(' ')} | avstand ${Math.round(Math.hypot(b.x - s.player.x, b.y - s.player.y))}`);
+        }
+      }
+    }
+  }
+  console.log = quiet;
+  for (const [name, list] of Object.entries(rows)) {
+    list.sort((a, b) => a - b);
+    const q = (f) => list[Math.min(list.length - 1, Math.floor(f * list.length))].toFixed(1);
+    console.log(`${name.padEnd(14)} median ${q(0.5)} min | 25 % ${q(0.25)} | 75 % ${q(0.75)} | maks ${q(1)} | sparket ${fired[name]} av ${list.length}`);
+  }
+  console.log('sparket av: ' + JSON.stringify(byBoss));
+  if (process.argv.includes('--detaljer')) console.log(details.join('\n'));
+  process.exit(0);
 }
 
 console.log(`Dagens vakt: ${date} (maks ${maxMin} min)\n`);
@@ -162,7 +244,7 @@ for (let i = 1; i <= 3; i++) playRound('Nybegynner ' + i, 0.45, false, i);
 for (let i = 1; i <= 3; i++) playRound('Gjennomsnittlig ' + i, 0.7, false, 10 + i);
 for (let i = 1; i <= 3; i++) playRound('God, tilfeldig bygg ' + i, 0.95, false, 40 + i);
 for (let i = 1; i <= 4; i++) playRound('God, planlagt bygg ' + i, 0.9, true, 20 + i);
-for (let k = 0; k < 4; k++) playRound('Ekspert, karakter ' + (k + 1), 1, true, 31 + k, false, undefined, false, k);
+for (let k = 0; k < 4; k++) playRound('Ekspert, karakter ' + (k + 1), 1, true, 31 + k, process.argv.includes('--logg=' + (k + 1)), undefined, false, k);
 const a = playRound('Ekspert', 1, true, 30, true, undefined, false, 0);
 const b = playRound('Ekspert (på nytt)', 1, true, 30, false, undefined, false, 0);
 const c = playRound('Ekspert (annet utseende)', 1, true, 30, false, undefined, true, 0);

@@ -140,7 +140,9 @@
   <!-- Game-over screen -->
   <div id="gameOver" class="screen" hidden>
     <div class="panel wide">
-      <div class="endHeader"><canvas id="endPortrait" class="portrait" width="64" height="64" aria-hidden="true"></canvas><div><h1 class="endTitle">Vakta er over</h1><p id="endCharacter" class="muted"></p></div></div>
+      <div class="endHeader"><canvas id="endPortrait" class="portrait" width="64" height="64" aria-hidden="true"></canvas><div><h1 id="endTitle" class="endTitle">Vakta er over</h1><p id="endCharacter" class="muted"></p></div></div>
+      <p id="endFired" class="firedLine" hidden></p>
+      <div id="endBosses" class="bossList"></div>
       <div class="result">
         <div><span id="endScore" class="bigNumber">0</span><small>poeng</small></div>
         <div><span id="endTime" class="bigNumber">00:00</span><small>overlevd tid</small></div>
@@ -181,6 +183,10 @@
       <button data-d="pc">Ny PC</button>
       <button data-d="drink">Drikk</button>
       <button data-d="swarm">+100 advokater</button>
+      <button data-d="boss1">Boss 1: Nørdic</button>
+      <button data-d="boss2">Boss 2: Printer</button>
+      <button data-d="boss3">Boss 3: Fristen</button>
+      <button data-d="boss4">Boss 4: Johan</button>
       <button data-d="stress" class="important">Stresstest (5 min)</button>
     </div>
   </div>

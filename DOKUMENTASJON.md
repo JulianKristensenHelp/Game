@@ -73,8 +73,8 @@ hvert innslag i topplisten (portrett ved navnet). Topplisten er felles for alle 
 | 3 | HDMI-kabelen | +10 % bevegelseshastighet |
 | 4 | Trådløse mus | +25 % radius for å plukke opp ticket-lapper |
 
-- **Navn og tittel** fylles inn i js/config.js under CONFIG.characters (nå står det «Karakter 1–4» og
-  «Tittel fylles inn»). Der står også startvåpen og bonus.
+- **Navn og tittel** står i js/config.js under CONFIG.characters (Odyssefs, Johannes, Jin og Julian, alle med
+  tittelen «IT-avdelingen»). Der står også startvåpen og bonus.
 - **Utseendet** står i js/figures.js (PLAYERS for figuren og drawPortrait for portrettet på 64 × 64).
 - **Forhåndsvisning til godkjenning:** <http://localhost:3000/?debug=karakterer> viser alle fire med portrett,
   animert gangsyklus, glad bilde, navn, tittel, startvåpen og bonus.
@@ -82,23 +82,52 @@ hvert innslag i topplisten (portrett ved navnet). Topplisten er felles for alle 
 
 ## Våpen, passive og kombinasjoner
 
-Det finnes 10 IT-løsninger (maks 4 samtidig) og 12 passive (maks 6 samtidig). Hvert våpen på nivå 8 pluss
-riktig passiv gir en kombinasjon. Fire våpen, fire passive og fire kombinasjoner er nye i versjon 3:
+Det finnes 11 IT-løsninger (maks 4 samtidig) og 12 passive (maks 6 samtidig). Hvert våpen på nivå 8 pluss
+riktig passiv gir en kombinasjon. Disse er nye eller endret i versjon 3 og 4:
 
 | Våpen | + Passiv | = Kombinasjon |
 | --- | --- | --- |
+| Passord-reset (kjede: hopper fra advokat til advokat, 3–10 hopp) | Raskere SSD | Tofaktor (to kjeder i hver sin retning, 16 hopp hver) |
 | Ctrl+Z (bumerang mot nærmeste advokat) | Hurtigtaster | Ctrl+Alt+Del |
 | Oppdateringsstrålen (stråle i gangretningen) | Sertifisering | Tvungen oppdatering |
-| Teams-varsel (spretter fra advokat til advokat) | Dobbel skjerm | Allmøte på Teams |
+| Teams-varsel (målsøkende varsler mot hver sin advokat) | Dobbel skjerm | Allmøte på Teams (hvert varsel deler seg i tre) |
 | Støydempende headset (skjold som blokkerer ett treff) | Ergonomisk stol | Hjemmekontor |
+| Skytsengelen (kaster mini-printere) | Større boks | Himmelsk serviceavtale |
 
-De nye tallene står i CONFIG.newWeapons og CONFIG.newPassives. «Dobbel skjerm» bruker en egen
-tilfeldighetsstrøm, så samme valg gir samme runde for alle.
+Tallene står i CONFIG.weapons og CONFIG.newWeapons. «Dobbel skjerm» bruker en egen tilfeldighetsstrøm, så
+samme valg gir samme runde for alle. Skytsengelen har et fast tak på antall mini-printere samtidig (2, 4 eller 6,
+og 10 som kombinasjon), likt for alle.
 
 **«Haster!»-avsenderen** (fra 2:30) holder seg 150–200 piksler unna og sender e-poster mot der spilleren
 står. Laptopen lyser og et «!» vises 0,5 sekunder før hvert skudd. Maks 15 % av advokatene og maks 30 samtidig,
-og maks 60 e-poster på kartet. Fra og med boss nummer tre sender bossen en vifte med tre e-poster.
-Tallene står i CONFIG.sender, CONFIG.enemyShots og CONFIG.bossShots.
+og maks 60 fiendeprosjektiler på kartet (e-poster og alle bossangrep til sammen).
+Tallene står i CONFIG.sender og CONFIG.enemyShots.
+
+## Bossene
+
+Bossene kommer i fast rekkefølge, og de er obligatoriske: går nedtellingen ut før bossen er hjulpet, får
+spilleren **sparken**. Spillet fryser kort, bossen ser skuffet ut, «DU HAR FÅTT SPARKEN!» vises, og slutt-skjermen
+sier hvilken boss det var. Poengene kan likevel sendes inn, og topplisten viser en liten flytteeske ved runden.
+
+| Tid | Boss | Nedtelling | Angrep |
+| --- | --- | --- | --- |
+| 3:00 | Nørdic-konsulenten | 120 s | Ventemusikk i en ring (sinker), ticket som deler seg i tre, «Vi ringer deg tilbake» (kan ikke hjelpes i 3 s) |
+| 6:00 | Multifunksjonsmonsteret | 120 s | CMYK-patroner som blir blekkdammer, utskriftsjobb på 400 sider, papirstopp (dobbel hjelp i 3 s) |
+| 9:00 | «Fristen er om 2 minutter!» | 120 s | En vifte med tre e-poster |
+| 12:00 | Johan (siste boss) | 150 s | Spurt, kalenderinvitasjoner, «Alle på møte!», og fra halv frustrasjon også de tidligere bossenes angrep |
+| 15:00, 18:00 … | Johan igjen | 150 s | Sterkere for hver gang |
+
+- Alle angrep varsles først (en positur, lys eller et «!» i 0,65 sekunder), og Johans spurt viser en linje.
+- Klokka øverst blir gul ved 30 sekunder og rød, blinkende og tikkende ved 10 (blinkingen følger innstillingen
+  for reduserte blinkeffekter).
+- Mens en boss er ute, kommer det færre vanlige advokater (55 %). En boss som er langt unna, jogger for å ta deg igjen.
+- **Navn, replikker og alle tall** står i CONFIG.bosses i js/config.js (`intro`, `line`, `happyText`, Johans
+  `title` og `phaseText` er plassholdere som kan endres fritt).
+- **Utseendet** står i js/figures.js: NORDIC (konsulenten), drawPrinterBoss (printeren) og JOHAN (figur og
+  portrett). Nørdic er et oppdiktet firma med egen logo (krøllparenteser rundt en N) i skoggrønt og lime.
+- **Bildet av Johan** er bare brukt som forelegg. Det ligger ikke i prosjektet og publiseres ikke.
+- **Test en boss direkte:** <http://localhost:3000/?debug=boss1> til `?debug=boss4` hopper rett til boss 1–4 med
+  et typisk bygg for tidspunktet (knappene «Boss 1–4» i debug-panelet gjør det samme).
 
 ## Slik justerer du balansen
 
@@ -107,32 +136,36 @@ siden på nytt. De viktigste:
 
 | Vil du … | Endre |
 | --- | --- |
-| gjøre starten lettere/vanskeligere | `spawn.rate` (de første punktene), `skalering.startEtterMin` |
-| gjøre midtspillet lettere/vanskeligere | `skalering.frustrasjonVekstPerMin`, `spawn.rate` |
-| flytte «veggen» for de beste (nå ca. 15 min) | `skalering.overtidFraMin` (13), `overtidVekstPerMin`, `overtidFartPerMin` |
-| gi raskere/tregere nivåopp | `nivaa` (`base`, `perNivaa`, `kvadrat`) |
-| endre et våpen | `vaapen.<navn>.nivaaer` (én linje per nivå) og `kombinasjon.tall` |
-| endre hastesak og boss | `fiender.hastesak`, `fiender.boss` |
-| endre energidrikken | `energidrikk` (første, intervall, maks, minAvstand) |
-| antall våpenplasser | `grenser.vaapen` (nå 4) |
-| endre karakterene | `karakterer` (navn, tittel, startvåpen, bonus) |
-| endre «Haster!»-avsenderen | `avsender`, `fiendeSkudd`, `bossSkudd` |
+| gjøre starten lettere/vanskeligere | `spawn.rate` (de første punktene), `scaling.startAfterMin` |
+| gjøre midtspillet lettere/vanskeligere | `scaling.frustrationGrowthPerMin`, `spawn.rate` |
+| flytte «veggen» for de beste (nå ca. 15 min) | `scaling.overtimeFromMin` (13), `overtimeGrowthPerMin`, `overtimeSpeedPerMin` |
+| gi raskere/tregere nivåopp | `level` (`base`, `perLevel`, `square`) |
+| endre et våpen | `weapons.<id>.levels` (én linje per nivå) og `combination.stats` |
+| endre hastesaken | `enemies.urgent` |
+| endre bossene (navn, replikker, frustrasjon, angrep, nedtelling) | `bosses` |
+| endre energidrikken | `energyDrink` (first, interval, max, minDistance) |
+| antall våpenplasser | `limits.weapons` (nå 4) |
+| endre karakterene | `characters` (navn, tittel, startvåpen, bonus) |
+| endre «Haster!»-avsenderen | `sender`, `enemyShots` |
 
 **Test endringene uten å spille:** `node tools/simulate.js [dato] [maks minutter]` lar enkle roboter
-spille hele runder på noen sekunder og skriver ut hvor lenge de holder ut og når de får første kombinasjon.
-Den sjekker også at to like runder gir nøyaktig samme resultat (også med «Dobbel skjerm»), og at utseendet på
-advokatene ikke påvirker spillet. Med tallene som ligger inne nå (tre forskjellige datoer):
+spille hele runder på noen sekunder og skriver ut hvor lenge de holder ut, hvilke bosser de hjalp (og hvor fort),
+og om runden endte med sparken. Den sjekker også at to like runder gir nøyaktig samme resultat (også med
+«Dobbel skjerm»), og at utseendet på advokatene ikke påvirker spillet.
 
-| Robot | Overlever ca. |
-| --- | --- |
-| Nybegynner (går ofte feil vei, tilfeldige kort) | 2–3 min |
-| Gjennomsnittlig | 3–5 min |
-| God, tilfeldig bygg | 4–8 min |
-| God/ekspert, bygger bevisst mot kombinasjoner | 9–14 min (ingen over 15) |
+`node tools/simulate.js x 25 --statistikk` kjører 10 dager × 4 karakterer for de gode robotene og skriver ut median,
+spredning og hvor mange som fikk sparken. Med tallene som ligger inne nå:
 
-Robotene svinger mye fra runde til runde og er ikke mennesker. Prøvespill gjerne med noen kolleger.
+| Robot | Median | 25–75 % | Lengst | Sparket |
+| --- | --- | --- | --- | --- |
+| God, bygger bevisst | 9,0 min | 6,4–12,1 min | 14,7 min | 2 av 40 |
+| Ekspert | 10,5 min | 6,0–13,6 min | 15,5 min | 3 av 40 |
 
-**Sammenlign våpen og kombinasjoner:** `node tools/measure-weapons.js` måler hjelp per sekund for alle 10 våpen
+Uten bosser (`--utenbosser`) er tallene 9,6 og 12,4 minutter, så bossene gjør det bare litt vanskeligere. Robotene
+ser ikke varslene slik et menneske gjør, så de får mer skade fra bossene enn en oppmerksom spiller. Robotene
+svinger mye fra runde til runde og er ikke mennesker. Prøvespill gjerne med noen kolleger.
+
+**Sammenlign våpen og kombinasjoner:** `node tools/measure-weapons.js` måler hjelp per sekund for alle 11 våpen
 på nivå 8 og som kombinasjon under like forhold. I debug-modus viser overlegget det samme i spillet
 (hjelp per sekund per våpen, siste 10 sekunder).
 
@@ -166,7 +199,7 @@ All grafikk tegnes med kode som fargeindekserte pikselrutenett (`js/pixel.js`) �
 
 ## Debug-modus
 
-Legg til `?debug` i adressen: <http://localhost:3000/?debug>. (`?debug=karakterer` viser forhåndsvisningen av karakterene.) Da vises et ytelsesoverlegg med:
+Legg til `?debug` i adressen: <http://localhost:3000/?debug>. (`?debug=karakterer` viser forhåndsvisningen av karakterene og Johan, og `?debug=boss1` til `?debug=boss4` hopper rett til en boss.) Da vises et ytelsesoverlegg med:
 
 - FPS nå, minste og snitt, og millisekunder per bilde delt på oppdatering og tegning
 - antall advokater, prosjektiler, effekter, ticket-lapper og glade advokater under animasjon
@@ -192,6 +225,7 @@ Runder der debug-knappene er brukt, kan ikke sendes inn til topplisten.
 | `js/config.js` | **Alle balansetall** |
 | `js/game.js` | Spilltilstanden og én oppdatering per fast tidssteg (60 per sekund) |
 | `js/player.js`, `js/enemies.js`, `js/weapons.js` | Spilleren, advokatene (inkl. spawning på kartet) og IT-løsningene |
+| `js/bosses.js` | Bossene: rekkefølgen, nedtellingen («sparken»), angrepene og fiendeprosjektilene |
 | `js/upgrades.js`, `js/tickets.js`, `js/score.js` | Nivåopp-kort, lapper/energidrikk/Ny PC, poeng og multiplikator |
 | `js/map.js` | Kartets soner, pynt, dører og vegger |
 | `js/renderer.js` | Spillverdenen i pixel art (640 × 360) |

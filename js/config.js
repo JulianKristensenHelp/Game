@@ -98,16 +98,89 @@ export const CONFIG = {
       /** If it is farther away than this, it runs slower so it can be caught. */
       slowDistance: 260, slowFactor: 0.35,
     },
-    boss: {
-      name: 'Fristen er om 2 minutter!', frustration: 1500, speed: 26, radius: 20, damage: 20, points: 2500,
-      /** First boss and time between each boss. */
-      first: 180, interval: 180,
-      /** Countdown in seconds. */
-      deadline: 90,
-      /** Increase per boss. */
-      frustrationPerBoss: 1.6, pointsPerBoss: 1.5,
-      /** Speed when the boss storms angrily off the screen. */
-      leavingSpeed: 85,
+    /** Shared base values for all bosses. Each boss has its own numbers in CONFIG.bosses below. */
+    boss: { name: 'Boss', frustration: 1500, speed: 26, radius: 20, damage: 20, points: 2500 },
+  },
+
+  /**
+   * BOSSES (version 4). They come in a fixed order, and they are mandatory: if the countdown runs out,
+   * the player is fired («Du har fått sparken!») and the round ends. The score can still be submitted.
+   * Every attack is warned (pose, light or «!») for «tell» seconds before it comes.
+   */
+  bosses: {
+    /** When each boss arrives (seconds) and which one. */
+    schedule: [
+      { at: 180, type: 'nordic' },
+      { at: 360, type: 'printerBoss' },
+      { at: 540, type: 'deadline' },
+      { at: 720, type: 'johan' },
+    ],
+    /** After the last one, Johan comes back this often (seconds), stronger each time. */
+    repeatEvery: 180,
+    /** The big clock turns yellow at 30 seconds left, and red (blinking and ticking) at 10. */
+    warnYellow: 30, warnRed: 10,
+    /** Seconds the game stays frozen with «DU HAR FÅTT SPARKEN!» before the end screen. */
+    firedPause: 2.8,
+    /** Warning time before an attack (seconds). */
+    tell: 0.65,
+    /** Distance from the player where the boss appears. */
+    spawnDistance: 330,
+    /** Boss attacks only start when the boss is this many seconds into the fight (time to see it coming). */
+    calmStart: 2.5,
+    /** While a boss is out, fewer ordinary lawyers stream in (0.55 = 55 % of normal). The waves are not affected. */
+    spawnFactor: 0.55,
+    /** A boss farther away than this jogs «catchUpSpeed» times faster, so the player cannot just run away from it. */
+    catchUpFrom: 230, catchUpSpeed: 2.4,
+
+    nordic: {
+      name: 'Nørdic-konsulenten', short: 'NØRDIC',
+      intro: 'Nørdic-konsulenten har ankommet!', line: 'Saken er registrert. Forventet svartid: 3–5 virkedager.',
+      happyText: 'Sak lukket!',
+      frustration: 850, speed: 28, radius: 20, damage: 8, points: 2500, deadline: 120,
+      /** «Du er nummer 47 i køen»: hold music in a ring. The notes only slow the player down. */
+      queue: { cooldown: 10, notes: 10, speed: 40, lifetime: 5.5, slow: 0.4, slowTime: 2 },
+      /** «Saken er sendt videre»: a ticket that splits into three smaller ones in a fan. */
+      forward: { cooldown: 5.5, speed: 95, splitAfter: 0.9, count: 3, spread: 0.45, damage: 6 },
+      /** «Vi ringer deg tilbake»: stands still and cannot be helped. Max once per «cooldown» seconds. */
+      callBack: { cooldown: 20, duration: 3 },
+    },
+    printerBoss: {
+      name: 'Multifunksjonsmonsteret', short: 'PRINTER',
+      intro: 'Multifunksjonsmonsteret har våknet!', line: 'PAPIRSTOPP I SKUFF 2',
+      happyText: 'Utskrift fullført',
+      frustration: 2200, speed: 24, radius: 22, damage: 9, points: 4000, deadline: 120,
+      /** Four colour cartridges (CMYK) in a fan. They land after «flight» seconds and leave an ink puddle. */
+      cmyk: { cooldown: 8, speed: 125, flight: 1.3, spread: 0.32, damage: 6, puddleTime: 4, puddleRadius: 16, puddleSlow: 0.3, maxPuddles: 8 },
+      /** «Utskriftsjobb på 400 sider»: a fast stream of sheets in a sweeping arc. */
+      printJob: { cooldown: 13, duration: 2, rate: 0.09, arc: 1.7, speed: 115, damage: 3 },
+      /** «Papirstopp!»: now and then the printer gets stuck – no movement, no attacks, and it takes double help. */
+      jam: { every: 15, duration: 3, helpFactor: 2 },
+    },
+    deadline: {
+      name: 'Fristen er om 2 minutter!', short: 'FRIST',
+      intro: 'Fristen er om 2 minutter!', line: 'Kan du se på dette før lunsj?',
+      happyText: 'Fristen ble holdt!',
+      frustration: 4400, speed: 27, radius: 20, damage: 11, points: 6000, deadline: 120,
+      /** A fan of emails (the same as from version 3). */
+      emails: { cooldown: 4, count: 3, spread: 0.3, damage: 0.5 },
+    },
+    johan: {
+      name: 'Johan', short: 'JOHAN', title: 'SISTE BOSS: JOHAN',
+      intro: 'SISTE BOSS: JOHAN', line: 'Har du et lite minutt?',
+      phaseText: 'Johan tar av seg dressjakka', happyText: 'Bra jobba!',
+      frustration: 6500, speed: 30, radius: 20, damage: 12, points: 15000, deadline: 150,
+      /** Second phase from half frustration: faster and attacks more often (cooldown × «cooldowns»). */
+      phase2: { at: 0.5, speed: 1.25, cooldowns: 0.75 },
+      /** «Har du et lite minutt?»: points at the player, then sprints in a straight line. damage = × his damage. */
+      sprint: { cooldown: 6.5, speed: 330, maxTime: 0.9, damage: 1.6 },
+      /** A fan of five calendar invitations. */
+      calendar: { cooldown: 7, count: 5, spread: 0.28, speed: 72, damage: 6 },
+      /** «Alle på møte!»: a ring of junior associates around the player, with an opening. */
+      meeting: { cooldown: 30, count: 18, radius: 150, gap: 1.1 },
+      /** From the second phase he also forwards the earlier bosses' attacks (more rarely than they did). */
+      forwarded: { cooldown: 12 },
+      /** He comes back every 3 minutes; each time with more frustration, damage and points. */
+      returns: { frustration: 1.5, damage: 1.2, points: 1.4 },
     },
   },
 
@@ -150,9 +223,6 @@ export const CONFIG = {
     /** Max number on the map at the same time. When the cap is reached, the senders wait. */
     max: 60,
   },
-
-  /** The boss sends a fan of emails starting from this boss (3 = the third). */
-  bossShots: { fromBoss: 3, interval: 4, count: 3, spread: 0.3 },
 
   /** How many different looks each type has (purely cosmetic). */
   figureVariants: { junior: 42, printer: 42, senior: 42, urgent: 21, boss: 12, sender: 42 },
@@ -311,22 +381,26 @@ export const CONFIG = {
     },
     password: {
       name: 'Passord-reset',
-      description: 'Nøkler flyr rett fram dit du går, gjennom flere advokater.',
+      description: 'En nøkkel hopper fra advokat til advokat, som et kjedelyn.',
       levels: [
-        { count: 1, through: 3, help: 11, interval: 1.0, speed: 280, range: 310, text: 'Nøkler flyr rett fram dit du går, gjennom flere advokater.' },
-        { count: 2, through: 3, help: 11, interval: 1.0, speed: 280, range: 310, text: '+1 nøkkel.' },
-        { count: 2, through: 5, help: 11, interval: 1.0, speed: 280, range: 310, text: 'Nøklene går gjennom 2 flere advokater.' },
-        { count: 2, through: 5, help: 15, interval: 1.0, speed: 340, range: 330, text: 'Raskere nøkler og mer hjelp.' },
-        { count: 3, through: 5, help: 15, interval: 0.95, speed: 340, range: 330, text: '+1 nøkkel.' },
-        { count: 3, through: 8, help: 15, interval: 0.95, speed: 340, range: 330, text: 'Nøklene går gjennom 3 flere advokater.' },
-        { count: 3, through: 8, help: 21, interval: 0.9, speed: 390, range: 350, text: 'Raskere nøkler og mer hjelp.' },
-        { count: 4, through: 10, help: 26, interval: 0.85, speed: 390, range: 350, text: '+1 nøkkel og mer hjelp.' },
+        /**
+         * hops = how many lawyers the chain hits, range = max distance per hop, hopTime = seconds per hop,
+         * reach = how far away the first lawyer can be.
+         */
+        { hops: 3, help: 30, interval: 1.05, range: 80, hopTime: 0.07, reach: 200, text: 'En nøkkel hopper fra advokat til advokat, som et kjedelyn.' },
+        { hops: 4, help: 30, interval: 1.05, range: 80, hopTime: 0.07, reach: 200, text: '+1 hopp.' },
+        { hops: 5, help: 30, interval: 1.05, range: 80, hopTime: 0.07, reach: 200, text: '+1 hopp.' },
+        { hops: 6, help: 33, interval: 1.05, range: 80, hopTime: 0.07, reach: 200, text: '+1 hopp og +10 % hjelp.' },
+        { hops: 7, help: 33, interval: 1.05, range: 80, hopTime: 0.07, reach: 200, text: '+1 hopp.' },
+        { hops: 8, help: 33, interval: 1.05, range: 80, hopTime: 0.07, reach: 200, text: '+1 hopp.' },
+        { hops: 9, help: 33, interval: 1.05, range: 80, hopTime: 0.07, reach: 200, text: '+1 hopp.' },
+        { hops: 10, help: 36, interval: 1.05, range: 80, hopTime: 0.07, reach: 200, text: '+1 hopp og +10 % hjelp.' },
       ],
       combination: {
         passive: 'ssd', name: 'Tofaktor',
-        text: 'Dobbelt så mange nøkler, og de stopper aldri før de forlater skjermen.',
-        /** through: 99999 = never stops. count has already been doubled. */
-        stats: { count: 6, through: 99999, help: 30, interval: 0.9, speed: 410, range: 9999 },
+        text: 'To kjeder samtidig i hver sin retning, og hver kan hoppe til 16 advokater.',
+        /** chains = number of chains at the same time. */
+        stats: { hops: 16, chains: 2, help: 22, interval: 1.05, range: 85, hopTime: 0.06, reach: 220 },
       },
     },
     hdmi: {
@@ -435,23 +509,47 @@ export const CONFIG = {
     },
     teams: {
       name: 'Teams-varsel',
-      description: 'Et Teams-varsel flyr til nærmeste advokat og spretter videre.',
+      description: 'Teams-varsler skytes ut og svinger seg mot hver sin advokat.',
       levels: [
-        /** bounces = how many lawyers the alert hits, range = max distance between each bounce. */
-        { bounces: 2, help: 18, interval: 1.5, range: 90, speed: 260, text: 'Et Teams-varsel flyr til nærmeste advokat og spretter videre.' },
-        { bounces: 3, help: 18, interval: 1.5, range: 90, speed: 260, text: '+1 sprett.' },
-        { bounces: 3, help: 24, interval: 1.4, range: 90, speed: 260, text: 'Mer hjelp per treff.' },
-        { bounces: 4, help: 24, interval: 1.3, range: 95, speed: 270, text: '+1 sprett og kortere intervall.' },
-        { bounces: 4, help: 30, interval: 1.2, range: 95, speed: 270, text: 'Mer hjelp, kortere intervall.' },
-        { bounces: 5, help: 30, interval: 1.1, range: 100, speed: 280, text: '+1 sprett.' },
-        { bounces: 5, help: 36, interval: 1.0, range: 100, speed: 280, text: 'Mer hjelp, kortere intervall.' },
-        { bounces: 6, help: 40, interval: 0.9, range: 105, speed: 290, text: '+1 sprett og mer hjelp.' },
+        /** count = alerts per volley (each picks its own lawyer), turn = how sharply they steer (radians per second). */
+        { count: 1, help: 32, interval: 1.4, speed: 200, turn: 7, reach: 240, text: 'Teams-varsler skytes ut og svinger seg mot hver sin advokat.' },
+        { count: 2, help: 32, interval: 1.4, speed: 200, turn: 7, reach: 240, text: '+1 varsel.' },
+        { count: 2, help: 40, interval: 1.3, speed: 210, turn: 7, reach: 240, text: 'Mer hjelp og kortere intervall.' },
+        { count: 3, help: 40, interval: 1.3, speed: 210, turn: 7.5, reach: 250, text: '+1 varsel.' },
+        { count: 3, help: 48, interval: 1.2, speed: 220, turn: 7.5, reach: 250, text: 'Mer hjelp og kortere intervall.' },
+        { count: 4, help: 48, interval: 1.15, speed: 220, turn: 8, reach: 260, text: '+1 varsel.' },
+        { count: 4, help: 56, interval: 1.05, speed: 230, turn: 8, reach: 260, text: 'Mer hjelp og kortere intervall.' },
+        { count: 5, help: 62, interval: 1.0, speed: 240, turn: 8, reach: 270, text: '+1 varsel og mer hjelp.' },
       ],
       combination: {
         passive: 'dualMonitor', name: 'Allmøte på Teams',
-        text: 'Varslet deler seg i to ved hvert sprett.',
-        /** maxHits = cap on the number of hits per alert (all branches combined). */
-        stats: { bounces: 4, help: 38, interval: 1.0, range: 100, speed: 290, maxHits: 24 },
+        text: 'Hvert varsel deler seg i tre nye målsøkende varsler når det treffer.',
+        /** split = new alerts on each hit (they do not split again). */
+        stats: { count: 4, help: 70, interval: 0.95, speed: 240, turn: 8, reach: 270, split: 3 },
+      },
+    },
+    angel: {
+      name: 'Skytsengelen',
+      description: 'En liten skytsengel svever rundt deg og kaster mini-printere som hjelper advokatene.',
+      levels: [
+        /**
+         * perThrow = mini printers per throw, max = max at the same time (fixed and the same for everyone),
+         * life = seconds a mini printer lasts, help = help per paper burst, burst = seconds between bursts, radius = burst radius.
+         */
+        { perThrow: 1, max: 2, interval: 2.6, life: 4, help: 15, burst: 0.5, radius: 30, text: 'En liten skytsengel svever rundt deg og kaster mini-printere som hjelper advokatene.' },
+        { perThrow: 1, max: 2, interval: 2.6, life: 4, help: 17.25, burst: 0.5, radius: 30, text: '+15 % hjelp.' },
+        { perThrow: 1, max: 2, interval: 2.1, life: 4, help: 17.25, burst: 0.5, radius: 30, text: 'Kaster oftere.' },
+        { perThrow: 2, max: 4, interval: 2.1, life: 4, help: 17.25, burst: 0.5, radius: 30, text: '2 mini-printere per kast, maks 4 samtidig.' },
+        { perThrow: 2, max: 4, interval: 2.1, life: 5, help: 17.25, burst: 0.5, radius: 30, text: 'Mini-printerne varer 1 sekund lenger.' },
+        { perThrow: 2, max: 4, interval: 2.1, life: 5, help: 19.84, burst: 0.5, radius: 30, text: '+15 % hjelp.' },
+        { perThrow: 2, max: 4, interval: 1.7, life: 5, help: 19.84, burst: 0.5, radius: 30, text: 'Kaster oftere.' },
+        { perThrow: 3, max: 6, interval: 1.7, life: 5, help: 19.84, burst: 0.5, radius: 30, text: '3 mini-printere per kast, maks 6 samtidig.' },
+      ],
+      combination: {
+        passive: 'biggerCan', name: 'Himmelsk serviceavtale',
+        text: 'Lysende glorie og større vinger: dobbelt så mange mini-printere, som avslutter med papirkonfetti.',
+        /** confetti = help in the final burst of paper confetti, confettiRadius = its radius. */
+        stats: { perThrow: 6, max: 10, interval: 1.7, life: 5, help: 10, burst: 0.5, radius: 30, confetti: 40, confettiRadius: 50 },
       },
     },
     headset: {

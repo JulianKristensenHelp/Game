@@ -7,14 +7,20 @@ import { givePoints, registerHelped } from './score.js';
 import { damagePlayer } from './player.js';
 import { dropTicket, dropPickup } from './tickets.js';
 import { INSIDE, DOORS } from './map.js';
+import { updateBoss, updateBossSchedule, bossContactDamage, bossHelpFactor, checkBossPhase, bossHelped, shoot } from './bosses.js';
 
 const F = CONFIG.enemies;
 const SP = CONFIG.spawn;
 const VB = CONFIG.view.width, VH = CONFIG.view.height;
 
 /** Type codes used by the happy animation (effects store numbers, not text). */
-export const TYPE_CODE = { junior: 0, printer: 1, senior: 2, urgent: 3, boss: 4, sender: 5 };
-export const TYPE_NAMES = ['junior', 'printer', 'senior', 'urgent', 'boss', 'sender'];
+export const TYPE_CODE = { junior: 0, printer: 1, senior: 2, urgent: 3, boss: 4, sender: 5, nordic: 6, printerBoss: 7, johan: 8 };
+export const TYPE_NAMES = ['junior', 'printer', 'senior', 'urgent', 'boss', 'sender', 'nordic', 'printerBoss', 'johan'];
+
+/** The figure type used to draw an enemy (the bosses have their own figures; «deadline» is the classic lawyer boss). */
+export function figureType(e) {
+  return e.type === 'boss' && e.bossType !== 'deadline' ? e.bossType : e.type;
+}
 
 /** Empty enemy object for the pool. */
 export function makeEnemy() {
@@ -32,6 +38,9 @@ export function makeEnemy() {
     phase: 0,
     /** Looks only: which variant (from a separate random stream) and which way the figure faces. */
     variant: 0, direction: 1,
+    /** Bosses (see bosses.js): which boss, the current attack, warning, pose and cooldowns. */
+    bossType: '', attack: '', tell: false, attackT: 0, pose: -1, cds: [0, 0, 0, 0, 0], fightT: 0, deadline: 0,
+    invuln: 0, jam: 0, jamCd: 0, phase2: false, alt: 0, aimX: 0, aimY: 0, vx: 0, vy: 0, streamT: 0, streamA: 0, returnNo: 0,
   };
 }
 
@@ -104,13 +113,18 @@ export function spawnEnemy(s, type, x, y) {
   e.variant = s.rng.looks.integer(CONFIG.figureVariants[type]);
   e.direction = x > s.player.x ? -1 : 1;
   if (type === 'sender') s.senderCount++;
+  e.bossType = '';
+  e.attack = '';
+  e.tell = false;
+  e.pose = -1;
+  e.invuln = 0;
+  e.jam = 0;
+  e.phase2 = false;
   if (type === 'boss') {
-    e.bossIndex = s.bossNo;
-    e.shots = CONFIG.bossShots.interval;
-    e.hp = k.frustration * Math.pow(k.frustrationPerBoss, s.bossNo);
-    e.points = Math.round(k.points * Math.pow(k.pointsPerBoss, s.bossNo));
-    e.damage = k.damage * damageFactor(s.time);
-    e.timer = k.deadline;
+    // The real values are set by spawnBoss() in bosses.js
+    e.hp = k.frustration;
+    e.points = k.points;
+    e.damage = k.damage;
   } else {
     e.hp = k.frustration * frustrationFactor(s.time);
     if (type !== 'urgent') e.speed = k.speed * speedFactor(s.time);
@@ -180,7 +194,7 @@ function doorSpot(s) {
 }
 
 /** Lets a lawyer in if there is room under the cap, otherwise it is saved up (and the next ones become stronger). */
-function trySpawn(s, type, x, y) {
+export function trySpawn(s, type, x, y) {
   if (s.enemies.n >= SP.maxConcurrent) {
     s.spared = Math.min(200, s.spared + 1);
     return;
@@ -198,7 +212,9 @@ export function updateDirector(s, dt) {
   const t = s.time;
 
   // Steady stream of lawyers.
-  s.spawnAcc += spawnRate(t) * dt;
+  // While a boss is out, fewer ordinary lawyers come in (the boss is the main threat)
+  const bossOut = s.boss && s.boss.active;
+  s.spawnAcc += spawnRate(t) * (bossOut ? CONFIG.bosses.spawnFactor : 1) * dt;
   while (s.spawnAcc >= 1) {
     s.spawnAcc -= 1;
     const typeNum = rng.next();
@@ -280,17 +296,8 @@ export function updateDirector(s, dt) {
       s.events.push('urgentSpawned');
     }
   }
-  if (t >= s.nextBoss) {
-    s.nextBoss += F.boss.interval;
-    const a = rs.next() * TAU;
-    let x = p.x + Math.cos(a) * 330, y = p.y + Math.sin(a) * 330;
-    if (x < INSIDE.x0 + 40 || x > INSIDE.x1 - 40) x = p.x - Math.cos(a) * 330;
-    if (y < INSIDE.y0 + 40 || y > INSIDE.y1 - 40) y = p.y - Math.sin(a) * 330;
-    spawnEnemy(s, 'boss', x, y);
-    s.bossNo++;
-    s.stat.bossesTotal++;
-    s.events.push('boss');
-  }
+  // The bosses come in a fixed order (see bosses.js)
+  updateBossSchedule(s);
 }
 
 /** Drops a paper pile. If there are too many, the oldest is removed. */
@@ -308,44 +315,10 @@ function dropPaper(s, x, y) {
   h.life = k.paperLifetime;
 }
 
-/** Empty enemy shot (email) for the pool. */
-export function makeEmail() {
-  return { x: 0, y: 0, vx: 0, vy: 0, life: 0, damage: 0, angle: 0 };
-}
-
 /** Sends an email in a straight line toward where the player is standing now (not homing). */
 function sendEmail(s, x, y, angle, damage) {
   const FS = CONFIG.enemyShots;
-  if (s.enemyShots.n >= FS.max) return;
-  const q = s.enemyShots.acquire();
-  q.x = x;
-  q.y = y;
-  q.vx = Math.cos(angle) * FS.speed;
-  q.vy = Math.sin(angle) * FS.speed;
-  q.life = FS.lifetime;
-  q.damage = damage;
-  q.angle = angle;
-  s.events.push('email');
-}
-
-/** Moves the emails. They disappear after their lifetime, at the outer wall, or when they hit the player. */
-export function updateEmails(s, dt) {
-  const pool = s.enemyShots, p = s.player;
-  const rr = (CONFIG.enemyShots.radius + p.r) ** 2;
-  for (let i = pool.n - 1; i >= 0; i--) {
-    const q = pool.items[i];
-    q.x += q.vx * dt;
-    q.y += q.vy * dt;
-    q.life -= dt;
-    if (q.life <= 0 || q.x < INSIDE.x0 || q.x > INSIDE.x1 || q.y < INSIDE.y0 || q.y > INSIDE.y1) {
-      pool.removeAt(i);
-      continue;
-    }
-    if ((q.x - p.x) ** 2 + (q.y - p.y) ** 2 < rr) {
-      if (p.invulnerable <= 0) damagePlayer(s, q.damage);
-      pool.removeAt(i);
-    }
-  }
+  shoot(s, 'email', x, y, angle, FS.speed, damage, FS.lifetime);
 }
 
 /** Moves all lawyers, keeps them slightly apart and checks contact with the player. */
@@ -431,37 +404,12 @@ export function updateEnemies(s, dt) {
           e.y += (oy / od) * (min - od) * 0.25;
         }
       }
-    } else if (e.type === 'boss' && e.leaving) {
-      // The deadline passed: the boss storms off angrily and can neither do damage nor be hit.
-      e.x -= dx * F.boss.leavingSpeed * dt;
-      e.y -= dy * F.boss.leavingSpeed * dt;
-      e.timer -= dt;
-      e.direction = dx > 0 ? -1 : 1;
-      if (!inView(s, e.x, e.y, 60) || e.timer <= 0) e.active = false;
+    } else if (e.type === 'boss') {
+      // The bosses move and attack on their own (bosses.js)
+      updateBoss(s, e, dt, dx, dy);
+      if (s.status !== 'running') return;
     } else {
-      if (e.type === 'boss') {
-        e.timer -= dt;
-        if (e.timer <= 0) {
-          e.leaving = true;
-          e.timer = 8;
-          e.alert = false;
-          s.events.push('bossLost');
-        }
-        // From boss number three: a fan of emails, with the same alert and rules
-        const BS = CONFIG.bossShots;
-        if (!e.leaving && e.bossIndex + 1 >= BS.fromBoss && inView(s, e.x, e.y, -8)) {
-          e.shots -= dt;
-          e.alert = e.shots <= CONFIG.sender.alert;
-          if (e.shots <= 0) {
-            if (s.enemyShots.n + BS.count <= CONFIG.enemyShots.max) {
-              const a = Math.atan2(p.y - e.y, p.x - e.x);
-              for (let j = 0; j < BS.count; j++) sendEmail(s, e.x, e.y - 10, a + (j - (BS.count - 1) / 2) * BS.spread, e.damage * 0.6);
-              e.shots = BS.interval;
-              e.alert = false;
-            } else e.shots = 0;
-          }
-        }
-      } else if (e.type === 'printer') {
+      if (e.type === 'printer') {
         e.timer -= dt;
         if (e.timer <= 0) {
           e.timer = F.printer.paperInterval;
@@ -472,20 +420,18 @@ export function updateEnemies(s, dt) {
       e.y += dy * e.speed * dt;
       if (Math.abs(dx) > 0.15) e.direction = dx < 0 ? -1 : 1;
 
-      if (e.type !== 'boss') {
-        // Soft pushing so the lawyers don't stand on top of each other (max 6 neighbors, so it never gets slow).
-        const n = s.grid.find(e.x, e.y, e.r * 0.8, out, 6);
-        for (let j = 0; j < n; j++) {
-          const o = f.items[out[j]];
-          if (o === e) continue;
-          const ox = e.x - o.x, oy = e.y - o.y;
-          const od = Math.hypot(ox, oy);
-          const min = (e.r + o.r) * 0.8;
-          if (od < min && od > 0.01) {
-            const shove = (min - od) * 0.25;
-            e.x += (ox / od) * shove;
-            e.y += (oy / od) * shove;
-          }
+      // Soft pushing so the lawyers don't stand on top of each other (max 6 neighbors, so it never gets slow).
+      const n = s.grid.find(e.x, e.y, e.r * 0.8, out, 6);
+      for (let j = 0; j < n; j++) {
+        const o = f.items[out[j]];
+        if (o === e) continue;
+        const ox = e.x - o.x, oy = e.y - o.y;
+        const od = Math.hypot(ox, oy);
+        const min = (e.r + o.r) * 0.8;
+        if (od < min && od > 0.01) {
+          const shove = (min - od) * 0.25;
+          e.x += (ox / od) * shove;
+          e.y += (oy / od) * shove;
         }
       }
     }
@@ -499,7 +445,7 @@ export function updateEnemies(s, dt) {
     // Contact with the player.
     if (e.active && !e.leaving && e.damage > 0) {
       const bx = p.x - e.x, by = p.y - e.y, rr = e.r + p.r - 2;
-      if (bx * bx + by * by < rr * rr) damagePlayer(s, e.damage);
+      if (bx * bx + by * by < rr * rr) damagePlayer(s, e.type === 'boss' ? bossContactDamage(e) : e.damage);
     }
   }
 }
@@ -510,11 +456,17 @@ export function updateEnemies(s, dt) {
  */
 export function help(s, e, amount, source) {
   if (!e.active || e.leaving) return;
-  const m = amount * s.player.mod.help;
+  let m = amount * s.player.mod.help;
+  if (e.type === 'boss') {
+    // «Vi ringer deg tilbake» ("We'll call you back"): no help gets through. Paper jam: double help.
+    m *= bossHelpFactor(e);
+    if (m <= 0) return;
+  }
   s.stat.helpPerWeapon[source] = (s.stat.helpPerWeapon[source] || 0) + Math.min(e.hp, m);
   e.hp -= m;
   e.blink = 0.09;
   if (e.hp <= 0) becomesHappy(s, e);
+  else if (e.type === 'boss') checkBossPhase(s, e);
 }
 
 /**
@@ -528,7 +480,9 @@ export function becomesHappy(s, e) {
   const G = CONFIG.happy;
   s.happyNow++;
   const shortened = s.happyNow > G.manyAtOnce;
-  effect(s, 'happy', e.x, e.y, shortened ? G.shortDuration : G.duration, shortened ? G.shortSmile : G.smile, TYPE_CODE[e.type], e.variant, false, '', e.direction);
+  // Bosses get a longer happy animation in the same style as the lawyers
+  const boss = e.type === 'boss';
+  effect(s, 'happy', e.x, e.y, boss ? 1.6 : shortened ? G.shortDuration : G.duration, boss ? 1.2 : shortened ? G.shortSmile : G.smile, TYPE_CODE[figureType(e)], e.variant, false, '', e.direction);
   s.helped++;
   s.stat.perType[e.type] = (s.stat.perType[e.type] || 0) + 1;
   s.events.push('happy');
@@ -543,7 +497,7 @@ export function becomesHappy(s, e) {
     s.stat.bossesHelped++;
     // The boss gives a points bonus and a guaranteed «Ny PC» ("New PC"; not an energy drink).
     dropPickup(s, 'pc', e.x, e.y + 10);
-    s.events.push('bossHappy');
+    bossHelped(s, e);
   } else {
     dropTicket(s, e.x, e.y, e.points);
     if (s.rng.drops.next() < CONFIG.newPc.dropChance) dropPickup(s, 'pc', e.x, e.y);

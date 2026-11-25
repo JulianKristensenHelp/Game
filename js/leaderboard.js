@@ -15,6 +15,7 @@ const TIMEOUT_MS = 5000;
  * @property {number} maxMult highest multiplier
  * @property {string} [date] "YYYY-MM-DD" (Norwegian time)
  * @property {string} [character] id of the character (k1–k4)
+ * @property {boolean} [fired] the round ended with «Du har fått sparken!» (a boss's countdown ran out)
  * @property {number} [spot]
  */
 

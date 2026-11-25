@@ -50,6 +50,8 @@ let previous = 0;
 let animTime = 0;
 let cardsReady = 0;
 let sent = false;
+/** The last whole second the boss clock ticked on. */
+let lastTick = -1;
 /** Selected character (remembered locally for next time). */
 let selectedCharacter = (() => {
   try {
@@ -147,6 +149,9 @@ function startShift() {  // Today's date in Norwegian time is the seed: everyone
   renderer.fig.makeSome(1e9);
   game = new Game(date, selectedCharacter);
   hud.portrait = renderer.fig.portrait(selectedCharacter);
+  hud.showFired('');
+  hud.intro = null;
+  lastTick = -1;
   acc = 0;
   sent = false;
   stress = null;
@@ -227,9 +232,15 @@ function showEnd() {
   spc.clearRect(0, 0, 64, 64);
   spc.drawImage(renderer.fig.portrait(game.character), 0, 0);
   el('endCharacter').textContent = `${k.name} – ${k.title}`;
+  // Fired: a different headline, and which boss was one too many
+  el('endTitle').textContent = game.fired ? 'Du har fått sparken!' : 'Vakta er over';
+  el('endFired').hidden = !game.fired;
+  if (game.fired) el('endFired').textContent = `${game.fired.name} fikk deg sparket ved ${mmss(game.fired.time)}`;
   el('endScore').textContent = formatNumber(game.score);
   el('endTime').textContent = mmss(game.time);
+  hud.showFired('');
   ui.drawStats(game);
+  ui.drawBosses(game, renderer.fig);
   const name = /** @type {HTMLInputElement} */ (el('name'));
   name.value = loadName();
   name.maxLength = CONFIG.leaderboard.maxName;
@@ -272,6 +283,7 @@ async function submit(e) {
     const response = await submitScore({
       name, date: game.date, character: CONFIG.characters[game.character].id, score: game.score, time: Math.round(game.time), helped: game.helped,
       maxMult: CONFIG.multiplier.start + game.stat.maxMultStep * CONFIG.multiplier.step,
+      fired: !!game.fired,
     });
     sent = true;
     el('submitStatus').textContent = response.improved
@@ -303,9 +315,13 @@ function handleEvents() {
       case 'multUp': sound.play('multUp'); hud.multEffect(1); break;
       case 'multDown': sound.play('multDown'); hud.multEffect(-1); break;
       case 'phase': hud.showBanner(game.phaseName); break;
-      case 'boss': sound.play('boss'); hud.showBanner('Fristen er om 2 minutter!', 'boss', 4000); break;
-      case 'bossHappy': sound.play('bonus'); hud.showBanner('Fristen ble holdt!', 'gold'); break;
-      case 'bossLost': hud.showBanner('Fristen gikk ut – bonusen røk'); break;
+      case 'tell': sound.play('tell'); break;
+      case 'jam': sound.play('jam'); hud.showBanner('Papirstopp! Nå tar den dobbelt så mye hjelp', 'gold', 2200); break;
+      case 'johanPhase2': hud.showBanner(CONFIG.bosses.johan.phaseText, 'boss', 2600); break;
+      case 'fired':
+        sound.play('fired');
+        hud.showFired('DU HAR FÅTT SPARKEN!');
+        break;
       case 'urgentSpawned': hud.showBanner('Hastesak! Ta igjen den gylne advokaten', 'gold'); break;
       case 'urgentHappy': sound.play('bonus'); break;
       case 'ring': hud.showBanner('De omringer deg – finn åpningen!'); break;
@@ -315,7 +331,18 @@ function handleEvents() {
       case 'upgraded': hud.iconsChanged(); break;
       case 'done': sound.play('done'); break;
       default:
-        if (name.startsWith('kombinasjon:')) {
+        if (name.startsWith('boss:')) {
+          // Each boss gets its own introduction (Johan a bigger one, with the portrait and a darker screen)
+          const type = name.slice(5);
+          const k = CONFIG.bosses[type];
+          sound.play(/** @type {any} */ (type === 'deadline' ? 'boss' : type));
+          if (type === 'johan') hud.showIntro(renderer.fig.johanPortrait(), k.title, k.line);
+          else hud.showBanner(k.intro, 'boss', 4200, k.line);
+        } else if (name.startsWith('bossHappy:')) {
+          const type = name.slice(10);
+          sound.play('bonus');
+          hud.showBanner(type === 'johan' ? 'Du hjalp Johan! Den største bossbonusen i spillet' : `${CONFIG.bosses[type].name} er fornøyd!`, 'gold', 3200);
+        } else if (name.startsWith('combination:')) {
           const id = name.slice(12);
           sound.play('bonus');
           hud.showBanner(`Kombinasjon: ${CONFIG.weapons[id].combination.name}!`, 'gold', 3500);
@@ -364,9 +391,19 @@ function onFrame(ms) {
       if (stress) game.chooseCard(0);
       else openLevelUp();
     } else if (game.status === 'done') {
+      // Fired: the game freezes for a moment with «DU HAR FÅTT SPARKEN!» before the end screen
       mode = 'ending';
       input.active = false;
-      setTimeout(showEnd, 900);
+      setTimeout(showEnd, game.fired ? CONFIG.bosses.firedPause * 1000 : 900);
+    }
+    // The boss clock ticks audibly in the last seconds
+    const boss = game.boss && game.boss.active ? game.boss : null;
+    if (boss && mode === 'game' && boss.timer <= CONFIG.bosses.warnRed) {
+      const sec = Math.ceil(boss.timer);
+      if (sec !== lastTick) {
+        lastTick = sec;
+        sound.play('tick');
+      }
     }
   } else if (mode === 'start') {
     animTime += dt;
@@ -521,11 +558,26 @@ function startStressTest() {
   const s = game;
   s.debugSkip(15 * 60 - 1);
   // The weapons that are heaviest on performance: many projectiles, chains and beams (all as combinations)
-  s.debugMaxBuild(['teams', 'ctrlz', 'beam', 'toner'], true);
+  // The weapons that are heaviest on performance: chains, homing alerts, mini printers and many projectiles (all as combinations)
+  s.debugMaxBuild(['password', 'angel', 'teams', 'toner'], true);
   s.debug.immortal = true;
+  // Johan is out during the whole test (with immortality the countdown starts over instead of firing the player)
+  s.debugSpawn('boss');
   hud.iconsChanged();
   stress = { time: 0, frames: 0, minFps: 999, sumFps: 0, measurements: 0, heapStart: heap(), heapMax: heap(), heapEnd: 0, log: [] };
   console.log('[stresstest] start: minutt 15, 4 våpen med kombinasjoner, maks advokater, 5 minutter');
+}
+
+/** The weapons each character builds toward in the boss test (starting weapon first). */
+const TEST_PLANS = [['powerCycle', 'mouse', 'toner', 'remote'], ['toner', 'powerCycle', 'hdmi', 'remote'], ['hdmi', 'powerCycle', 'mouse', 'teams'], ['mouse', 'powerCycle', 'ctrlz', 'beam']];
+
+/** ?debug=boss1 … boss4: jumps straight to that boss with a reasonable build for the time. */
+function startBossTest(n) {
+  startShift();
+  if (!game) return;
+  game.debugBossTest(n, TEST_PLANS[game.character]);
+  hud.iconsChanged();
+  console.log(`[bosstest] boss ${n}: ${game.player.weapons.map((w) => w.id + (w.evo ? '*' : ' ' + w.level)).join(', ')}`);
 }
 
 function stressInput() {
@@ -617,6 +669,10 @@ if (DEBUG) {
       startStressTest();
       return;
     }
+    if (/^boss[1-4]$/.test(d)) {
+      startBossTest(Number(d.slice(4)));
+      return;
+    }
     if (!game) return;
     if (d === 't60') game.debugSkip(60);
     else if (d === 't180') game.debugSkip(180);
@@ -650,7 +706,10 @@ ui.setPortraitSource((i) => renderer.fig.portrait(i));
 fit();
 updateSoundButtons();
 toStart();
-if (new URLSearchParams(location.search).get('debug') === 'karakterer') ui.showCharacterPreview(renderer.fig);
+const debugParam = new URLSearchParams(location.search).get('debug') ?? '';
+if (debugParam === 'karakterer') ui.showCharacterPreview(renderer.fig);
+// ?debug=boss1 … boss4: straight to that boss (after the figures are made)
+if (/^boss[1-4]$/.test(debugParam)) setTimeout(() => startBossTest(Number(debugParam.slice(4))), 300);
 
 // Make all the figure variants while the start screen is shown. The atlases must never change during play
 // (that forces the browser to copy the whole atlas again and causes stutter).

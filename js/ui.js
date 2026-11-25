@@ -91,6 +91,12 @@ export function drawLeaderboard(holder, data, ownName) {
     const ki = characterIndex(r.character);
     if (ki >= 0) name.append(portraitElement(ki));
     name.append(document.createTextNode(r.name));
+    if (r.fired) {
+      // a small moving box: this round ended with the sack
+      const ic = iconElement('fired', 'icon firedIcon');
+      ic.title = 'Fikk sparken';
+      name.append(ic);
+    }
     tr.append(make('td', '', r.spot + '.'), name, make('td', 'right', formatNumber(r.score)), make('td', 'right', mmss(r.time)));
     tr.title = `${r.helped} hjulpne advokater · høyeste multiplikator ${multText(r.maxMult)}`;
     return tr;
@@ -198,6 +204,42 @@ export function drawStats(s) {
   if (total > 0) line(`Du rakk ${Math.round((st.ticketsPicked / total) * 100)} % av ticket-lappene (nivå ${s.level})`);
 }
 
+/**
+ * The bosses the player met this shift, with small portraits: helped (happy), or the one that got the player fired.
+ * @param {import('./game.js').Game} s
+ * @param {import('./figures.js').Figures} fig
+ */
+export function drawBosses(s, fig) {
+  const holder = el('endBosses');
+  holder.replaceChildren();
+  const log = s.stat.bossLog;
+  holder.hidden = log.length === 0;
+  for (const b of log) {
+    const k = CONFIG.bosses[b.type];
+    const firedBy = !b.helped && s.fired && s.fired.type === b.type && b === log[log.length - 1];
+    const card = make('div', 'boss' + (b.helped ? ' helped' : firedBy ? ' fired' : ''));
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 64;
+    c.className = 'portrait';
+    const ctx = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
+    if (b.type === 'johan' && b.helped) ctx.drawImage(fig.johanPortrait(), 0, 0);
+    else {
+      const type = b.type === 'deadline' ? 'boss' : b.type;
+      if (b.helped) {
+        const sheet = fig.sheet(type, 0);
+        ctx.drawImage(sheet.canvas, 8 * sheet.w, sheet.sy, sheet.w, sheet.h, 0, 0, 64, 64);
+      } else {
+        const ps = fig.poses(type, 0);
+        ctx.drawImage(ps.canvas, 3 * ps.w, 0, ps.w, ps.h, 0, 0, 64, 64);
+      }
+    }
+    const name = b.type === 'johan' && b.returnNo > 0 ? `${k.name} (runde ${b.returnNo + 1})` : k.name;
+    card.append(c, make('span', 'name', name), make('small', '', b.helped ? 'Hjulpet ✓' : firedBy ? 'Fikk deg sparket' : 'Ikke hjulpet'));
+    holder.append(card);
+  }
+}
+
 // ---------- Character select ----------
 
 /**
@@ -277,6 +319,52 @@ export function showCharacterPreview(fig) {
     grid.append(cardEl);
   });
   root.append(grid);
+
+  // The final boss Johan, for approval
+  root.append(make2('h1', 'margin:32px 0 4px;font-size:2em', 'Siste boss: Johan'));
+  root.append(make2('p', 'margin:0 0 20px;color:#c8d6e5', 'Til godkjenning. Laget i samme stil som de spillbare karakterene, i dobbel størrelse (64 × 64). Utseendet justeres i js/figures.js (JOHAN).'));
+  const johanCard = make2('div', 'background:#f4f1ea;color:#1d1626;padding:16px;box-shadow:0 0 0 4px #1d1626;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start');
+  const jp = document.createElement('canvas');
+  jp.width = 64;
+  jp.height = 64;
+  jp.style.cssText = 'width:256px;height:256px;image-rendering:pixelated;background:#a9b8c8';
+  /** @type {CanvasRenderingContext2D} */ (jp.getContext('2d')).drawImage(fig.johanPortrait(), 0, 0);
+  const jpBox = make2('div', 'text-align:center');
+  jpBox.append(jp, make2('p', 'margin:4px 0 0;font-size:0.8em;color:#5d6b7a', 'Portrett (bossintro og slutt-skjerm)'));
+  johanCard.append(jpBox);
+  const frames = make2('div', 'display:grid;grid-template-columns:repeat(4,auto);gap:12px;align-content:start');
+  /** Adds one frame (from a sheet or the pose sheet) with a caption. frame = -1 animates the walk cycle. */
+  const addFrame = (caption, draw) => {
+    const box = make2('div', 'text-align:center');
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 64;
+    c.style.cssText = 'width:128px;height:128px;image-rendering:pixelated;background:#a9b8c8';
+    draw(c);
+    box.append(c, make2('p', 'margin:2px 0 0;font-size:0.75em;color:#5d6b7a', caption));
+    frames.append(box);
+  };
+  const fromSheet = (variant, frame) => (c) => {
+    const sh = fig.sheet('johan', variant);
+    /** @type {CanvasRenderingContext2D} */ (c.getContext('2d')).drawImage(sh.canvas, frame * sh.w, sh.sy, sh.w, sh.h, 0, 0, sh.w, sh.h);
+  };
+  const fromPose = (variant, p) => (c) => {
+    const sh = fig.poses('johan', variant);
+    /** @type {CanvasRenderingContext2D} */ (c.getContext('2d')).drawImage(sh.canvas, p * sh.w, 0, sh.w, sh.h, 0, 0, sh.w, sh.h);
+  };
+  addFrame('Gange (animert)', (c) => animated.push({ c, i: -1 }));
+  addFrame('Glad: tommel opp', fromSheet(0, 8));
+  addFrame('Blink når han får hjelp', fromSheet(0, 4));
+  addFrame('Armene i kors', fromPose(0, 4));
+  addFrame('«Har du et lite minutt?» (peker)', fromPose(0, 0));
+  addFrame('Kalenderinvitasjoner', fromPose(0, 2));
+  addFrame('«Alle på møte!» (klapper)', fromPose(0, 1));
+  addFrame('Skuffet (sparken)', fromPose(0, 3));
+  addFrame('Uten dressjakke (gange)', (c) => animated.push({ c, i: -2 }));
+  addFrame('Uten dressjakke: glad', fromSheet(1, 8));
+  johanCard.append(frames);
+  root.append(johanCard);
+
   const close = make2('button', 'margin-top:20px', 'Lukk forhåndsvisningen');
   close.addEventListener('click', () => root.remove());
   root.append(close);
@@ -286,7 +374,7 @@ export function showCharacterPreview(fig) {
     if (!root.isConnected) return;
     frame = (frame + 1) & 3;
     for (const { c, i } of animated) {
-      const sheet = fig.sheet('player', i);
+      const sheet = i >= 0 ? fig.sheet('player', i) : fig.sheet('johan', -1 - i);
       const ctx = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
       ctx.clearRect(0, 0, c.width, c.height);
       ctx.drawImage(sheet.canvas, frame * sheet.w, sheet.sy, sheet.w, sheet.h, 0, 0, sheet.w, sheet.h);

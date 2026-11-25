@@ -63,7 +63,7 @@ const DRAW = {
     r.px(13, 2, C.BLUE);
   },
   // ----- Combinations -----
-  'evo:avpaa': (r) => {
+  'evo:powerCycle': (r) => {
     // two arrows in a circle (restart)
     r.ellipse(8, 8, 7, 7, C.TEAL);
     r.ellipse(8, 8, 4.5, 4.5, 0);
@@ -82,7 +82,7 @@ const DRAW = {
     r.rect(3, 8, 10, 2, C.NEAR_BLACK);
     r.rect(4, 10, 8, 4, C.PAPER);
   },
-  'evo:passord': (r) => {
+  'evo:password': (r) => {
     // padlock + key
     r.rect(3, 1, 6, 6, C.LIGHT_GRAY);
     r.rect(5, 3, 2, 4, 0);
@@ -102,7 +102,7 @@ const DRAW = {
     r.rect(12, 3, 3, 3, C.GOLD);
     r.rect(1, 11, 3, 3, C.GOLD);
   },
-  'evo:fjern': (r) => {
+  'evo:remote': (r) => {
     // crown
     r.stamp('#..#..#..#..#.. #..#..#..#..#.. ##.##.##.##.##. ###############', 1, 3, { '#': C.GOLD });
     r.rect(1, 7, 14, 5, C.GOLD);
@@ -111,7 +111,7 @@ const DRAW = {
     r.rect(10, 8, 2, 2, C.BLUE);
     r.rect(7, 8, 2, 2, C.GREEN);
   },
-  'evo:mus': (r) => {
+  'evo:mouse': (r) => {
     // mouse pad with swirl
     r.rect(1, 3, 14, 11, C.PURPLE);
     r.rect(1, 3, 14, 2, C.LIGHT_BLUE);
@@ -252,7 +252,7 @@ const DRAW = {
     r.rect(6, 8, 3, 1, C.NEAR_BLACK);
     r.rect(11, 13, 3, 1, C.DARK_RED);
   },
-  'evo:straale': (r) => {
+  'evo:beam': (r) => {
     // two crossed beams
     for (let i = 0; i < 14; i++) {
       r.rect(1 + i, 1 + i, 2, 2, C.GREEN);
@@ -308,6 +308,45 @@ const DRAW = {
     r.ellipse(12, 11, 3, 3, C.GOLD);
     r.rect(10, 13, 2, 3, C.RED);
     r.rect(13, 13, 2, 3, C.RED);
+  },
+  // ----- Version 4 -----
+  angel: (r) => {
+    // the guardian angel: bald head with glasses, white wings, halo
+    r.ellipse(8, 1.8, 3.5, 1.2, C.GOLD);
+    r.ellipse(8, 1.8, 2, 0.4, 0);
+    r.ellipse(3.5, 9, 3, 3.5, C.WHITE);
+    r.ellipse(12.5, 9, 3, 3.5, C.WHITE);
+    r.rect(5, 10, 6, 5, C.WOOD_M);
+    r.rect(8, 10, 1, 5, C.CREAM);
+    r.ellipse(8, 6.5, 3.3, 3.2, C.WOOD_L);
+    r.rect(5, 6, 2, 2, C.DARKER);
+    r.rect(9, 6, 2, 2, C.DARKER);
+    r.px(7, 6, C.DARKER);
+    r.rect(7, 9, 2, 1, C.WOOD);
+  },
+  'evo:angel': (r) => {
+    // heavenly service agreement: golden glow, bigger wings and a mini printer
+    r.ellipse(8, 7, 7.5, 7, C.GOLD_L);
+    r.ellipse(8, 1.8, 4.5, 1.4, C.GOLD);
+    r.ellipse(8, 1.8, 2.5, 0.5, 0);
+    r.ellipse(3, 8, 3, 4.5, C.WHITE);
+    r.ellipse(13, 8, 3, 4.5, C.WHITE);
+    r.ellipse(8, 6, 3, 3, C.WOOD_L);
+    r.rect(5, 5, 2, 2, C.DARKER);
+    r.rect(9, 5, 2, 2, C.DARKER);
+    r.rect(4, 10, 8, 5, C.NEAR_WHITE);
+    r.rect(5, 9, 6, 2, C.PAPER);
+    r.rect(5, 12, 4, 1, C.TEAL);
+  },
+  fired: (r) => {
+    // the moving box (you are fired): cardboard box with a plant and a mug
+    r.rect(4, 2, 2, 5, C.LEAF_M);
+    r.ellipse(5, 2.5, 2.5, 2, C.LEAF);
+    r.rect(9, 4, 4, 4, C.WHITE);
+    r.rect(13, 5, 1, 2, C.WHITE);
+    r.rect(1, 7, 14, 8, C.WOOD);
+    r.rect(1, 7, 14, 2, C.WOOD_L);
+    r.rect(6, 10, 4, 1, C.BROWN);
   },
   lock: (r) => {
     r.rect(4, 1, 8, 7, C.GRAY);

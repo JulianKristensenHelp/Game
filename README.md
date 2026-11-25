@@ -15,8 +15,12 @@ long as you can, collect tickets, and climb the shared daily leaderboard.
   images or sound files. Everything (sprites, pixel font, sound) is generated in code. The total size is about 0.4 MB.
 - **Pixel art** rendered at 640 × 360 and scaled up with crisp pixels. Every screen sees the same area of the map.
 - **Four playable characters**, each with its own starting weapon and bonus.
-- **10 weapons** (max 4 at once), **12 passives** (max 6 at once) and **10 combinations** (evolutions).
+- **11 weapons** (max 4 at once), **12 passives** (max 6 at once) and **11 combinations** (evolutions), including a
+  chain-lightning key, homing Teams alerts and a guardian angel who throws mini printers.
 - **Diverse, procedurally composed lawyers**, including a ranged type that sends «Haster!» emails.
+- **Four different bosses in a fixed order** (3:00, 6:00, 9:00 and the final boss at 12:00, who returns every
+  3 minutes after that), each with its own telegraphed attacks. Bosses are mandatory: if a boss's countdown
+  runs out, you're fired («Du har fått sparken!») and the shift ends.
 - **"Today's shift" (Dagens vakt):** all randomness is seeded from today's date (Europe/Oslo), so everyone
   plays the same waves and gets the same upgrade offers for the same choices.
 - **Shared daily leaderboard** using a tiny Node.js server with built-in SQLite. It resets at midnight Norwegian time.
@@ -65,6 +69,8 @@ Example: `PORT=8080 DATA_DIR=/var/lib/hds node server/server.js`
 - **Level-up cards:** click, or press **1**, **2** or **3**.
 - **Pause:** Esc or P, or the pause button on touch screens.
 - Pick up the yellow tickets before they disappear. Look for **energy drinks** around the map (follow the green arrow).
+- **Bosses** show a big countdown at the top of the screen. Help them before it runs out, or you're fired. Every
+  boss attack is warned (a pose, a light or a «!») just before it comes, so watch the boss and dodge.
 
 ## Deployment
 
@@ -87,8 +93,8 @@ storage, replace `fetchLeaderboard(date)` and `submitScore(entry)` in `js/leader
 
 | Method | Path | Body / query | Response |
 | --- | --- | --- | --- |
-| `GET` | `/api/leaderboard` | `?date=YYYY-MM-DD&name=<name>` | `{ date, top: [...], own, count }` (top 20, plus your own rank) |
-| `POST` | `/api/score` | `{ name, date, character, score, time, helped, maxMult }` | `{ ok, improved, spot }` |
+| `GET` | `/api/leaderboard` | `?date=YYYY-MM-DD&name=<name>` | `{ date, top: [...], own, count }` (top 20, plus your own rank; each entry has `fired`) |
+| `POST` | `/api/score` | `{ name, date, character, score, time, helped, maxMult, fired }` | `{ ok, improved, spot }` |
 
 ## Project structure
 
@@ -99,7 +105,8 @@ fonts/                Pixel font «KontorPiksel» (generated, CC0)
 js/config.js          ALL balance numbers (weapons, enemies, curve, characters …)
 js/game.js            Game state and fixed-timestep update (60 per second)
 js/player.js          The player (movement, energy, pickups)
-js/enemies.js         Lawyers, spawning, emails
+js/enemies.js         Lawyers and spawning
+js/bosses.js          The four bosses: order, countdown («fired»), attacks and enemy projectiles
 js/weapons.js         Weapons and combinations
 js/upgrades.js        Level-up cards and passives
 js/tickets.js, js/score.js   Tickets / energy drinks / new PC, points and multiplier
@@ -128,12 +135,14 @@ On Windows without Node.js: `powershell -File tools/node.ps1 tools/simulate.js`.
 **Debug mode:** add `?debug` to the URL for a performance overlay (FPS, frame time, entity counts, memory,
 help per second per weapon) and buttons to skip time, level up, spawn bosses and run a 5-minute stress test.
 `?debug&utenGPU` forces software rendering (the worst case for an office PC). `?debug=karakterer` shows a
-preview of the four playable characters. Runs where debug buttons were used are never submitted to the leaderboard.
+preview of the four playable characters and the final boss. `?debug=boss1` … `?debug=boss4` jumps straight to
+that boss with a typical build for the time. Runs where debug buttons were used are never submitted to the leaderboard.
 
 ## Customising
 
 All balance numbers are in **[`js/config.js`](js/config.js)**, with a comment on every field. That includes
-character names, titles, starting weapons and bonuses (`CONFIG.characters`). See [DOKUMENTASJON.md](DOKUMENTASJON.md)
+character names, titles, starting weapons and bonuses (`CONFIG.characters`), and the bosses' names, lines,
+countdowns and attacks (`CONFIG.bosses`). See [DOKUMENTASJON.md](DOKUMENTASJON.md)
 (Norwegian) for how to tune difficulty, edit the map and change the graphics.
 
 ## License
