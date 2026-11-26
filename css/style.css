@@ -255,23 +255,23 @@ canvas.portrait { image-rendering: pixelated; image-rendering: crisp-edges; back
 #characters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1em; margin: 0.5em 0 0.75em; }
 @media (max-width: 760px) { #characters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .character { display: flex; flex-direction: column; align-items: center; gap: 0.3em; margin: 0; padding: 0.9em 0.6em; background: #ffffff; text-align: center; }
-.character canvas.portrait { width: 8em; height: 8em; box-shadow: 0 0 0 0.125em var(--border); }
+.character canvas.portrait { box-shadow: 0 0 0 0.125em var(--border); }
 .character .name { font-size: 1.2em; }
 .character .title { color: var(--muted); font-size: 0.85em; min-height: 1.2em; }
 .character .weapon { display: flex; align-items: center; gap: 0.4em; font-size: 0.9em; }
 .character .weapon canvas.icon { width: 2em; height: 2em; }
 .character .bonus { color: var(--primary-dark); font-size: 0.85em; line-height: 1.35; }
 .character.selected { background: #fff4c2; box-shadow: 0 -0.25em 0 0 #8a5a00, 0 0.25em 0 0 #8a5a00, -0.25em 0 0 0 #8a5a00, 0.25em 0 0 0 #8a5a00, 0 0 0 0.6em rgba(245, 207, 58, 0.45); }
-.leaderboard canvas.portrait { width: 1.6em; height: 1.6em; vertical-align: middle; margin-right: 0.35em; box-shadow: 0 0 0 0.0625em var(--border); }
+.leaderboard canvas.figure { vertical-align: middle; margin-right: 0.35em; }
 .endHeader { display: flex; align-items: center; justify-content: center; gap: 1em; }
-.endHeader canvas.portrait { width: 5em; height: 5em; box-shadow: 0 0 0 0.125em var(--border); }
+.endHeader canvas.portrait { box-shadow: 0 0 0 0.125em var(--border); }
 .endHeader p { margin: 0.2em 0 0; }
 
 /* Fired, and the bosses met this shift */
 .firedLine { color: var(--danger); margin: 0.4em 0 0; font-size: 1.1em; }
 .bossList { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75em; margin: 0.6em 0 0.2em; }
 .bossList .boss { display: flex; flex-direction: column; align-items: center; gap: 0.15em; width: 8.5em; padding: 0.4em; background: #ffffff; box-shadow: 0 0 0 0.125em var(--border); }
-.bossList .boss canvas.portrait { width: 4em; height: 4em; }
+.bossList .boss canvas.portrait { image-rendering: pixelated; }
 .bossList .boss .name { font-size: 0.85em; text-align: center; line-height: 1.2; }
 .bossList .boss small { color: var(--muted); font-size: 0.75em; }
 .bossList .boss.helped small { color: var(--primary-dark); }

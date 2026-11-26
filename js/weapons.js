@@ -23,7 +23,7 @@ export function makeProjectile() {
     /** Teams alert: steering (radians per second) and how many new alerts it splits into on a hit. */
     turn: 0, split: 0,
     /** Mini printer: thrown from (sx, sy) to (tx, ty); t = time since the throw, burst = time to the next paper burst. */
-    sx: 0, sy: 0, tx: 0, ty: 0, t: 0, burst: 0, radius: 0, confetti: 0, confettiRadius: 0,
+    sx: 0, sy: 0, tx: 0, ty: 0, t: 0, burst: 0, every: 0, radius: 0, confetti: 0, confettiRadius: 0,
   };
 }
 
@@ -341,11 +341,10 @@ function updateAngel(s, w, t, dt) {
     const target = closest(s, p.x, p.y, 240, PICKED, picked) ?? closest(s, p.x, p.y, 240);
     let tx = p.x + p.dirX * 70 + (i - (t.perThrow - 1) / 2) * 18, ty = p.y + p.dirY * 70;
     if (target) {
+      // lands where the lawyer stood when the throw started (like a molotov in survivors games)
       PICKED[picked++] = target.uid;
-      // lands a little in front of the lawyer, on the side facing the angel
-      const d = Math.hypot(target.x - ax, target.y - ay) || 1;
-      tx = target.x - ((target.x - ax) / d) * 12;
-      ty = target.y - ((target.y - ay) / d) * 12;
+      tx = target.x;
+      ty = target.y;
     }
     const pr = s.projectiles.acquire();
     s.projCounter.mini++;
@@ -361,8 +360,9 @@ function updateAngel(s, w, t, dt) {
     pr.goBack = false;
     pr.life = 0.6 + t.life * p.mod.duration;
     pr.help = t.help;
-    pr.burst = 0.15;
-    pr.radius = t.radius * p.mod.area;
+    pr.burst = 0.1;
+    pr.every = t.burst;
+    pr.radius = t.range * p.mod.area;
     pr.confetti = t.confetti ?? 0;
     pr.confettiRadius = (t.confettiRadius ?? 0) * p.mod.area;
     pr.evo = w.evo;
@@ -546,6 +546,10 @@ function removeProjectile(s, i) {
     s.teamsTargets.delete(pr);
   } else if (pr.type === 'ctrlz') s.projCounter.ctrlz--;
   else if (pr.type === 'mini') s.projCounter.mini--;
+  else if (pr.type === 'sheet') {
+    s.projCounter.sheet--;
+    s.teamsTargets.delete(pr);
+  }
   else if (pr.type === 'teams') {
     s.projCounter.teams--;
     s.teamsTargets.delete(pr);
@@ -692,6 +696,28 @@ export function updateProjectiles(s, dt) {
       continue;
     }
 
+    if (pr.type === 'sheet') {
+      // A sheet of paper from a mini printer: flies to its lawyer and helps on arrival
+      const target = s.teamsTargets.get(pr);
+      if (!target || !target.active || target.uid !== pr.targetUid) {
+        removeProjectile(s, i);
+        continue;
+      }
+      const dx = target.x - pr.x, dy = target.y - pr.y, d = Math.hypot(dx, dy) || 1;
+      if (d <= pr.speed * dt + target.r) {
+        help(s, target, pr.help, 'angel', pr.fx);
+        removeProjectile(s, i);
+        continue;
+      }
+      pr.vx = (dx / d) * pr.speed;
+      pr.vy = (dy / d) * pr.speed;
+      pr.x += pr.vx * dt;
+      pr.y += pr.vy * dt;
+      pr.angle = Math.atan2(dy, dx);
+      if (pr.life <= 0) removeProjectile(s, i);
+      continue;
+    }
+
     if (pr.type === 'mini') {
       pr.t += dt;
       if (!pr.goBack) {
@@ -699,24 +725,39 @@ export function updateProjectiles(s, dt) {
         const fr = Math.min(1, pr.t / pr.range);
         pr.x = pr.sx + (pr.tx - pr.sx) * fr;
         pr.y = pr.sy + (pr.ty - pr.sy) * fr - Math.sin(fr * Math.PI) * 26;
-        if (fr >= 1) pr.goBack = true;
-      } else {
-        // On the floor: shuffles toward the nearest lawyer on small legs and shoots out paper sheets
-        const target = closest(s, pr.x, pr.y, 160);
-        if (target) {
-          const dx = target.x - pr.x, dy = target.y - pr.y, d = Math.hypot(dx, dy) || 1;
-          if (d > 10) {
-            pr.x += (dx / d) * 34 * dt;
-            pr.y += (dy / d) * 34 * dt;
-            pr.angle = dx < 0 ? -1 : 1;
-          }
+        if (fr >= 1) {
+          // Lands with a little hop and a puff of dust, and stays exactly here
+          pr.goBack = true;
+          pr.x = pr.tx;
+          pr.y = pr.ty;
+          pr.t = 0;
+          effect(s, 'dust', pr.x, pr.y + 5, 0.35, 10);
         }
+      } else {
+        // Standing still: feeds out a sheet of paper toward the nearest lawyer within range every «every» seconds
         pr.burst -= dt;
         if (pr.burst <= 0) {
-          pr.burst += 0.5;
-          const n = s.grid.find(pr.x, pr.y, pr.radius, out);
-          for (let j = 0; j < n; j++) help(s, f[out[j]], pr.help, 'angel', pr.fx);
-          effect(s, 'paperBurst', pr.x, pr.y - 4, 0.35, pr.radius, 0, pr.evo ? 1 : 0);
+          pr.burst += pr.every;
+          const target = closest(s, pr.x, pr.y, pr.radius);
+          if (target && s.projCounter.sheet < MAX_PROJ) {
+            const sh = pool.acquire();
+            s.projCounter.sheet++;
+            sh.type = 'sheet';
+            sh.x = pr.x;
+            sh.y = pr.y - 6;
+            sh.speed = 260;
+            sh.vx = 0;
+            sh.vy = 0;
+            sh.life = 0.8;
+            sh.help = pr.help;
+            sh.evo = pr.evo;
+            sh.nHit = 0;
+            sh.fx = pr.fx;
+            sh.targetUid = target.uid;
+            sh.angle = Math.atan2(target.y - sh.y, target.x - sh.x);
+            s.teamsTargets.set(sh, target);
+            pr.angle = target.x < pr.x ? -1 : 1;
+          }
         }
       }
       if (pr.life <= 0) {

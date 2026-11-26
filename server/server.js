@@ -208,7 +208,7 @@ const MIME = {
   '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8',
 };
 /** Only these are served openly on the web (not the server folder or the database). */
-const OPEN = ['/index.html', '/css/', '/js/', '/fonts/'];
+const OPEN = ['/index.html', '/css/', '/js/', '/fonts/', '/assets/'];
 
 function json(res, status, data) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });

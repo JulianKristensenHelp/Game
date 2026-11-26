@@ -55,7 +55,7 @@ export class Hud {
     this.iconDrawn = -1;
     /** @type {HTMLCanvasElement | null} */
     this.iconRow = null;
-    /** Portrait of the selected character (shown by the energy bar). @type {HTMLCanvasElement | null} */
+    /** Portrait of the selected character (shown by the energy bar). @type {CanvasImageSource | null} */
     this.portrait = null;
   }
 
@@ -265,14 +265,16 @@ export class Hud {
     const eh = 13 * s3;
     let ex = rx + m;
     if (this.portrait) {
-      // Small portrait of the selected character by the energy bar
-      const ps = eh + 4 * s3;
+      // The selected character's portrait by the energy bar: the face (48 × 48 of the 64 × 64 image),
+      // always at a whole multiple of its size so the pixels stay sharp
+      const n = Math.max(1, Math.floor((eh + 2 * s3) / 48));
+      const inner = 48 * n;
       ctx.fillStyle = '#1d1626';
-      ctx.fillRect(ex, ey - 2 * s3, ps, ps);
+      ctx.fillRect(ex, ey - 2 * s3, inner + 2 * s3, inner + 2 * s3);
       ctx.fillStyle = '#a9b8c8';
-      ctx.fillRect(ex + s3, ey - s3, ps - 2 * s3, ps - 2 * s3);
-      ctx.drawImage(this.portrait, 8, 2, 48, 48, ex + s3, ey - s3, ps - 2 * s3, ps - 2 * s3);
-      ex += ps + 2 * s3;
+      ctx.fillRect(ex + s3, ey - s3, inner, inner);
+      ctx.drawImage(this.portrait, 8, 2, 48, 48, ex + s3, ey - s3, inner, inner);
+      ex += inner + 4 * s3;
     }
     this.drawEnergy(ctx, ex, ey, ew, eh, p, blinkPhase, settings);
 

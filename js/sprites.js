@@ -301,19 +301,24 @@ function makeObjects() {
   };
   const angel = [0, 1, 2, 3].map((f) => make(22, 21, 11, 11, angelDraw(f, false)));
   const angelEvo = [0, 1, 2, 3].map((f) => make(22, 21, 11, 11, angelDraw(f, true)));
-  /** Mini printer on small legs (2 walk frames). */
-  const miniDraw = (step, evo) => (r) => {
+  /** Mini printer on small legs, standing still. Frame 1: printing (the lamp is green and the paper tray is pushed up). */
+  const miniDraw = (feed, evo) => (r) => {
     r.rect(2, 3, 11, 7, evo ? C.GOLD_L : C.NEAR_WHITE);
     r.rect(11, 3, 2, 7, evo ? C.GOLD : C.LIGHT_GRAY2);
-    r.rect(4, 1, 7, 3, C.PAPER);
+    r.rect(4, feed ? 0 : 1, 7, feed ? 4 : 3, C.PAPER);
     r.rect(4, 5, 5, 2, C.TEAL);
-    r.px(10, 5, C.RED);
+    r.px(10, 5, feed ? C.GREEN : C.RED);
     r.rect(3, 8, 9, 1, C.DARK_GRAY);
-    r.rect(4, 10, 2, step ? 3 : 2, C.DARK_GRAY);
-    r.rect(9, 10, 2, step ? 2 : 3, C.DARK_GRAY);
+    r.rect(4, 10, 2, 3, C.DARK_GRAY);
+    r.rect(9, 10, 2, 3, C.DARK_GRAY);
   };
   const mini = [0, 1].map((f) => make(15, 14, 7, 9, miniDraw(f, false)));
   const miniEvo = [0, 1].map((f) => make(15, 14, 7, 9, miniDraw(f, true)));
+  const sheetSmall = make(7, 8, 3, 4, (r) => {
+    r.rect(1, 1, 5, 6, C.PAPER);
+    r.rect(2, 3, 3, 1, C.LIGHT_GRAY2);
+    r.rect(2, 5, 2, 1, C.LIGHT_GRAY2);
+  });
 
   /** «Pakke fra leverandøren»: a cardboard box with tape, a label and a gold sticker. */
   const pkg = make(16, 14, 8, 8, (r) => {
@@ -329,7 +334,7 @@ function makeObjects() {
     package: pkg,
     packageGlow: glow(18, '#ff9f43', 0.75),
     note, ticketShot: ticketShot(11, 8), ticketSmall: ticketShot(7, 5), cartridge, puddle, sheet, calendar,
-    angel, angelEvo, mini, miniEvo,
+    angel, angelEvo, mini, miniEvo, sheetSmall,
     angelGlow: glow(14, '#fff2a8', 0.55),
     email,
     emailGlow: glow(10, '#ff4d5a', 0.7),
