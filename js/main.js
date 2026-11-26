@@ -724,7 +724,7 @@ function startStressTest() {
   handleEvents();
   pendingMatrix = false;
   stress = { time: 0, frames: 0, minFps: 999, sumFps: 0, measurements: 0, heapStart: heap(), heapMax: heap(), heapEnd: 0, log: [] };
-  console.log('[stresstest] start: minutt 15, 4 våpen med kombinasjoner (Tofaktor, Kontorprinteren, Ping of Death, The Matrix), Fiske-Frida, maks advokater, 5 minutter');
+  console.log('[stresstest] start: minutt 15, 4 våpen med kombinasjoner (Tofaktor, Kontorprinteren, Ping of Death, The Matrix), Anonymous og venninnene, maks advokater, 5 minutter');
 }
 
 /** The weapons each character builds toward in the boss test (starting weapon first). */

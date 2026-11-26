@@ -202,8 +202,9 @@ export const CONFIG = {
      * Frida is the one who must be helped; the friends can be helped separately for extra points.
      */
     frida: {
-      name: 'Fiske-Frida og venninnene', short: 'FRIDA',
-      intro: 'Fiske-Frida og venninnene har ankommet!', line: 'Jeg har vunnet en iPhone! Bare klikk på lenken, vennen!',
+      // shown to the player as «Anonymous» (the code still calls her «frida»)
+      name: 'Anonymous og venninnene', short: 'ANONYMOUS',
+      intro: 'Anonymous og venninnene har ankommet!', line: 'Jeg har vunnet en iPhone! Bare klikk på lenken, vennen!',
       happyText: 'Oi, var det svindel? Takk, vennen!',
       frustration: 6600, speed: 26, radius: 20, damage: 11, points: 6000, deadline: 120,
       /** The friends: frustration and points as a fraction of Frida's, contact damage, speed factor and follow distance. */

@@ -1,5 +1,10 @@
 # Endringslogg
 
+## Versjon 7.0.1 – 26. november 2026
+- Boss 3 heter nå **Anonymous** i spillet («Anonymous og venninnene har ankommet!», «ANONYMOUS» på pila og
+  klokka). Utseende, replikker og angrep er uendret. I koden heter hun fortsatt `frida` (`CONFIG.bosses.frida`,
+  `js/frida.js`), så Fiske-Frida i versjon 7.0 under er samme boss.
+
 ## Versjon 7.0 – 26. november 2026 (Kristensens endringsprompt 4, bygget på versjon 6.1)
 
 Bygget videre på versjon 6.1 (den andre utviklerens grein). Det han la til, er ikke endret, fjernet eller

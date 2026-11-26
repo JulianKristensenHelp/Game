@@ -401,7 +401,7 @@ export function drawStats(s) {
   if (st.events > 0) line(`${st.events} ${st.events === 1 ? 'hendelse' : 'hendelser'} på kontoret`);
   if (st.drinks > 0) line(`Du fant ${st.drinks} ${st.drinks === 1 ? 'energidrikk' : 'energidrikker'} på kartet`);
   if (st.cookies > 0) line(`Du spiste ${st.cookies} ${st.cookies === 1 ? 'helsekjeks' : 'helsekjeks'} fra glade advokater`);
-  if (st.baited > 0) line(`Du gikk på Fiske-Fridas lokkemat ${st.baited} ${st.baited === 1 ? 'gang' : 'ganger'}`);
+  if (st.baited > 0) line(`Du gikk på lokkematen til Anonymous ${st.baited} ${st.baited === 1 ? 'gang' : 'ganger'}`);
   if (st.combinations.includes('matrix')) line('Du låste opp The Matrix!');
   line(`Høyeste multiplikator: ${multText(CONFIG.multiplier.start + st.maxMultStep * CONFIG.multiplier.step)}`);
   let best = '', bestHelp = 0;
@@ -594,8 +594,8 @@ export function showCharacterPreview(fig) {
   root.append(johanCard);
 
   // Boss 3, Fiske-Frida and her friends (Endringsprompt 4), in the same style
-  root.append(make2('h1', 'margin:32px 0 4px;font-size:2em', 'Boss 3: Fiske-Frida og venninnene'));
-  root.append(make2('p', 'margin:0 0 20px;color:#c8d6e5', 'Samme stil som Johan og de fire karakterene. Frida er 64 × 64, venninnene 32 × 40. Utseendet justeres i js/frida.js.'));
+  root.append(make2('h1', 'margin:32px 0 4px;font-size:2em', 'Boss 3: Anonymous og venninnene'));
+  root.append(make2('p', 'margin:0 0 20px;color:#c8d6e5', 'Samme stil som Johan og de fire karakterene. Anonymous er 64 × 64, venninnene 32 × 40. Utseendet justeres i js/frida.js.'));
   const fridaCard = make2('div', 'background:#f4f1ea;color:#1d1626;padding:16px;box-shadow:0 0 0 4px #1d1626');
   const fridaFrames = make2('div', 'display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px');
   const addTo = (type, variant, caption, frame, pose) => {

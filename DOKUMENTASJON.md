@@ -84,7 +84,7 @@ hvert innslag i topplisten (portrett ved navnet). Topplisten er felles for alle 
   på én piksel; hode og overkropp er identiske med originalen. Venstre er speilet, og blink, sukkerkick og skjold
   legges oppå bildet. Topplisten bruker 32 × 32-figuren.
 - **Forhåndsvisning til godkjenning:** <http://localhost:3000/?debug=karakterer> viser alle fire med portrett,
-  stående figur, animert gangsyklus og gangbilde 2 og 4, og dessuten Johan og Fiske-Frida med venninnene.
+  stående figur, animert gangsyklus og gangbilde 2 og 4, og dessuten Johan og Anonymous med venninnene.
 - Bildene av personene er bare brukt som forelegg. De ligger ikke i prosjektet og publiseres ikke.
 
 ## Våpen, passive og kombinasjoner
@@ -209,7 +209,7 @@ senere enn «nivå 9». Det systemet er beholdt uendret, se ENDRINGSLOGG.md (kon
 
 ### Helsekjeks
 
-Vanlige advokater (ikke bosser, Fridas venninner, partnere eller hastesaker) legger av og til igjen en liten kjeks
+Vanlige advokater (ikke bosser, Anonymous' venninner, partnere eller hastesaker) legger av og til igjen en liten kjeks
 med sjokoladebiter når de blir glade: ca. 1 av 100, fra drop-strømmen i «Dagens vakt». Den gir 5 energi (ingen
 sukkerkick), ligger i 10 sekunder og blinker de siste 3, plukkes opp med samme radius som ticket-lappene, har en
 svak, varm glød og vises ikke på minikartet. Maks 6 samtidig. Tallene står i `CONFIG.cookie`. Energidrikken på
@@ -328,7 +328,7 @@ sier hvilken boss det var. Poengene kan likevel sendes inn, og topplisten viser 
 | --- | --- | --- | --- |
 | 3:00 | Nørdic-konsulenten | 120 s | Ventemusikk i en ring (sinker), ticket som deler seg i tre, «Vi ringer deg tilbake» (kan ikke hjelpes i 3 s) |
 | 6:00 | Multifunksjonsmonsteret | 120 s | CMYK-patroner som blir blekkdammer, utskriftsjobb på 400 sider, papirstopp (dobbel hjelp i 3 s) |
-| 9:00 | Fiske-Frida og venninnene | 120 s | «Klikk på lenken!» (fiskekrok som drar deg mot henne), silderegn, videresendt svindel-e-post (fra venninnene), lokkemat |
+| 9:00 | Anonymous og venninnene | 120 s | «Klikk på lenken!» (fiskekrok som drar deg mot henne), silderegn, videresendt svindel-e-post (fra venninnene), lokkemat |
 | 12:00 | Johan (siste boss) | 150 s | Spurt, kalenderinvitasjoner, «Alle på møte!», og fra halv frustrasjon også de tidligere bossenes angrep |
 | 15:00, 18:00 … | Johan igjen | 150 s | Sterkere for hver gang |
 
@@ -339,26 +339,26 @@ sier hvilken boss det var. Poengene kan likevel sendes inn, og topplisten viser 
 - **Navn, replikker og alle tall** står i CONFIG.bosses i js/config.js (`intro`, `line`, `happyText`, Johans
   `title` og `phaseText` er plassholdere som kan endres fritt).
 - **Utseendet** står i js/figures.js (NORDIC for konsulenten, drawPrinterBoss for printeren), js/johan.js (Johan,
-  figur og portrett) og js/frida.js (Fiske-Frida og venninnene). Johan og Frida er tegnet i samme stil som
+  figur og portrett) og js/frida.js (Anonymous og venninnene). Johan og Anonymous er tegnet i samme stil som
   oppdragsgivers karakterbilder: 1 piksel detalj, fargede omriss og myk skyggelegging med lys fra venstre. Nørdic er
   et oppdiktet firma med egen logo (krøllparenteser rundt en N) i skoggrønt og lime.
 
-**Fiske-Frida og venninnene (boss 3):** en hjertelig bestemor (64 × 64) med grått hår i knute, briller i kjede,
+**Anonymous og venninnene (boss 3):** en hjertelig bestemor (64 × 64) med grått hår i knute, briller i kjede,
 strikket cardigan, håndveske og fiskestang, og to mindre venninner (32 × 40) i egne strikkeklær med mobiltelefon.
-Vitsen er at hun er lurt, ikke at hun er dum. Venninnene har hver sin frustrasjon (15 % av Fridas) og gir ekstra
-poeng hvis de hjelpes hver for seg, men det er Frida som må hjelpes. Når hun blir glad, blir venninnene også glade,
+Vitsen er at hun er lurt, ikke at hun er dum. Venninnene har hver sin frustrasjon (15 % av Anonymous') og gir ekstra
+poeng hvis de hjelpes hver for seg, men det er Anonymous som må hjelpes. Når hun blir glad, blir venninnene også glade,
 og hun sier «Oi, var det svindel? Takk, vennen!».
 
 | Angrep | Varsling | Hva skjer |
 | --- | --- | --- |
-| «Klikk på lenken!» | Frida svinger stanga over hodet, en stiplet linje viser retningen | Kroken kastes i en rett linje. Treff gir vanlig skade og drar deg 48 piksler mot henne |
+| «Klikk på lenken!» | Anonymous svinger stanga over hodet, en stiplet linje viser retningen | Kroken kastes i en rett linje. Treff gir vanlig skade og drar deg 48 piksler mot henne |
 | Silderegn | Små skygger på gulvet (én der du står) | Sild faller på skyggene etter 1 sekund |
 | Videresendt svindel-e-post | Venninnene løfter mobilen og får «!» | Fiskeformede e-poster svømmer i en bølgete linje mot deg |
 | Lokkemat | Ingen tydelig varsling – det er poenget | Falsk energidrikk eller falsk «Ny PC» med en liten fiskekrok. Gir litt skade og sinker i 2 sekunder |
 
 Lokkematen kan avsløres: litt feil farge (gulere grønn boks, rosa skjerm), en synlig fiskekrok, en annen, ujevn
 blink (kjapp dobbeltblink i stedet for den rolige pulsen) og et stivere hopp. Den vises aldri på minikartet, det er
-maks 3 samtidig, og de forsvinner når Frida er hjulpet. Alt står i `CONFIG.bosses.frida`.
+maks 3 samtidig, og de forsvinner når Anonymous er hjulpet. Alt står i `CONFIG.bosses.frida`.
 - **Bildet av Johan** er bare brukt som forelegg. Det ligger ikke i prosjektet og publiseres ikke.
 - **Test en boss direkte:** <http://localhost:3000/?debug=boss1> til `?debug=boss4` hopper rett til boss 1–4 med
   et typisk bygg for tidspunktet (knappene «Boss 1–4» i debug-panelet gjør det samme).
@@ -447,7 +447,7 @@ energidrikk, en partner, en pakke fra leverandøren, en helsekjeks eller 100 eks
 gir The Matrix med en gang (med animasjonen), og «Ping-pong + Livvakt» gir begge med 10 oppgraderinger og Joggesko.
 
 **Stresstest (5 min):** starter på minutt 15 med fire våpen som kombinasjoner (Tofaktor, Kontorprinteren fra
-helvete, Ping of Death og The Matrix), med Fiske-Frida og venninnene ute hele tiden, holder antall advokater på
+helvete, Ping of Death og The Matrix), med Anonymous og venninnene ute hele tiden, holder antall advokater på
 taket (400) og kjører i 5 minutter uten at du kan dø. Den logger FPS, tid per bilde og
 minnebruk hvert 30. sekund i konsollen (F12) og viser resultatet i overlegget til slutt.
 Legg til `&utenGPU` (`?debug&utenGPU`) for å tvinge all tegning over på prosessoren – slik en kontor-PC
@@ -468,7 +468,7 @@ Runder der debug-knappene er brukt, kan ikke sendes inn til topplisten.
 | `js/renderer.js` | Spillverdenen i pixel art (640 × 360) |
 | `js/hud.js` | HUD og minikart |
 | `js/figures.js`, `js/sprites.js`, `js/icons.js`, `js/pixel.js`, `js/pixelfont.js` | Grafikken |
-| `js/johan.js`, `js/frida.js` | Johan og Fiske-Frida med venninnene, i stilen til karakterbildene |
+| `js/johan.js`, `js/frida.js` | Johan og Anonymous med venninnene, i stilen til karakterbildene |
 | `js/matrixfx.js` | Animasjonen når The Matrix velges |
 | `assets/karakterer/` | Oppdragsgivers pikselbilder av de fire karakterene (figur og portrett) |
 | `js/settings.js`, `js/sound.js`, `js/input.js` | Innstillinger, lyd (Web Audio) og tastatur/touch |
@@ -480,4 +480,4 @@ Runder der debug-knappene er brukt, kan ikke sendes inn til topplisten.
 som seed, i separate strømmer: når advokater kommer (og om de er partnere), hvor de kommer inn, hastesak/boss,
 oppgraderingskort (og kortnivåene), Ny PC-drops, helsekjeks og partnernes lapper, energidrikkens plassering,
 «Dobbel skjerm», kritiske treff, unnvikelse, pakkene fra leverandøren, hendelsene, retningen på pingpongballene og
-utseende. Fiske-Fridas silderegn og lokkemat bruker hastesak/boss-strømmen. `Math.random()` brukes ikke.
+utseende. Anonymous' silderegn og lokkemat bruker hastesak/boss-strømmen. `Math.random()` brukes ikke.

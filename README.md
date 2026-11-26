@@ -31,7 +31,7 @@ long as you can, collect tickets, and climb the shared daily leaderboard.
 - **Diverse, procedurally composed lawyers**, including a ranged type that sends «Haster!» emails, and rare
   **partners** (elites) with a crown, a big frustration bar and a trait: an aura that shields their neighbours,
   delegating to juniors when helped, or a telegraphed dash.
-- **Four different bosses in a fixed order** (the consultant at 3:00, the multifunction printer at 6:00, Fiske-Frida
+- **Four different bosses in a fixed order** (the consultant at 3:00, the multifunction printer at 6:00, Anonymous
   and her friends at 9:00 and the final boss at 12:00, who returns every 3 minutes after that), each with its own
   telegraphed attacks. Bosses are mandatory: if a boss's countdown
   runs out, you're fired («Du har fått sparken!») and the shift ends.
@@ -149,7 +149,7 @@ On Windows without Node.js: `powershell -File tools/node.ps1 tools/simulate.js`.
 **Debug mode:** add `?debug` to the URL for a performance overlay (FPS, frame time, entity counts, memory,
 help per second per weapon) and buttons to skip time, level up, spawn bosses and run a 5-minute stress test.
 `?debug&utenGPU` forces software rendering (the worst case for an office PC). `?debug=karakterer` shows a
-preview of the four playable characters, the final boss and Fiske-Frida. `?debug=boss1` … `?debug=boss4` jumps straight to
+preview of the four playable characters, the final boss and Anonymous. `?debug=boss1` … `?debug=boss4` jumps straight to
 that boss with a typical build for the time. Runs where debug buttons were used are never submitted to the leaderboard.
 
 ## Customising
