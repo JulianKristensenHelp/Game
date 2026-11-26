@@ -1,5 +1,56 @@
 # Endringslogg
 
+## Versjon 4.1 – 26. november 2026 (endringsprompt 4)
+
+### 1. Skytsengelens mini-printere står stille
+- **Ny oppførsel (som molotov):** mini-printeren kastes i en bue og lander der advokaten stod da kastet startet. Der står den helt stille og skyter et papirark mot nærmeste advokat innenfor 60 piksler hvert 0,3. sekund. Etter 4 sekunder forsvinner den i en liten papirsky.
+- **Visuelt:** et lite hopp og en støvsky når den lander. Når den skyter, mates et ark ut og lampa lyser grønt. En svak, stiplet sirkel på gulvet viser rekkevidden.
+- **Nivå 5:** printeren står og skyter 1 sekund lenger (5 sekunder), og rekkevidden øker med 15 % til 69 piksler.
+- **Himmelsk serviceavtale:** printerne står også stille her og avslutter med papirkonfetti. Taket på antall samtidig er uendret.
+- **Balanse:** hjelpen per ark er justert slik at våpenet er like sterkt som før (`tools/measure-weapons.js`):
+
+  | | Før | Nå |
+  | --- | --- | --- |
+  | Nivå 8 | 582 hjelp/s | 582 hjelp/s |
+  | Himmelsk serviceavtale | 710 hjelp/s | 708 hjelp/s |
+
+### 2. Oppdragsgivers egne bilder av de fire karakterene
+- **Bildene:** de 8 PNG-filene ligger i `assets/karakterer/` og brukes piksel for piksel, uten å tegnes om eller fargejusteres. Dette er kontrollert i koden: stående figur og portrett er identiske med filene.
+- **Kobling etter utseende**, avtalt med oppdragsgiver fordi numrene ikke stemte med karakterene:
+
+  | Fil | Karakter |
+  | --- | --- |
+  | person4 | Odyssefs |
+  | person3 | Johannes |
+  | person1 | Jin |
+  | person2 | Julian |
+
+  Koblingen står i `CONFIG.characters` (`sprite` og `portrait`).
+- **Gangsyklus på 4 bilder:** bare beina og føttene endres. I bilde 2 og 4 dupper figuren én piksel og løfter én fot. Hode og overkropp er identiske med originalen.
+- **Venstre og høyre:** vises med speiling.
+- **Effekter oppå bildet:** blink ved treff legges oppå som en hvit silhuett, så selve bildet endres aldri. Spilleren har fått samme lille skygge under føttene som de andre figurene.
+- **Portrettene** vises i karaktervalget, på slutt-skjermen og ved energibaren. Topplisten bruker den lille 32 × 32-figuren.
+- **Skarpe bilder:**
+  - Alle bilder tegnes med nærmeste nabo og heltallsskalering, også i HTML-menyene.
+  - Størrelsen regnes ut i ekte skjermpiksler, så den alltid er et helt multiplum.
+  - Spillflaten skaleres nå alltid med et helt tall. Før kunne den bruke et ikke-heltall hvis det fylte skjermen bedre.
+- **Fjernet:** de gamle tegnede spritene og portrettene for de fire karakterene.
+
+### 3. Johan i den nye stilen
+- **Stil:** Johan er tegnet på nytt fra fotoet i samme stil som de nye bildene:
+  - 1 piksel detalj (samme pikseltetthet).
+  - Fargede omriss, altså en mørk utgave av hvert materiale.
+  - Tre-tonet skyggelegging med lys fra venstre.
+  - Øyne med hvitt, iris og en mørk øyelokklinje.
+  - Samme hudfarger og samme proporsjoner (hodet er omtrent halve høyden).
+- **Størrelse:** som boss er figuren dobbelt så stor (64 × 64). Portrettet er 64 × 64 med samme oppbygning som de fire.
+- **Fil:** ny `js/johan.js`. Fotoet ligger fortsatt ikke i prosjektet.
+- **Forhåndsvisning:** `?debug=karakterer` viser de fire og Johan stående, i gangsyklus og som portrett.
+
+### Antakelser
+- **Kobling:** filene er koblet til karakterene etter utseende, ikke etter nummer, slik oppdragsgiver bekreftet.
+- **Små skjermer:** er skjermen mindre enn 640 × 360 ekte piksler, må spillflaten fortsatt skaleres ned med et ikke-heltall. Det gjelder bare svært små vinduer.
+
 ## Versjon 4.0 – 25. november 2026 (endringsprompt 3)
 
 ### 1. Fire forskjellige bosser i fast rekkefølge, og «Du har fått sparken!»

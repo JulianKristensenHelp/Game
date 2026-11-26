@@ -55,7 +55,7 @@ export class Game {
 
     this.enemies = new Pool(makeEnemy);
     this.projectiles = new Pool(makeProjectile);
-    this.projCounter = { toner: 0, key: 0, ctrlz: 0, teams: 0, mini: 0 };
+    this.projCounter = { toner: 0, key: 0, ctrlz: 0, teams: 0, mini: 0, sheet: 0 };
     this.tickets = new Pool(makeTicket);
     this.pickups = new Pool(makePickup);
     this.paper = new Pool(makePaper);

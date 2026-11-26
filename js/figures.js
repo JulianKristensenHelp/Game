@@ -5,6 +5,7 @@
 import { CONFIG } from './config.js';
 import { Raster, ramp, hex, toCanvas } from './pixel.js';
 import { Rng } from './utils.js';
+import { drawJohan, drawJohanPortrait, JOHAN_PALETTE } from './johan.js';
 
 /** Color indices. Numbers with _S/_L are the shadow (+1) and light (+2) of the same color. */
 const I = {
@@ -53,9 +54,10 @@ export const TYPES = {
   urgent: { w: 32, h: 40, rx: 7, ry: 7, kb: 12, kh: 10, legs: 7, shoes: 2, arm: 3, k: 1, item: 'folder', clothes: 'dress', margin: 2 },
   boss: { w: 64, h: 64, rx: 12, ry: 12, kb: 30, kh: 18, legs: 11, shoes: 3, arm: 7, k: 2, item: 'folder', clothes: 'dress', margin: 2 },
   sender: { w: 26, h: 32, rx: 6, ry: 6, kb: 10, kh: 8, legs: 5, shoes: 2, arm: 3, k: 1, item: 'openLaptop', clothes: 'sweater', margin: 2 },
-  player: { w: 32, h: 32, rx: 6, ry: 6, kb: 12, kh: 8, legs: 5, shoes: 2, arm: 3, k: 1, item: 'can', clothes: 'hoodie', margin: 3 },
-  /** The final boss: the playable characters' proportions at double size (and a little broader). */
-  johan: { w: 64, h: 64, rx: 12, ry: 12, kb: 26, kh: 16, legs: 10, shoes: 4, arm: 6, k: 2, item: 'none', clothes: 'blazer', margin: 4 },
+  /** The playable characters: the client's own 32 × 32 pixel art (only the size and anchor are used here). */
+  player: { w: 32, h: 32, rx: 6, ry: 6, kb: 12, kh: 8, legs: 5, shoes: 2, arm: 3, k: 1, item: 'none', clothes: 'none', margin: 3 },
+  /** The final boss (drawn in js/johan.js, 64 × 64). */
+  johan: { w: 64, h: 64, rx: 12, ry: 12, kb: 26, kh: 16, legs: 10, shoes: 4, arm: 6, k: 2, item: 'none', clothes: 'none', margin: 2 },
   /** Boss 1: the Nørdic consultant – big, friendly, with headset, laptop and a polo shirt with the logo. */
   nordic: { w: 64, h: 64, rx: 12, ry: 12, kb: 30, kh: 17, legs: 10, shoes: 4, arm: 7, k: 2, item: 'laptop', clothes: 'polo', margin: 3 },
   /** Boss 2: Multifunksjonsmonsteret (the multifunction monster) – a big printer on small legs (drawn separately). */
@@ -70,6 +72,8 @@ export const TILE = { walk: 0, blink: 4, happy: 8, left: 9, count: 18 };
 
 /** Anchor point (middle of the body) for each type. */
 export function anchor(type) {
+  // Johan (js/johan.js): the middle of the body, with the feet on row 61
+  if (type === 'johan') return { ax: 32, ay: 44 };
   const T = TYPES[type];
   const bottom = T.h - T.margin;
   const legsTop = bottom - T.shoes - T.legs + 1;
@@ -154,34 +158,11 @@ function makeVariants(type, n) {
   return out;
 }
 
-/**
- * The four playable characters (the IT department), drawn from photos of real colleagues.
- * Only the looks are here – name, title, starting weapon and bonus are in config.js (CONFIG.characters).
- * The order is the same as in config.js.
- * skinHex/hair can be custom colors to match the person as closely as possible.
- */
+/** Shared default values for the hand-made boss variants below. */
 const COMMON = { age: 'young', height: 0, width: 0, glasses: false, beard: 'none', earrings: false, skirt: false, hijab: '#000000', sweat: false, accent: '#1b1b1f' };
-export const PLAYERS = /** @type {(Variant & {clothesStyle: string, skinHex: string, belt: string, shoes: string, pink?: boolean})[]} */ ([
-  // 1: brown, tousled hair with a fringe, dark navy shirt, black tie, black belt, dark pants, watch
-  { ...COMMON, skin: 1, skinHex: '#f2cdb0', style: 'fringe', hair: '#6e4a2e', neck: 'tie', clothesStyle: 'shirt', clothes: '#1f2a4a', shirt: '#1f2a4a', pants: '#1c1d24', belt: '#141416', shoes: '#141416' },
-  // 2: light, slicked-back hair, gray-green pinstripe jacket over white shirt without a tie, brown belt
-  { ...COMMON, skin: 0, skinHex: '#f3d0b8', style: 'slickedBack', hair: '#c9a15a', neck: 'none', clothesStyle: 'openSuit', clothes: '#8a9283', shirt: '#f6f6f4', pants: '#8a9283', belt: '#6e3b24', shoes: '#4a2e1e' },
-  // 3: black hair with a middle part, brown cable-knit sweater, dark jeans, rings
-  { ...COMMON, skin: 1, skinHex: '#efc9a6', style: 'middlePart', hair: '#1c1a1b', neck: 'none', clothesStyle: 'sweater', clothes: '#4a3326', shirt: '#4a3326', pants: '#2a2d35', belt: '#2a2d35', shoes: '#1d1d22' },
-  // 4: auburn, wavy hair, white shirt over white t-shirt, gold chain, bracelet, pink cheeks
-  { ...COMMON, skin: 0, skinHex: '#f6d2bf', style: 'waves', hair: '#8e5638', neck: 'none', clothesStyle: 'openShirt', clothes: '#f4f4f1', shirt: '#ffffff', pants: '#1c1d24', belt: '#1c1d24', shoes: '#1d1d22', pink: true },
-]);
 
-/**
- * The final boss Johan, drawn from a photo in the same style as the playable characters:
- * short light-brown hair combed up and back, fair skin, no glasses or beard, charcoal suit jacket
- * over a royal-blue shirt with an open collar, dark gray trousers. Variant 1 = jacket off (second phase).
- */
-const JOHAN_BASE = { ...COMMON, age: 'medium', skin: 1, skinHex: '#efc4a5', style: 'johan', hair: '#7d5c40', neck: 'none', shirt: '#2f50b0', pants: '#45474d', belt: '#141418', shoes: '#18181c' };
-export const JOHAN = /** @type {(Variant & {clothesStyle: string, skinHex: string, belt: string, shoes: string})[]} */ ([
-  { ...JOHAN_BASE, clothesStyle: 'blazer', clothes: '#4b4e55' },
-  { ...JOHAN_BASE, clothesStyle: 'blueShirt', clothes: '#2f50b0' },
-]);
+/** Johan (the final boss) is drawn in js/johan.js. Variant 1 = jacket off (second phase). */
+export const JOHAN = /** @type {any[]} */ ([{ johanVariant: 0 }, { johanVariant: 1 }]);
 
 /**
  * Boss 1, the Nørdic consultant: an invented IT supplier («Nørdic», a pun on «nørd», nerd) with its own simple logo
@@ -209,6 +190,7 @@ function tinyText(r, text, x, y, c) {
 }
 
 function palette(v, type) {
+  if (type === 'johan') return JOHAN_PALETTE.slice();
   /** @type {(number[] | null)[]} */
   const p = new Array(48).fill(null);
   const set = (i, color) => {
@@ -227,7 +209,6 @@ function palette(v, type) {
   set(I.BELT, v.belt ?? '#2b2220');
   if (type === 'junior' || type === 'sender') set(I.ITEM, '#c3c9d2');
   else if (type === 'printer') set(I.ITEM, '#ffffff');
-  else if (type === 'player') set(I.ITEM, '#cfd5dc');
   else if (type === 'printerBoss') set(I.ITEM, '#f6f6f0');
   else if (type === 'nordic') set(I.ITEM, '#b58a57');
   else set(I.ITEM, type === 'urgent' ? '#5a3a1e' : '#6e4325');
@@ -283,7 +264,7 @@ function drawFigure(type, v, frame, mirror = false) {
   const bob = still || older ? 0 : [0, -1, 0, -1][frame] * (k > 1 ? 2 : 1);
   const arm = still ? 0 : [0, -1, 0, 1][frame] * k;
   /** Friendly face (the playable characters and Johan) instead of a frustrated lawyer. */
-  const friendly = (type === 'player' || type === 'johan' || type === 'nordic') && pose !== POSE.sad;
+  const friendly = type === 'nordic' && pose !== POSE.sad;
 
   const bottom = T.h - T.margin;
   const legs = T.legs + v.height;
@@ -387,48 +368,6 @@ function drawFigure(type, v, frame, mirror = false) {
   } else if (T.clothes === 'sweater') {
     // sweater with round neck
     r.rect(cx - 2, kTop, 4, 1, I.KL + 1);
-  } else if (T.clothes === 'hoodie') {
-    // The playable characters: the clothes follow the photos
-    const style = /** @type {any} */ (v).clothesStyle;
-    const beltY = legsTop - 1;
-    if (style === 'shirt') {
-      // dark shirt with collar and button row
-      r.px(cx - 2, kTop, I.KL + 2);
-      r.px(cx + 1, kTop, I.KL + 2);
-      for (let y = kTop + 3; y < beltY; y += 2) r.px(cx + 1, y, I.KL + 2);
-    } else if (style === 'openSuit') {
-      // open jacket over white shirt without a tie
-      for (let y = kTop; y < beltY; y++) {
-        const b = y - kTop < 4 ? 4 - Math.floor((y - kTop) / 2) : 2;
-        r.rect(cx - b / 2 - 1, y, b + 2, 1, I.SHIRT);
-      }
-      r.px(cx - 3, kTop, I.SHIRT + 2);
-      r.px(cx + 2, kTop, I.SHIRT + 2);
-      r.rect(cx - 3, kTop + 1, 1, 4, I.KL + 2);
-      r.rect(cx + 2, kTop + 1, 1, 4, I.KL + 1);
-      r.px(cx - 4, kTop + T.kh - 3, I.KL + 1);
-    } else if (style === 'sweater') {
-      // cable-knit sweater: round neck and braids
-      r.rect(cx - 2, kTop, 4, 1, I.KL + 1);
-      for (let y = kTop + 1; y < beltY + 1; y++) {
-        for (const x of [Math.floor(kV) + 2, cx - 1, Math.ceil(kH) - 3]) r.px(x + ((y >> 1) & 1), y, I.KL + 2);
-      }
-      r.rect(kV, beltY, kb, 2, I.KL + 1);
-    } else if (style === 'openShirt') {
-      // white shirt open over white t-shirt, gold chain
-      r.rect(cx - 2, kTop, 4, T.kh - 1, I.SHIRT);
-      r.rect(cx - 3, kTop, 1, 3, I.KL + 1);
-      r.rect(cx + 2, kTop, 1, 3, I.KL + 1);
-      r.px(cx - 2, kTop + 1, I.GOLD);
-      r.px(cx - 1, kTop + 2, I.GOLD);
-      r.px(cx, kTop + 2, I.GOLD);
-      r.px(cx + 1, kTop + 1, I.GOLD);
-    }
-    // belt
-    if (style !== 'sweater') {
-      r.rect(kV, beltY, kb, 1, I.BELT);
-      r.px(cx - 1, beltY, I.GRAY);
-    }
   } else if (T.clothes === 'polo') {
     // The Nørdic consultant's polo shirt: collar, button placket, own logo «{N}» and the name across the chest
     r.rect(cx - 6, kTop, 4, 2, I.KL + 2);
@@ -439,42 +378,6 @@ function drawFigure(type, v, frame, mirror = false) {
     r.px(cx - 1, kTop + 4, I.ACC);
     texts.push(['{N}', kV + 3, kTop + 2, I.ACC], ['NØRDIC', cx - 12, kTop + 9, I.ACC]);
     r.rect(kV, legsTop - 1, kb, 2, I.KL + 1);
-  } else if (T.clothes === 'blazer') {
-    // Johan: open charcoal jacket over a royal-blue shirt with an open collar (or the shirt alone in phase 2)
-    const style = /** @type {any} */ (v).clothesStyle;
-    const beltY = legsTop - 2;
-    if (style === 'blazer') {
-      // the shirt shows in a V between the lapels
-      for (let y = kTop; y < beltY; y++) {
-        const d = y - kTop;
-        const b = d < 10 ? 10 - Math.floor(d / 2) * 2 + 2 : 4;
-        r.rect(cx - b / 2, y, b, 1, d < 2 ? I.SHIRT + 2 : I.SHIRT);
-      }
-      // lapels (lighter edge) and the shadowed inside of the jacket
-      for (let i = 0; i < 10; i++) {
-        r.px(cx - 7 + Math.floor(i / 2), kTop + i, I.KL + 2);
-        r.px(cx + 6 - Math.floor(i / 2), kTop + i, I.KL + 1);
-      }
-      // jacket buttons and a breast pocket
-      r.rect(cx + 2, kTop + 11, 2, 2, I.OUT);
-      r.rect(cx + 2, kTop + 14, 2, 1, I.OUT);
-      r.rect(kV + 3, kTop + 7, 5, 1, I.KL + 1);
-      // pocket flaps at the hips
-      r.rect(kV + 2, beltY - 3, 6, 1, I.KL + 1);
-      r.rect(kH - 8, beltY - 3, 6, 1, I.KL + 1);
-    } else {
-      // shirt with collar, buttons and a darker crease
-      for (let y = kTop + 3; y < beltY; y += 3) r.px(cx, y, I.KL + 2);
-      r.rect(cx + 1, kTop + 2, 1, beltY - kTop - 2, I.KL + 1);
-      r.rect(kV + 1, beltY, kb - 2, 2, I.BELLY);
-      r.rect(kV + 1, beltY, kb - 2, 1, I.BELT);
-      r.rect(cx - 1, beltY, 2, 1, I.GRAY);
-    }
-    // open collar: shirt collar points and a bit of neck
-    r.rect(cx - 5, kTop, 3, 2, I.SHIRT + 2);
-    r.rect(cx + 2, kTop, 3, 2, I.SHIRT + 2);
-    r.rect(cx - 2, kTop, 4, 2, I.SKIN);
-    r.rect(cx - 1, kTop + 2, 2, 1, I.SKIN + 1);
   }
   // Tie or scarf
   if (v.neck === 'tie') {
@@ -607,26 +510,6 @@ function drawFigure(type, v, frame, mirror = false) {
     r.rect(kV + 1, py + 6, kb - 2, 1, I.ITEM + 1);
     r.rect(kV, py + 3, 2, 2, I.SKIN);
     r.rect(kH - 2, py + 3, 2, 2, I.SKIN);
-  } else if (T.item === 'can') {
-    // energy drink in right hand
-    const bx = rArmX, by = rHandBottom - 4;
-    r.rect(bx, by, 3, 6, I.GREEN);
-    r.rect(bx, by, 3, 1, I.ITEM);
-    r.rect(bx + 2, by + 1, 1, 5, I.ITEM + 1);
-    r.px(bx + 1, by + 3, I.GOLD);
-    const style = /** @type {any} */ (v).clothesStyle;
-    // watch, rings and bracelet on left hand
-    const vh = kTop + 1 + armLength - hand + arm;
-    if (style === 'shirt' || style === 'openShirt') r.rect(lArmX, vh - 1, ab, 1, I.GOLD);
-    if (style === 'openShirt') {
-      r.px(lArmX, vh - 2, I.BLUSH);
-      r.px(lArmX + 1, vh - 2, I.BLUE);
-      r.px(lArmX + 2, vh - 2, I.ACC);
-    }
-    if (style === 'sweater') {
-      r.px(lArmX + 1, vh + 1, I.GOLD);
-      r.px(rArmX + 1, rHandBottom - 1, I.GOLD);
-    }
   } else if (T.item === 'openLaptop') {
     // open laptop held in front of the chest (the lid faces us)
     const ly = kTop + 1;
@@ -639,9 +522,8 @@ function drawFigure(type, v, frame, mirror = false) {
     r.rect(cx + 5, ly + 5, 2, 2, I.SKIN);
   }
 
-  // 5. Head (Johan: softer shading, since the head is drawn at double size)
-  if (type === 'johan') r.ellipse(cx, cy, rx, ry, I.SKIN, (nx, ny) => (nx * 0.6 + ny * 0.8 > 0.78 ? I.SKIN + 1 : nx * 0.6 + ny * 0.8 < -0.7 ? I.SKIN + 2 : I.SKIN));
-  else r.ball(cx, cy, rx, ry, I.SKIN, I.SKIN + 1, I.SKIN + 2);
+  // 5. Head
+  r.ball(cx, cy, rx, ry, I.SKIN, I.SKIN + 1, I.SKIN + 2);
   if (v.style === 'hijab') {
     for (let y = cy - ry - 2; y <= cy + ry + 2; y++) {
       for (let x = cx - rx - 2; x <= cx + rx + 2; x++) {
@@ -664,7 +546,7 @@ function drawFigure(type, v, frame, mirror = false) {
   // 7. Face
   const ex = Math.round((rx / k) * 0.45);
   const eyeL = -ex, eyeR = ex - 1;
-  if (type === 'player' || !happy) {
+  if (!happy) {
     f(eyeL, 0, I.EYE);
     f(eyeL, 1, I.EYE);
     f(eyeR, 0, I.EYE);
@@ -674,28 +556,14 @@ function drawFigure(type, v, frame, mirror = false) {
       r.px(cx + eyeR * k, cy, I.WHITE);
     }
   }
-  if (type === 'player' && /** @type {any} */ (v).portrait?.smile === 'grin') {
-    // broad smile with teeth
-    f(-2, 3, I.MOUTH);
-    f(-1, 3, I.WHITE);
-    f(0, 3, I.WHITE);
-    f(1, 3, I.MOUTH);
-    f(-1, 4, I.MOUTH);
-    f(0, 4, I.MOUTH);
-  } else if ((type === 'johan' || type === 'nordic') && friendly && !happy) {
-    // Johan: brows, a warm closed smile (thin line) and smile lines
+  if (friendly && !happy) {
+    // Nørdic: brows, a warm closed smile (thin line) and smile lines
     for (const ox of [eyeL, eyeR]) r.rect(cx + (ox - 1) * k + 1, cy - 2 * k, 3 * k - 1, 1, H + 1);
     r.px(cx - 4, cy + 5, I.MOUTH);
     r.rect(cx - 3, cy + 6, 6, 1, I.MOUTH);
     r.px(cx + 3, cy + 5, I.MOUTH);
     r.px(cx - 6, cy + 4, I.SKIN + 1);
     r.px(cx + 5, cy + 4, I.SKIN + 1);
-  } else if (type === 'player' || (friendly && !happy)) {
-    // friendly smile
-    f(-2, 3, I.MOUTH);
-    f(1, 3, I.MOUTH);
-    f(-1, 4, I.MOUTH);
-    f(0, 4, I.MOUTH);
   } else if (pose === POSE.sad) {
     // disappointed: brows raised in the middle, mouth turned down
     f(eyeL - 1, -2, I.EYE);
@@ -802,14 +670,6 @@ function drawFigure(type, v, frame, mirror = false) {
       }, cx - rx - 3, cy - ry - 3, cx + rx + 3, cy + 1);
       for (let y = cy - ry - 1; y < cy - 1; y += 2) for (let x = cx - rx; x < cx + rx; x += 3) if (r.get(x + ((y >> 1) & 1), y) === H) r.px(x + ((y >> 1) & 1), y, H + 2);
       break;
-    case 'johan': {
-      // short light-brown hair combed up and back, a little volume on top, slightly higher temples, short sides
-      cap(0.45, -2 * k, 1);
-      hairArea((x, y) => inE(x, y, cx - 0.5, cy - ry + 1.5, rx * 0.82, 3.2), cx - rx, cy - ry - 4, cx + rx, cy - ry + 4);
-      // combed strands
-      for (let i = 0; i < 6; i++) r.px(cx - rx + 5 + i * 3, cy - ry - 1 + (i % 2), H + 2);
-      break;
-    }
     case 'bald':
       for (let y = cy - 2 * k; y <= cy + 1; y++) for (let x = cx - rx; x < cx + rx; x++) {
         if (inE(x, y, cx, cy, rx + 0.6, ry) && Math.abs(x + 0.5 - cx) >= rx - 1.2 * k) hairPx(x, y);
@@ -868,15 +728,9 @@ function drawFigure(type, v, frame, mirror = false) {
     r.rect(ax, topY - 2 * k, k, k, I.SKIN + 2);
   }
 
-  // 11. Pink cheeks on the character who has them in the photo
-  if (type === 'player' && /** @type {any} */ (v).pink) {
-    f(eyeL - 1, 2, I.BLUSH);
-    f(eyeR + 1, 2, I.BLUSH);
-  }
 
   finishText(r, texts, mirror);
   r.outline(I.OUT);
-  if (type === 'player') r.outline(I.OUT_LIGHT);
   return r;
 }
 
@@ -996,311 +850,16 @@ function finishText(r, texts, mirror) {
 
 /** Draws one frame of any figure type. */
 function drawAny(type, v, frame, mirror = false) {
+  if (type === 'johan') {
+    const r = drawJohan(frame, v.johanVariant);
+    return mirror ? r.mirrored() : r;
+  }
   return type === 'printerBoss' ? drawPrinterBoss(frame, mirror) : drawFigure(/** @type {any} */ (type), v, frame, mirror);
 }
 
 /** Figures with text on them are drawn again for the left-facing frames (instead of being mirrored). */
 const HAS_TEXT = ['nordic', 'printerBoss'];
 const leftFacing = (type, v, frame, r) => (HAS_TEXT.includes(type) ? drawAny(type, v, frame, true) : r.mirrored());
-
-/**
- * Larger portrait (64 × 64) of a playable character: head and shoulders, friendly expression.
- * Each character has their own face shape, smile, hairstyle and clothes (see PORTRAIT below).
- * @param {any} v one of PLAYERS
- */
-function drawPortrait(v) {
-  const r = new Raster(64, 64);
-  const H = I.HAIR;
-  const P = v.portrait;
-  const cx = 32, cy = 28, rx = P.rx, ry = P.ry;
-
-  /** Inside the face: ellipse that narrows toward the chin (jaw 0 = round, 0.3 = narrow chin). */
-  const inFace = (x, y) => {
-    const ny = (y + 0.5 - cy) / ry;
-    const narrow = ny > 0 ? 1 - P.jaw * ny * ny : 1;
-    const nx = (x + 0.5 - cx) / (rx * narrow);
-    return nx * nx + ny * ny <= 1;
-  };
-  /** Hair pixel with shadow on the right, a light stripe and strand texture. */
-  const hair = (x, y) => {
-    const dx = x + 0.5 - cx;
-    let c = H;
-    if (dx > rx * 0.55) c = H + 1;
-    if (P.strands(x, y)) c = H + 2;
-    else if (P.shadow(x, y)) c = H + 1;
-    r.px(x, y, c);
-  };
-  const fillHair = (pred, x0 = 8, y0 = 2, x1 = 56, y1 = 44) => {
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (pred(x, y)) hair(x, y);
-  };
-
-  // 1. Hair behind the head (volume sticking out at the sides)
-  fillHair((x, y) => P.backHair(x, y));
-
-  // 2. Shoulders and clothes
-  for (let y = 47; y < 64; y++) for (let x = 4; x < 60; x++) {
-    if (!inE(x, y, 32, 66, P.shoulders, 19)) continue;
-    r.px(x, y, x > 46 ? I.KL + 1 : x < 13 ? I.KL + 2 : I.KL);
-  }
-  // Neck (with shadow under the chin)
-  const neckBottom = 50;
-  r.rect(cx - 5, cy + ry - 4, 10, neckBottom - (cy + ry - 4), I.SKIN);
-  r.rect(cx + 2, cy + ry - 4, 3, neckBottom - (cy + ry - 4), I.SKIN + 1);
-  r.rect(cx - 5, cy + ry - 3, 10, 2, I.SKIN + 1);
-  P.clothes(r, cx);
-
-  // 3. Ears and face
-  r.ellipse(cx - rx + 0.5, cy + 2, 2.6, 3.6, I.SKIN + 1);
-  r.ellipse(cx + rx - 0.5, cy + 2, 2.6, 3.6, I.SKIN + 1);
-  r.px(cx - rx, cy + 2, I.SKIN);
-  for (let y = cy - ry - 1; y <= cy + ry + 1; y++) for (let x = cx - rx - 1; x <= cx + rx + 1; x++) {
-    if (!inFace(x, y)) continue;
-    const edge = !inFace(x + 2, y) || !inFace(x, y + 2);
-    const light = x < cx - rx * 0.35 && y < cy - ry * 0.2 && inFace(x - 2, y - 2) && (x + y) % 2 === 0;
-    r.px(x, y, edge && x > cx - 2 ? I.SKIN + 1 : light ? I.SKIN + 2 : I.SKIN);
-  }
-
-  // 4. Facial features: brows, eyes (small and friendly), nose and smile
-  const oy = cy + 1;
-  for (const ex of [cx - 7, cx + 4]) {
-    // brows
-    r.rect(ex - 1, oy - 4 + P.brows, 5, 1, H + 1);
-    r.px(ex + (ex < cx ? -1 : 3), oy - 3 + P.brows, H + 1);
-    // eye: dark pupil with a light dot and a small lid
-    r.rect(ex, oy - 1, 3, 1, I.SKIN + 1);
-    r.rect(ex, oy, 3, P.eyeH, I.WHITE);
-    r.rect(ex + (ex < cx ? 1 : 0), oy, 2, P.eyeH, I.EYE);
-    r.px(ex + (ex < cx ? 1 : 0), oy, I.WHITE);
-  }
-  // nose
-  r.px(cx, oy + 3, I.SKIN + 1);
-  r.px(cx, oy + 4, I.SKIN + 1);
-  r.rect(cx - 1, oy + 5, 3, 1, I.SKIN + 1);
-  // mouth
-  const my = oy + 9;
-  if (P.smile === 'grin') {
-    r.rect(cx - 4, my, 9, 1, I.MOUTH);
-    r.rect(cx - 4, my + 1, 1, 1, I.MOUTH);
-    r.rect(cx + 4, my + 1, 1, 1, I.MOUTH);
-    r.rect(cx - 3, my + 1, 7, 1, I.WHITE);
-    r.rect(cx - 2, my + 2, 5, 1, I.MOUTH);
-    r.px(cx - 5, my - 1, I.MOUTH);
-    r.px(cx + 5, my - 1, I.MOUTH);
-  } else {
-    r.px(cx - 4, my - 1, I.MOUTH);
-    r.px(cx + 4, my - 1, I.MOUTH);
-    r.rect(cx - 3, my, 7, 1, I.MOUTH);
-    r.rect(cx - 2, my + 1, 5, 1, P.lip === false ? I.SKIN + 1 : I.BLUSH);
-  }
-  if (v.pink) {
-    r.rect(cx - 10, oy + 4, 3, 2, I.BLUSH);
-    r.rect(cx + 8, oy + 4, 3, 2, I.BLUSH);
-  }
-
-  // 5. Hair in front (fringe, sides)
-  fillHair((x, y) => P.frontHair(x, y, inFace));
-  if (P.after) P.after(r, cx, cy);
-
-  r.outline(I.OUT);
-  return r;
-}
-
-/** Helpers for the hair in the portraits. */
-const circle = (x, y, mx, my, rr) => (x + 0.5 - mx) ** 2 + (y + 0.5 - my) ** 2 <= rr * rr;
-
-/** Personal features in the portraits (face shape, eyes, smile, hair and clothes), in the same order as PLAYERS. */
-const PORTRAIT = [
-  {
-    // 1: narrow, long face, brown hair with volume and a fringe swept to the side, dark shirt with button-down collar and narrow black tie
-    rx: 11.5, ry: 15, jaw: 0.32, shoulders: 25, eyeH: 2, brows: 0, smile: 'smile',
-    backHair: (x, y) => circle(x, y, 32, 19, 14.5) && y < 30,
-    frontHair: (x, y, iA) => {
-      if (!(circle(x, y, 32, 19, 14.5) || circle(x, y, 24, 12, 7) || circle(x, y, 38, 11, 8))) return false;
-      // the fringe slants from left (high) to right (low), with a few tufts
-      const fringe = 19 + (x - 20) * 0.28 + ((x * 7) % 5 === 0 ? 1.5 : 0);
-      if (y < fringe) return true;
-      return !iA(x, y) && y < 30;
-    },
-    strands: (x, y) => y < 19 && (x + Math.floor(y * 0.6)) % 6 === 0,
-    shadow: (x, y) => y < 21 && (x + Math.floor(y * 0.6)) % 6 === 3,
-    clothes: (r, cx) => {
-      // collar (button-down) in lighter navy, the buttons in the tips
-      for (let i = 0; i < 6; i++) {
-        r.rect(cx - 7 + i, 47 + i, 2, 1, I.KL + 2);
-        r.rect(cx + 5 - i, 47 + i, 2, 1, I.KL + 2);
-      }
-      r.px(cx - 6, 50, I.WHITE);
-      r.px(cx + 5, 50, I.WHITE);
-      // narrow black tie
-      r.rect(cx - 2, 48, 4, 3, I.ACC + 1);
-      for (let y = 51; y < 64; y++) r.rect(cx - 1 - (y > 54 ? 1 : 0), y, 3 + (y > 54 ? 1 : 0), 1, I.ACC);
-      r.rect(cx + 1, 51, 1, 13, I.ACC + 1);
-    },
-  },
-  {
-    // 2: broad face, light hair with volume swept back and short sides, gray-green pinstripe jacket over white shirt
-    rx: 13, ry: 14, jaw: 0.18, shoulders: 27, eyeH: 2, brows: 0, smile: 'smile',
-    backHair: () => false,
-    frontHair: (x, y, iA) => {
-      // volume on top, high forehead, short sides
-      const edge = 16 + Math.sin((x + 0.5) * 0.45) * 1.2 - (x < 26 ? 1 : 0);
-      const top = circle(x, y, 32, 16, 13.5) && y < edge;
-      const quiff = (circle(x, y, 30, 11, 10.5) || circle(x, y, 37, 12, 8)) && y < edge;
-      const side = !iA(x, y) && Math.abs(x + 0.5 - 32) > 11 && y < 26 && y > 14 && circle(x, y, 32, 26, 15);
-      return top || quiff || side;
-    },
-    strands: (x, y) => y < 15 && (x - Math.floor(y * 0.8)) % 5 === 0,
-    shadow: (x, y) => y > 15 || (x === 26 && y > 3 && y < 15) || (x - Math.floor(y * 0.8)) % 5 === 2,
-    clothes: (r, cx) => {
-      // white shirt with open collar
-      for (let y = 47; y < 64; y++) {
-        const b = Math.max(8, 18 - (y - 47));
-        r.rect(cx - b / 2, y, b, 1, I.SHIRT);
-      }
-      r.rect(cx - 3, 47, 6, 4, I.SKIN);
-      r.rect(cx - 2, 51, 4, 2, I.SKIN + 1);
-      r.rect(cx - 8, 47, 4, 3, I.SHIRT + 2);
-      r.rect(cx + 4, 47, 4, 3, I.SHIRT + 2);
-      // lapels
-      for (let i = 0; i < 9; i++) {
-        r.px(cx - 10 + Math.floor(i / 2), 48 + i * 2, I.KL + 1);
-        r.px(cx + 9 - Math.floor(i / 2), 48 + i * 2, I.KL + 1);
-      }
-      for (let y = 49; y < 64; y += 3) for (let x = 8; x < 56; x += 4) if (r.get(x, y) === I.KL) r.px(x + (y & 1), y, I.KL + 2);
-    },
-  },
-  {
-    // 3: oval face, straight black hair with a middle part and curtain bangs, brown cable-knit sweater
-    rx: 12.5, ry: 14.5, jaw: 0.25, shoulders: 28, eyeH: 2, brows: 1, smile: 'smile',
-    backHair: (x, y) => circle(x, y, 32, 20, 14) && y < 26,
-    frontHair: (x, y, iA) => {
-      if (!circle(x, y, 32, 20, 14.2)) return false;
-      // curtain bangs: parted in the middle, the fringe hangs lower toward the sides
-      const dx = Math.abs(x + 0.5 - 32);
-      const fringe = 14 + Math.min(8, dx * 0.8) + (x % 3 === 0 ? 1.5 : 0);
-      if (y < fringe) return true;
-      return !iA(x, y) && y < 23;
-    },
-    strands: (x, y) => y > 8 && y < 13 && (x === 25 || x === 28 || x === 36 || x === 39),
-    shadow: (x, y) => y > 14 && x % 3 === 1,
-    clothes: (r, cx) => {
-      // round ribbed neck and braids
-      r.rect(cx - 7, 47, 14, 2, I.KL + 1);
-      for (let x = cx - 7; x < cx + 7; x += 2) r.px(x, 47, I.KL + 2);
-      for (let y = 50; y < 64; y++) for (const x of [10, 19, 28, 37, 46]) {
-        r.px(x + ((y >> 1) & 1), y, I.KL + 2);
-        r.px(x + 3 - ((y >> 1) & 1), y, I.KL + 2);
-      }
-    },
-    after: (r, cx) => {
-      // the part
-      r.rect(cx - 1, 8, 1, 7, I.SKIN + 1);
-      r.px(cx - 1, 15, I.SKIN);
-    },
-  },
-  {
-    // 4: round face, big smile and pink cheeks, copper-brown wavy and full hair, white shirt over t-shirt and gold chain
-    rx: 12.5, ry: 13.5, jaw: 0.12, shoulders: 27, eyeH: 2, brows: -1, smile: 'grin',
-    backHair: (x, y) => {
-      if (y > 30) return false;
-      if (circle(x, y, 32, 19, 15.5)) return true;
-      // curls around the edge
-      for (let i = 0; i < 9; i++) {
-        const a = Math.PI * (0.95 + i * 0.14);
-        if (circle(x, y, 32 + Math.cos(a) * 15, 20 + Math.sin(a) * 14, 4.2)) return true;
-      }
-      return false;
-    },
-    frontHair: (x, y, iA) => {
-      if (!circle(x, y, 32, 19, 15.5)) return false;
-      // curly fringe in arcs over the forehead
-      const fringe = 17 + (Math.abs(Math.sin((x + 0.5) * 0.55)) * 3);
-      if (y < fringe) return true;
-      return !iA(x, y) && y < 26;
-    },
-    strands: (x, y) => ((x * 5 + y * 3) % 9 === 0 || (x * 3 + y * 7) % 13 === 0) && y < 26,
-    shadow: (x, y) => (x * 7 + y * 5) % 8 === 0,
-    clothes: (r, cx) => {
-      // white t-shirt, open white shirt, thin gold chain
-      r.rect(cx - 6, 47, 12, 17, I.SHIRT);
-      r.rect(cx - 5, 47, 10, 1, I.SHIRT + 1);
-      for (let i = 0; i < 8; i++) {
-        r.px(cx - 7 - i, 47 + i, I.KL + 1);
-        r.px(cx + 6 + i, 47 + i, I.KL + 1);
-      }
-      for (let i = 0; i <= 5; i++) {
-        r.px(cx - 5 + i, 47 + i, I.GOLD);
-        r.px(cx + 4 - i, 47 + i, I.GOLD);
-      }
-    },
-  },
-];
-PLAYERS.forEach((v, i) => {
-  /** @type {any} */ (v).portrait = PORTRAIT[i];
-});
-
-/**
- * Johan's portrait: broad face with a gently squared jaw and a warm, closed smile with smile lines,
- * short light-brown hair combed up and back with higher temples, charcoal jacket over a royal-blue open-collar shirt.
- */
-const JOHAN_PORTRAIT = {
-  rx: 13, ry: 15, jaw: 0.22, shoulders: 29, eyeH: 2, brows: 0, smile: 'smile', lip: false,
-  backHair: () => false,
-  frontHair: (x, y, iA) => {
-    const dx = Math.abs(x + 0.5 - 32);
-    // a fairly straight hairline that sits a little higher at the temples
-    const edge = 19.5 - Math.max(0, dx - 6) * 0.35;
-    // The hair hugs the skull: a shape only slightly larger than the head (3–4 px of volume on top, 1–2 px at the sides)
-    const nx = (x + 0.5 - 32) / 14.8, ny = (y + 0.5 - 26) / 16.6;
-    if (nx * nx + ny * ny > 1) return false;
-    // over the face the hairline follows «edge»; at the sides it stops above the ears
-    return y < edge || (!iA(x, y) && y < 23);
-  },
-  strands: (x, y) => y < 12 && y > 6 && (x * 2 + y * 3) % 9 === 0,
-  shadow: (x, y) => y >= 12 || (x * 2 + y * 3) % 9 === 4,
-  clothes: (r, cx) => {
-    // royal-blue shirt with an open collar between the jacket lapels
-    for (let y = 47; y < 64; y++) {
-      const b = Math.max(6, 20 - (y - 47) * 1.1);
-      r.rect(cx - b / 2, y, b, 1, I.SHIRT);
-    }
-    r.rect(cx - 3, 47, 6, 4, I.SKIN);
-    r.rect(cx - 2, 51, 4, 2, I.SKIN + 1);
-    // collar points
-    for (let i = 0; i < 4; i++) {
-      r.rect(cx - 9 + i, 47 + i, 3, 1, I.SHIRT + 2);
-      r.rect(cx + 6 - i, 47 + i, 3, 1, I.SHIRT + 2);
-    }
-    // jacket lapels
-    for (let i = 0; i < 9; i++) {
-      r.px(cx - 11 + Math.floor(i / 2), 48 + i * 2, I.KL + 2);
-      r.px(cx - 11 + Math.floor(i / 2), 49 + i * 2, I.KL + 2);
-      r.px(cx + 10 - Math.floor(i / 2), 48 + i * 2, I.KL + 1);
-      r.px(cx + 10 - Math.floor(i / 2), 49 + i * 2, I.KL + 1);
-    }
-  },
-  after: (r, cx, cy) => {
-    // smile lines at the eyes and next to the mouth
-    r.px(cx - 10, cy, I.SKIN + 1);
-    r.px(cx - 10, cy + 2, I.SKIN + 1);
-    r.px(cx + 9, cy, I.SKIN + 1);
-    r.px(cx + 9, cy + 2, I.SKIN + 1);
-    r.px(cx - 6, cy + 8, I.SKIN + 1);
-    r.px(cx + 6, cy + 8, I.SKIN + 1);
-  },
-};
-/** @type {any} */ (JOHAN[0]).portrait = JOHAN_PORTRAIT;
-/** @type {any} */ (JOHAN[1]).portrait = JOHAN_PORTRAIT;
-
-/** White silhouette (flash when a lawyer gets help, or when the player is hit). */
-function whiteCopy(r) {
-  const h = new Raster(r.w, r.h);
-  for (let i = 0; i < r.d.length; i++) {
-    const c = r.d[i];
-    if (c) h.d[i] = c === I.OUT || c === I.OUT_LIGHT ? I.GRAY : I.WHITE;
-  }
-  return h;
-}
 
 // ---------- Sprite sheets with cache ----------
 
@@ -1316,10 +875,13 @@ function whiteCopy(r) {
 
 export class Figures {
   constructor() {
-    /** @type {Record<string, Variant[]>} */
+    /** @type {Record<string, any[]>} */
     this.variants = {};
     for (const [type, n] of Object.entries(CONFIG.figureVariants)) this.variants[type] = makeVariants(type, n);
-    this.variants.player = PLAYERS;
+    /** The playable characters come from the client's own pixel art (assets/karakterer/), see loadCharacters(). */
+    this.variants.player = CONFIG.characters;
+    /** @type {{sprite: HTMLImageElement, portrait: HTMLImageElement}[]} */
+    this.images = [];
     this.variants.johan = JOHAN;
     this.variants.nordic = NORDIC;
     this.variants.printerBoss = PRINTER_BOSS;
@@ -1350,6 +912,11 @@ export class Figures {
     const key = type + variant;
     let a = this.cache.get(key);
     if (a) return a;
+    if (type === 'player') {
+      a = this.playerSheet(variant % CONFIG.characters.length);
+      this.cache.set(key, a);
+      return a;
+    }
     const list = this.variants[type];
     const vi = variant % list.length;
     const v = list[vi];
@@ -1364,14 +931,13 @@ export class Figures {
       strip.lim(r, col * T.w, 0);
       strip.lim(s, (col + TILE.left) * T.w, 0);
       if (b < 4) {
-        const blink = type === 'player' ? whiteCopy(r) : r;
-        blinkStrip.lim(blink, (TILE.blink + b) * T.w, 0);
-        blinkStrip.lim(type === 'player' ? whiteCopy(s) : s, (TILE.blink + b + TILE.left) * T.w, 0);
+        blinkStrip.lim(r, (TILE.blink + b) * T.w, 0);
+        blinkStrip.lim(s, (TILE.blink + b + TILE.left) * T.w, 0);
       }
     }
     const { ax, ay } = anchor(type);
     const pal = palette(v, type);
-    const lightPal = pal.map((f, i) => (f && i !== I.OUT ? f.map((c) => Math.round(c + (255 - c) * 0.6)) : f));
+    const lightPal = pal.map((f, i) => (f && (type === 'johan' || i !== I.OUT) ? f.map((c) => Math.round(c + (255 - c) * 0.6)) : f));
     // Merge normal and flash into one strip (the flash columns use the light palette)
     const W = T.w * TILE.count;
     for (let i = 0; i < blinkStrip.d.length; i++) if (blinkStrip.d[i]) strip.d[i] = 0;
@@ -1408,21 +974,83 @@ export class Figures {
     return a;
   }
 
-  /** Portrait (64 × 64) of character no. i (0–3). */
+  /**
+   * Loads the client's pixel art for the four playable characters (32 × 32 figure and 64 × 64 portrait each).
+   * The files are used exactly as they are – never redrawn, recoloured or scaled.
+   */
+  async loadCharacters() {
+    const load = (src) => new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = () => reject(new Error('Fant ikke ' + src));
+      im.src = src;
+    });
+    this.images = await Promise.all(CONFIG.characters.map(async (k) => ({ sprite: await load(k.sprite), portrait: await load(k.portrait) })));
+  }
+
+  /**
+   * The sprite sheet for playable character no. i, made from the client's 32 × 32 image:
+   * frame 0 is the image exactly as it is. The walk cycle only changes the legs and feet (rows 27–30): in frames 1 and 3
+   * the whole figure dips one pixel and one foot is lifted. The head and upper body are copied unchanged.
+   * Flash frames (4–7) are white silhouettes that the renderer lays on top of the normal frame.
+   */
+  playerSheet(i) {
+    const img = this.images[i].sprite;
+    const S = 32, LEGS = 27, BOTTOM = 31;
+    const canvas = document.createElement('canvas');
+    canvas.width = S * TILE.count;
+    canvas.height = S;
+    const ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d'));
+    ctx.imageSmoothingEnabled = false;
+    /** Draws walk frame f (facing right) at x. Only whole-pixel copies of parts of the image – nothing is scaled. */
+    const walkFrame = (c2, f, x) => {
+      const dip = f === 1 || f === 3 ? 1 : 0;
+      // head and upper body (rows 0–26), moved down one pixel on the dip
+      c2.drawImage(img, 0, 0, S, LEGS, x, dip, S, LEGS);
+      for (const [x0, w, lifted] of [[0, S / 2, f === 1], [S / 2, S / 2, f === 3]]) {
+        if (lifted) {
+          // the lifted leg: rows 28–30 one pixel higher (the top leg row is hidden under the body)
+          c2.drawImage(img, x0, LEGS + 1, w, BOTTOM - LEGS - 1, x + x0, LEGS + dip, w, BOTTOM - LEGS - 1);
+        } else {
+          c2.drawImage(img, x0, LEGS, w, BOTTOM - LEGS, x + x0, LEGS + dip, w, BOTTOM - LEGS);
+        }
+      }
+    };
+    for (let f = 0; f < 4; f++) walkFrame(ctx, f, f * S);
+    ctx.drawImage(img, 0, 0, S, S, TILE.happy * S, 0, S, S);
+    // flash: white silhouettes of the walk frames
+    for (let f = 0; f < 4; f++) {
+      const t = document.createElement('canvas');
+      t.width = S;
+      t.height = S;
+      const tc = /** @type {CanvasRenderingContext2D} */ (t.getContext('2d'));
+      walkFrame(tc, f, 0);
+      tc.globalCompositeOperation = 'source-in';
+      tc.fillStyle = '#ffffff';
+      tc.fillRect(0, 0, S, S);
+      ctx.drawImage(t, (TILE.blink + f) * S, 0);
+    }
+    // facing left: the same frames mirrored
+    for (let f = 0; f < TILE.left; f++) {
+      ctx.save();
+      ctx.translate((TILE.left + f + 1) * S, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(canvas, f * S, 0, S, S, 0, 0, S, S);
+      ctx.restore();
+    }
+    return { canvas, sy: 0, w: S, h: S, ax: 16, ay: 20 };
+  }
+
+  /** Portrait (64 × 64) of character no. i (0–3): the client's image as it is. */
   portrait(i) {
-    let c = this.portraits.get(i);
-    if (c) return c;
-    const v = PLAYERS[i % PLAYERS.length];
-    c = toCanvas(drawPortrait(v), palette(v, 'player'));
-    this.portraits.set(i, c);
-    return c;
+    return this.images[i % this.images.length].portrait;
   }
 
   /** Johan's portrait (64 × 64), for the boss introduction, the end screen and the preview. */
   johanPortrait() {
     let c = this.portraits.get('johan');
     if (c) return c;
-    c = toCanvas(drawPortrait(JOHAN[0]), palette(JOHAN[0], 'player'));
+    c = toCanvas(drawJohanPortrait(), JOHAN_PALETTE);
     this.portraits.set('johan', c);
     return c;
   }
@@ -1445,7 +1073,7 @@ export class Figures {
       strip.lim(leftFacing(type, v, 5 + p, r), (p + POSE.count) * T.w, 0);
     }
     const pal = palette(v, type);
-    const lightPal = pal.map((f, i) => (f && i !== I.OUT ? f.map((c) => Math.round(c + (255 - c) * 0.6)) : f));
+    const lightPal = pal.map((f, i) => (f && (type === 'johan' || i !== I.OUT) ? f.map((c) => Math.round(c + (255 - c) * 0.6)) : f));
     const canvas = document.createElement('canvas');
     canvas.width = strip.w;
     canvas.height = T.h * 2;

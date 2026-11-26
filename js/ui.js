@@ -11,20 +11,49 @@ export const el = (id) => /** @type {HTMLElement} */ (document.getElementById(id
 
 const SCREENS = ['start', 'characterSelect', 'levelUp', 'pause', 'settings', 'gameOver'];
 
-/** Where the portraits come from (set by main.js). @type {(i: number) => HTMLCanvasElement} */
+/** Where the portraits come from (set by main.js). @type {(i: number) => CanvasImageSource} */
 let portraitSource = () => document.createElement('canvas');
 export function setPortraitSource(f) {
   portraitSource = f;
 }
+/** Where the 32 × 32 figures come from (the sprite sheet; frame 0 is the image exactly as it is). @type {(i: number) => any} */
+let figureSource = () => null;
+export function setFigureSource(f) {
+  figureSource = f;
+}
 
-/** A small canvas element with the portrait of character no. i. */
-export function portraitElement(i) {
+/**
+ * Gives a pixel-art canvas a size on screen that is a whole multiple of its own size in real (device) pixels,
+ * as close as possible to «cssPx». Never smoothed, never scaled by a non-integer factor.
+ */
+export function crisp(c, cssPx) {
+  const dpr = window.devicePixelRatio || 1;
+  const n = Math.max(1, Math.round((cssPx * dpr) / c.width));
+  c.style.width = (c.width * n) / dpr + 'px';
+  c.style.height = (c.height * n) / dpr + 'px';
+  c.style.imageRendering = 'pixelated';
+  return c;
+}
+
+/** A canvas element with the portrait (64 × 64) of character no. i, shown at about «cssPx» CSS pixels. */
+export function portraitElement(i, cssPx = 128) {
   const c = document.createElement('canvas');
   c.width = 64;
   c.height = 64;
   c.className = 'portrait';
   /** @type {CanvasRenderingContext2D} */ (c.getContext('2d')).drawImage(portraitSource(i), 0, 0);
-  return c;
+  return crisp(c, cssPx);
+}
+
+/** A canvas element with the 32 × 32 figure of character no. i (for small places like the leaderboard). */
+export function figureElement(i, cssPx = 32) {
+  const c = document.createElement('canvas');
+  c.width = 32;
+  c.height = 32;
+  c.className = 'figure';
+  const sheet = figureSource(i);
+  /** @type {CanvasRenderingContext2D} */ (c.getContext('2d')).drawImage(sheet.canvas, 0, sheet.sy, 32, 32, 0, 0, 32, 32);
+  return crisp(c, cssPx);
 }
 
 /** Character no. from the id stored in the leaderboard ('k1'–'k4'). */
@@ -89,7 +118,7 @@ export function drawLeaderboard(holder, data, ownName) {
     const tr = make('tr', me && r.name.toLowerCase() === me ? 'me' : '');
     const name = make('td', 'name');
     const ki = characterIndex(r.character);
-    if (ki >= 0) name.append(portraitElement(ki));
+    if (ki >= 0) name.append(figureElement(ki, 32));
     name.append(document.createTextNode(r.name));
     if (r.fired) {
       // a small moving box: this round ended with the sack
@@ -222,6 +251,7 @@ export function drawBosses(s, fig) {
     c.width = 64;
     c.height = 64;
     c.className = 'portrait';
+    crisp(c, 64);
     const ctx = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
     if (b.type === 'johan' && b.helped) ctx.drawImage(fig.johanPortrait(), 0, 0);
     else {
@@ -256,7 +286,7 @@ export function showCharacterSelect(selected, choose) {
     b.setAttribute('aria-checked', String(i === selected));
     const weapons = make('span', 'weapon');
     weapons.append(iconElement(k.startWeapon), make('span', '', CONFIG.weapons[k.startWeapon].name));
-    b.append(make('kbd', '', i + 1), portraitElement(i), make('span', 'name', k.name), make('span', 'title', k.title), weapons, make('span', 'bonus', k.bonusText));
+    b.append(make('kbd', '', i + 1), portraitElement(i, 128), make('span', 'name', k.name), make('span', 'title', k.title), weapons, make('span', 'bonus', k.bonusText));
     b.addEventListener('click', () => choose(i, true));
     b.addEventListener('focus', () => choose(i, false));
     holder.append(b);
@@ -287,7 +317,7 @@ export function showCharacterPreview(fig) {
   };
   const root = make2('div', 'position:fixed;inset:0;z-index:50;overflow:auto;background:#16202b;color:#fff;padding:24px;font-family:var(--font)');
   root.append(make2('h1', 'margin:0 0 4px;font-size:2em', 'Forhåndsvisning: de fire spillbare karakterene'));
-  root.append(make2('p', 'margin:0 0 20px;color:#c8d6e5', 'Til godkjenning. Navn og tittel fylles inn i js/config.js (CONFIG.karakterer). Utseendet justeres i js/figures.js (SPILLERE).'));
+  root.append(make2('p', 'margin:0 0 20px;color:#c8d6e5', 'Bildene er oppdragsgivers egne (assets/karakterer/), brukt piksel for piksel. Gangsyklusen endrer bare beina og føttene. Navn og tittel står i js/config.js (CONFIG.characters).'));
   const grid = make2('div', 'display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px');
   /** @type {{c: HTMLCanvasElement, i: number}[]} */
   const animated = [];
@@ -296,22 +326,24 @@ export function showCharacterPreview(fig) {
     const p = document.createElement('canvas');
     p.width = 64;
     p.height = 64;
-    p.style.cssText = 'width:256px;height:256px;image-rendering:pixelated;display:block;margin:0 auto 8px;background:#a9b8c8';
+    p.style.cssText = 'display:block;margin:0 auto 8px;background:#a9b8c8';
+    crisp(p, 256);
     /** @type {CanvasRenderingContext2D} */ (p.getContext('2d')).drawImage(fig.portrait(i), 0, 0);
     cardEl.append(p);
     const figRow = make2('div', 'display:flex;gap:8px;justify-content:center;margin-bottom:8px');
     const sheet = fig.sheet('player', i);
-    for (const frame of [-1, 8, 4]) {
+    for (const frame of [8, -1, 1, 3]) {
       const c = document.createElement('canvas');
       c.width = sheet.w;
       c.height = sheet.h;
-      c.style.cssText = 'width:96px;height:96px;image-rendering:pixelated;background:#a9b8c8';
+      c.style.background = '#a9b8c8';
+      crisp(c, 64);
       if (frame >= 0) /** @type {CanvasRenderingContext2D} */ (c.getContext('2d')).drawImage(sheet.canvas, frame * sheet.w, sheet.sy, sheet.w, sheet.h, 0, 0, sheet.w, sheet.h);
       else animated.push({ c, i });
       figRow.append(c);
     }
     cardEl.append(figRow);
-    cardEl.append(make2('p', 'margin:0;font-size:0.8em;color:#5d6b7a;text-align:center', 'Gange (animert) · Glad · Blink ved treff'));
+    cardEl.append(make2('p', 'margin:0;font-size:0.8em;color:#5d6b7a;text-align:center', 'Stående (originalbildet) · Gange (animert) · Gangbilde 2 og 4'));
     cardEl.append(make2('h2', 'margin:12px 0 2px', `${i + 1}. ${k.name}`));
     cardEl.append(make2('p', 'margin:0 0 6px;color:#5d6b7a', k.title));
     cardEl.append(make2('p', 'margin:0', `Startvåpen: ${CONFIG.weapons[k.startWeapon].name}`));
@@ -322,12 +354,13 @@ export function showCharacterPreview(fig) {
 
   // The final boss Johan, for approval
   root.append(make2('h1', 'margin:32px 0 4px;font-size:2em', 'Siste boss: Johan'));
-  root.append(make2('p', 'margin:0 0 20px;color:#c8d6e5', 'Til godkjenning. Laget i samme stil som de spillbare karakterene, i dobbel størrelse (64 × 64). Utseendet justeres i js/figures.js (JOHAN).'));
+  root.append(make2('p', 'margin:0 0 20px;color:#c8d6e5', 'Laget fra fotoet av Johan i samme stil som de fire karakterene over: samme pikseltetthet (1 piksel detalj), fargede omriss og myk skyggelegging. Som boss er figuren dobbelt så stor (64 × 64). Utseendet justeres i js/johan.js.'));
   const johanCard = make2('div', 'background:#f4f1ea;color:#1d1626;padding:16px;box-shadow:0 0 0 4px #1d1626;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start');
   const jp = document.createElement('canvas');
   jp.width = 64;
   jp.height = 64;
-  jp.style.cssText = 'width:256px;height:256px;image-rendering:pixelated;background:#a9b8c8';
+  jp.style.background = '#a9b8c8';
+  crisp(jp, 256);
   /** @type {CanvasRenderingContext2D} */ (jp.getContext('2d')).drawImage(fig.johanPortrait(), 0, 0);
   const jpBox = make2('div', 'text-align:center');
   jpBox.append(jp, make2('p', 'margin:4px 0 0;font-size:0.8em;color:#5d6b7a', 'Portrett (bossintro og slutt-skjerm)'));
@@ -339,7 +372,8 @@ export function showCharacterPreview(fig) {
     const c = document.createElement('canvas');
     c.width = 64;
     c.height = 64;
-    c.style.cssText = 'width:128px;height:128px;image-rendering:pixelated;background:#a9b8c8';
+    c.style.background = '#a9b8c8';
+    crisp(c, 128);
     draw(c);
     box.append(c, make2('p', 'margin:2px 0 0;font-size:0.75em;color:#5d6b7a', caption));
     frames.append(box);

@@ -75,9 +75,15 @@ hvert innslag i topplisten (portrett ved navnet). Topplisten er felles for alle 
 
 - **Navn og tittel** står i js/config.js under CONFIG.characters (Odyssefs, Johannes, Jin og Julian, alle med
   tittelen «IT-avdelingen»). Der står også startvåpen og bonus.
-- **Utseendet** står i js/figures.js (PLAYERS for figuren og drawPortrait for portrettet på 64 × 64).
+- **Utseendet** er oppdragsgivers egne pikselbilder i `assets/karakterer/` (figur 32 × 32 og portrett 64 × 64 per
+  karakter). De brukes piksel for piksel og tegnes alltid med heltallsskalering uten utglatting. Hvilken fil som hører
+  til hvilken karakter, står i CONFIG.characters (`sprite` og `portrait`): person4 = Odyssefs, person3 = Johannes,
+  person1 = Jin og person2 = Julian (koblet etter utseende).
+- **Gangsyklusen** lages i koden fra den stående figuren: bare beina og føttene (rad 27–30) endres, og figuren dupper
+  én piksel. Hode og overkropp er uendret. Blink ved treff legges oppå som en hvit silhuett.
+- På topplisten brukes den lille 32 × 32-figuren i stedet for et nedskalert portrett.
 - **Forhåndsvisning til godkjenning:** <http://localhost:3000/?debug=karakterer> viser alle fire med portrett,
-  animert gangsyklus, glad bilde, navn, tittel, startvåpen og bonus.
+  stående figur, animert gangsyklus, navn, tittel, startvåpen og bonus, og Johan under.
 - Bildene av personene er bare brukt som forelegg. De ligger ikke i prosjektet og publiseres ikke.
 
 ## Våpen, passive og kombinasjoner
@@ -92,11 +98,13 @@ riktig passiv gir en kombinasjon. Disse er nye eller endret i versjon 3 og 4:
 | Oppdateringsstrålen (stråle i gangretningen) | Sertifisering | Tvungen oppdatering |
 | Teams-varsel (målsøkende varsler mot hver sin advokat) | Dobbel skjerm | Allmøte på Teams (hvert varsel deler seg i tre) |
 | Støydempende headset (skjold som blokkerer ett treff) | Ergonomisk stol | Hjemmekontor |
-| Skytsengelen (kaster mini-printere) | Større boks | Himmelsk serviceavtale |
+| Skytsengelen (kaster mini-printere som står stille og skyter papirark) | Større boks | Himmelsk serviceavtale |
 
 Tallene står i CONFIG.weapons og CONFIG.newWeapons. «Dobbel skjerm» bruker en egen tilfeldighetsstrøm, så
-samme valg gir samme runde for alle. Skytsengelen har et fast tak på antall mini-printere samtidig (2, 4 eller 6,
-og 10 som kombinasjon), likt for alle.
+samme valg gir samme runde for alle. Skytsengelens mini-printere fungerer som molotov: de lander der advokaten stod,
+står helt stille og skyter et papirark mot nærmeste advokat innenfor rekkevidden (60 piksler, 69 fra nivå 5) hvert
+0,3. sekund, i 4 sekunder (5 fra nivå 5). Taket på antall samtidig er fast og likt for alle (2, 4 eller 6, og 10 som
+kombinasjon).
 
 **«Haster!»-avsenderen** (fra 2:30) holder seg 150–200 piksler unna og sender e-poster mot der spilleren
 står. Laptopen lyser og et «!» vises 0,5 sekunder før hvert skudd. Maks 15 % av advokatene og maks 30 samtidig,
@@ -123,8 +131,9 @@ sier hvilken boss det var. Poengene kan likevel sendes inn, og topplisten viser 
 - Mens en boss er ute, kommer det færre vanlige advokater (55 %). En boss som er langt unna, jogger for å ta deg igjen.
 - **Navn, replikker og alle tall** står i CONFIG.bosses i js/config.js (`intro`, `line`, `happyText`, Johans
   `title` og `phaseText` er plassholdere som kan endres fritt).
-- **Utseendet** står i js/figures.js: NORDIC (konsulenten), drawPrinterBoss (printeren) og JOHAN (figur og
-  portrett). Nørdic er et oppdiktet firma med egen logo (krøllparenteser rundt en N) i skoggrønt og lime.
+- **Utseendet** står i js/figures.js: NORDIC (konsulenten) og drawPrinterBoss (printeren). Johan står i js/johan.js,
+  tegnet i samme stil som oppdragsgivers bilder av de fire karakterene (samme pikseltetthet, fargede omriss og myk
+  skyggelegging). Nørdic er et oppdiktet firma med egen logo (krøllparenteser rundt en N) i skoggrønt og lime.
 - **Bildet av Johan** er bare brukt som forelegg. Det ligger ikke i prosjektet og publiseres ikke.
 - **Test en boss direkte:** <http://localhost:3000/?debug=boss1> til `?debug=boss4` hopper rett til boss 1–4 med
   et typisk bygg for tidspunktet (knappene «Boss 1–4» i debug-panelet gjør det samme).

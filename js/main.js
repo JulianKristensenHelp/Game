@@ -83,7 +83,8 @@ function fit() {
   let k;
   const options = settings.v.gameSize;
   if (options === 'fit') {
-    k = spot >= 1 && Math.floor(spot) / spot >= 0.85 ? Math.floor(spot) : spot;
+    // Always a whole multiple of 640 × 360 in real pixels (sharp, equal pixels), unless the screen is smaller than that
+    k = spot >= 1 ? Math.floor(spot) : spot;
   } else {
     k = Math.min(Number(options) * dpr, spot);
     if (k >= 1 && k < spot) k = Math.floor(k);
@@ -231,6 +232,7 @@ function showEnd() {
   const spc = /** @type {CanvasRenderingContext2D} */ (sp.getContext('2d'));
   spc.clearRect(0, 0, 64, 64);
   spc.drawImage(renderer.fig.portrait(game.character), 0, 0);
+  ui.crisp(sp, 128);
   el('endCharacter').textContent = `${k.name} – ${k.title}`;
   // Fired: a different headline, and which boss was one too many
   el('endTitle').textContent = game.fired ? 'Du har fått sparken!' : 'Vakta er over';
@@ -702,7 +704,10 @@ if (DEBUG) {
   Object.defineProperty(window, 'hds', { get: () => ({ game, CONFIG, mode, renderer, hud, input, settings, perf, startStressTest }) });
 }
 
+// The client's own pixel art for the four playable characters (assets/karakterer/) must be loaded before anything is drawn.
+await renderer.fig.loadCharacters();
 ui.setPortraitSource((i) => renderer.fig.portrait(i));
+ui.setFigureSource((i) => renderer.fig.sheet('player', i));
 fit();
 updateSoundButtons();
 toStart();

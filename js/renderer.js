@@ -400,6 +400,16 @@ export class Renderer {
           drawSprite(ctx, this.spr.item.sheet, x + Math.cos(a) * d, y + Math.sin(a) * d * 0.7);
         }
         ctx.globalAlpha = 1;
+      } else if (e.type === 'dust') {
+        // A mini printer lands: a small puff of dust
+        ctx.globalAlpha = (1 - f) * 0.8;
+        ctx.fillStyle = '#d9d2c3';
+        for (let j = 0; j < 6; j++) {
+          const a = Math.PI + (j / 5) * Math.PI;
+          const d = 3 + f * e.r;
+          ctx.fillRect(Math.round(x + Math.cos(a) * d * -1.2), Math.round(y + Math.sin(a) * d * 0.4), 2, 2);
+        }
+        ctx.globalAlpha = 1;
       } else if (e.type === 'confetti') {
         // Himmelsk serviceavtale (heavenly service agreement): paper confetti
         const colors = ['#f5cf3a', '#e0409a', '#19b5c9', '#2fd06a', '#ffffff'];
@@ -529,11 +539,27 @@ export class Renderer {
         continue;
       }
       if (pr.type === 'mini') {
-        // Mini printer: in the air in an arc, then shuffling on small legs
+        // Mini printer: in the air in an arc, then standing still where it landed and feeding out sheets
         const set = pr.evo ? item.miniEvo : item.mini;
-        const frame = pr.goBack ? Math.floor(now * 8 + i) & 1 : 0;
-        if (pr.goBack) drawSprite(ctx, item.shadows.small, pr.x, pr.y + 4);
-        drawSprite(ctx, set[frame], pr.x, pr.y);
+        if (!pr.goBack) {
+          drawSprite(ctx, set[0], pr.x, pr.y);
+          continue;
+        }
+        // a discreet circle on the floor shows the range (below the lawyers' feet, faint)
+        ctx.globalAlpha = 0.16;
+        drawSprite(ctx, ring(pr.radius, pr.evo ? '#f5cf3a' : '#ffffff', 1, 0, 3), pr.x, pr.y + 2);
+        ctx.globalAlpha = 1;
+        drawSprite(ctx, item.shadows.small, pr.x, pr.y + 4);
+        // a little hop right after landing
+        const hop = pr.t < 0.25 ? Math.round(Math.sin((pr.t / 0.25) * Math.PI) * 4) : 0;
+        // just fired: a sheet sticks out of the output tray
+        const feeding = pr.every - pr.burst < 0.12 ? 1 : 0;
+        drawSprite(ctx, set[feeding], pr.x, pr.y - hop);
+        if (feeding) drawSprite(ctx, item.sheetSmall, pr.x + (pr.angle < 0 ? -4 : 4), pr.y - 10 - hop);
+        continue;
+      }
+      if (pr.type === 'sheet') {
+        drawSprite(ctx, item.sheetSmall, pr.x, pr.y);
         continue;
       }
       if (pr.type === 'toner') {
@@ -612,14 +638,19 @@ export class Renderer {
       ctx.globalAlpha = 1;
     }
     const walk = p.moving ? Math.floor(now * 10) & 3 : 0;
-    let frame = walk + (this.playerDirection < 0 ? TILE.left : 0);
-    if (p.invulnerable > 0) {
-      // Flash on hit
-      if (this.settings.fewerFlashes) ctx.globalAlpha = 0.65;
-      else if (Math.floor(now * 20) % 2 === 0) frame += TILE.blink;
-    }
-    ctx.drawImage(sheet.canvas, frame * sheet.w, sheet.sy, sheet.w, sheet.h, Math.round(p.x - sheet.ax), Math.round(p.y - sheet.ay), sheet.w, sheet.h);
+    const frame = walk + (this.playerDirection < 0 ? TILE.left : 0);
+    const px = Math.round(p.x - sheet.ax), py = Math.round(p.y - sheet.ay);
+    // the same small shadow under the feet as the other figures
+    drawSprite(ctx, item.shadows.player, p.x, p.y + sheet.h - sheet.ay - 2);
+    if (p.invulnerable > 0 && this.settings.fewerFlashes) ctx.globalAlpha = 0.65;
+    ctx.drawImage(sheet.canvas, frame * sheet.w, sheet.sy, sheet.w, sheet.h, px, py, sheet.w, sheet.h);
     ctx.globalAlpha = 1;
+    // Flash on hit: a white silhouette laid on top – the image itself is never changed
+    if (p.invulnerable > 0 && !this.settings.fewerFlashes && Math.floor(now * 20) % 2 === 0) {
+      ctx.globalAlpha = 0.7;
+      ctx.drawImage(sheet.canvas, (frame + TILE.blink) * sheet.w, sheet.sy, sheet.w, sheet.h, px, py, sheet.w, sheet.h);
+      ctx.globalAlpha = 1;
+    }
     if (p.inPaper) this.font.draw(ctx, 'Sakte …', p.x, p.y - 30, '#ffffff', 1, '#1d1626', 'center');
   }
 

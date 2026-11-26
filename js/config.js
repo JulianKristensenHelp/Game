@@ -188,13 +188,14 @@ export const CONFIG = {
    * The four playable characters (the IT department). Name and title are filled in by the client.
    * startWeapon = the weapon the character starts with (counts as one of four slots).
    * bonus: maxEnergy (+energy), help (+fraction), speed (+fraction), pick (+fraction of the pickup radius for tickets).
-   * The looks are in js/figures.js (PLAYERS), in the same order.
+   * sprite/portrait = the client's own pixel art (32 × 32 figure, 64 × 64 portrait), used exactly as it is.
+   * The files are matched to the characters by their looks (person4 = Odyssefs, person3 = Johannes, person1 = Jin, person2 = Julian).
    */
   characters: [
-    { id: 'k1', name: 'Odyssefs', title: 'IT-avdelingen', startWeapon: 'powerCycle', bonus: { maxEnergy: 20 }, bonusText: '+20 maks energi' },
-    { id: 'k2', name: 'Johannes', title: 'IT-avdelingen', startWeapon: 'toner', bonus: { help: 0.10 }, bonusText: '+10 % hjelp' },
-    { id: 'k3', name: 'Jin', title: 'IT-avdelingen', startWeapon: 'hdmi', bonus: { speed: 0.10 }, bonusText: '+10 % bevegelseshastighet' },
-    { id: 'k4', name: 'Julian', title: 'IT-avdelingen', startWeapon: 'mouse', bonus: { pick: 0.25 }, bonusText: '+25 % radius for å plukke opp ticket-lapper' },
+    { id: 'k1', name: 'Odyssefs', title: 'IT-avdelingen', sprite: 'assets/karakterer/figur_person4.png', portrait: 'assets/karakterer/portrett_person4.png', startWeapon: 'powerCycle', bonus: { maxEnergy: 20 }, bonusText: '+20 maks energi' },
+    { id: 'k2', name: 'Johannes', title: 'IT-avdelingen', sprite: 'assets/karakterer/figur_person3.png', portrait: 'assets/karakterer/portrett_person3.png', startWeapon: 'toner', bonus: { help: 0.10 }, bonusText: '+10 % hjelp' },
+    { id: 'k3', name: 'Jin', title: 'IT-avdelingen', sprite: 'assets/karakterer/figur_person1.png', portrait: 'assets/karakterer/portrett_person1.png', startWeapon: 'hdmi', bonus: { speed: 0.10 }, bonusText: '+10 % bevegelseshastighet' },
+    { id: 'k4', name: 'Julian', title: 'IT-avdelingen', sprite: 'assets/karakterer/figur_person2.png', portrait: 'assets/karakterer/portrett_person2.png', startWeapon: 'mouse', bonus: { pick: 0.25 }, bonusText: '+25 % radius for å plukke opp ticket-lapper' },
   ],
 
   /** The «Haster!» ("Urgent!") sender: keeps its distance and sends emails («Haster!!!») at the player. */
@@ -533,23 +534,25 @@ export const CONFIG = {
       description: 'En liten skytsengel svever rundt deg og kaster mini-printere som hjelper advokatene.',
       levels: [
         /**
+         * The mini printers work like a molotov: they land where the lawyer stood, stand completely still,
+         * and shoot a sheet of paper at the nearest lawyer within «range» every «every» seconds.
          * perThrow = mini printers per throw, max = max at the same time (fixed and the same for everyone),
-         * life = seconds a mini printer lasts, help = help per paper burst, burst = seconds between bursts, radius = burst radius.
+         * life = seconds a mini printer stands and shoots, help = help per sheet.
          */
-        { perThrow: 1, max: 2, interval: 2.6, life: 4, help: 15, burst: 0.5, radius: 30, text: 'En liten skytsengel svever rundt deg og kaster mini-printere som hjelper advokatene.' },
-        { perThrow: 1, max: 2, interval: 2.6, life: 4, help: 17.25, burst: 0.5, radius: 30, text: '+15 % hjelp.' },
-        { perThrow: 1, max: 2, interval: 2.1, life: 4, help: 17.25, burst: 0.5, radius: 30, text: 'Kaster oftere.' },
-        { perThrow: 2, max: 4, interval: 2.1, life: 4, help: 17.25, burst: 0.5, radius: 30, text: '2 mini-printere per kast, maks 4 samtidig.' },
-        { perThrow: 2, max: 4, interval: 2.1, life: 5, help: 17.25, burst: 0.5, radius: 30, text: 'Mini-printerne varer 1 sekund lenger.' },
-        { perThrow: 2, max: 4, interval: 2.1, life: 5, help: 19.84, burst: 0.5, radius: 30, text: '+15 % hjelp.' },
-        { perThrow: 2, max: 4, interval: 1.7, life: 5, help: 19.84, burst: 0.5, radius: 30, text: 'Kaster oftere.' },
-        { perThrow: 3, max: 6, interval: 1.7, life: 5, help: 19.84, burst: 0.5, radius: 30, text: '3 mini-printere per kast, maks 6 samtidig.' },
+        { perThrow: 1, max: 2, interval: 2.6, life: 4, help: 37, every: 0.3, range: 60, text: 'En liten skytsengel svever rundt deg og kaster mini-printere som hjelper advokatene.' },
+        { perThrow: 1, max: 2, interval: 2.6, life: 4, help: 43, every: 0.3, range: 60, text: '+15 % hjelp.' },
+        { perThrow: 1, max: 2, interval: 2.1, life: 4, help: 43, every: 0.3, range: 60, text: 'Kaster oftere.' },
+        { perThrow: 2, max: 4, interval: 2.1, life: 4, help: 43, every: 0.3, range: 60, text: '2 mini-printere per kast, maks 4 samtidig.' },
+        { perThrow: 2, max: 4, interval: 2.1, life: 5, help: 43, every: 0.3, range: 69, text: 'Mini-printerne står og skyter 1 sekund lenger, og +15 % rekkevidde.' },
+        { perThrow: 2, max: 4, interval: 2.1, life: 5, help: 49.5, every: 0.3, range: 69, text: '+15 % hjelp.' },
+        { perThrow: 2, max: 4, interval: 1.7, life: 5, help: 49.5, every: 0.3, range: 69, text: 'Kaster oftere.' },
+        { perThrow: 3, max: 6, interval: 1.7, life: 5, help: 49.5, every: 0.3, range: 69, text: '3 mini-printere per kast, maks 6 samtidig.' },
       ],
       combination: {
         passive: 'biggerCan', name: 'Himmelsk serviceavtale',
         text: 'Lysende glorie og større vinger: dobbelt så mange mini-printere, som avslutter med papirkonfetti.',
         /** confetti = help in the final burst of paper confetti, confettiRadius = its radius. */
-        stats: { perThrow: 6, max: 10, interval: 1.7, life: 5, help: 10, burst: 0.5, radius: 30, confetti: 40, confettiRadius: 50 },
+        stats: { perThrow: 6, max: 10, interval: 1.7, life: 5, help: 27.5, every: 0.3, range: 69, confetti: 40, confettiRadius: 50 },
       },
     },
     headset: {

@@ -11,10 +11,12 @@ long as you can, collect tickets, and climb the shared daily leaderboard.
 
 ## Features
 
-- **Plain JavaScript, no build step.** HTML5 Canvas 2D and ES modules, with no npm packages, external scripts,
-  images or sound files. Everything (sprites, pixel font, sound) is generated in code. The total size is about 0.4 MB.
+- **Plain JavaScript, no build step.** HTML5 Canvas 2D and ES modules, with no npm packages, external scripts or
+  sound files. The four playable characters are the client's own pixel art (`assets/karakterer/`, 8 small PNG files);
+  everything else (sprites, pixel font, sound) is generated in code. The total size is about 0.4 MB.
 - **Pixel art** rendered at 640 × 360 and scaled up with crisp pixels. Every screen sees the same area of the map.
-- **Four playable characters**, each with its own starting weapon and bonus.
+- **Four playable characters**, each with its own starting weapon and bonus, drawn by the client (used pixel for pixel,
+  always at whole-number scales).
 - **11 weapons** (max 4 at once), **12 passives** (max 6 at once) and **11 combinations** (evolutions), including a
   chain-lightning key, homing Teams alerts and a guardian angel who throws mini printers.
 - **Diverse, procedurally composed lawyers**, including a ranged type that sends «Haster!» emails.
@@ -78,13 +80,13 @@ Example: `PORT=8080 DATA_DIR=/var/lib/hds node server/server.js`
 as a systemd service, Windows service or `pm2`), and share the URL. The server delivers both the game and
 the leaderboard API.
 
-- Only `index.html`, `css/`, `js/` and `fonts/` are served publicly. The server code and database are not.
+- Only `index.html`, `css/`, `js/`, `fonts/` and `assets/` are served publicly. The server code and database are not.
 - Behind a reverse proxy (nginx, IIS, Caddy), forward both `/` and `/api/` to the Node server.
 - Keep `DATA_DIR` on a normal local disk, not in a OneDrive/Dropbox-synced folder, because syncing can lock SQLite files.
 - The server rejects unrealistic scores and rate-limits submissions. This is light anti-cheat meant for a
   friendly internal competition.
 
-**Static hosting only:** `index.html`, `css/`, `js/` and `fonts/` can go on any static host. For example,
+**Static hosting only:** `index.html`, `css/`, `js/`, `fonts/` and `assets/` can go on any static host. For example,
 `python -m http.server` works for local testing. The game is fully playable, but it shows "Topplisten er
 utilgjengelig" (leaderboard unavailable) until `/api/leaderboard` and `/api/score` respond. To use different
 storage, replace `fetchLeaderboard(date)` and `submitScore(entry)` in `js/leaderboard.js`.
@@ -102,6 +104,7 @@ storage, replace `fetchLeaderboard(date)` and `submitScore(entry)` in `js/leader
 index.html            Page and menus
 css/style.css         Menu and HUD styling
 fonts/                Pixel font «KontorPiksel» (generated, CC0)
+assets/karakterer/    The client's pixel art for the four playable characters (32 × 32 figures, 64 × 64 portraits)
 js/config.js          ALL balance numbers (weapons, enemies, curve, characters …)
 js/game.js            Game state and fixed-timestep update (60 per second)
 js/player.js          The player (movement, energy, pickups)
@@ -113,7 +116,8 @@ js/tickets.js, js/score.js   Tickets / energy drinks / new PC, points and multip
 js/map.js             Office map layout (zones, decorations, doors)
 js/renderer.js        World renderer (640 × 360 pixel art)
 js/hud.js             HUD and minimap
-js/figures.js         Characters and lawyers (palette-indexed pixel grids)
+js/figures.js         Lawyers and bosses (palette-indexed pixel grids) and the playable characters' sprite sheets
+js/johan.js           The final boss Johan (figure and portrait in the same style as the client's pixel art)
 js/sprites.js, js/icons.js, js/pixel.js, js/pixelfont.js   Graphics
 js/settings.js, js/sound.js, js/input.js   Settings, sound (Web Audio), keyboard/touch
 js/leaderboard.js     Leaderboard client
