@@ -58,6 +58,11 @@ export function bossTimeAt(n) {
 
 /** Lets the next boss in when it is time (waits if one is still out, which only happens in debug mode). */
 export function updateBossSchedule(s) {
+  // A banner a few seconds before the boss arrives, so nobody is surprised
+  if (!s.bossWarned && s.nextBoss < 1e8 && s.time >= s.nextBoss - B.warnBefore) {
+    s.bossWarned = true;
+    s.events.push('bossSoon:' + bossTypeAt(s.bossNo));
+  }
   if (s.time < s.nextBoss || activeBoss(s)) return;
   spawnBoss(s, bossTypeAt(s.bossNo));
 }
@@ -103,6 +108,7 @@ export function spawnBoss(s, type) {
   s.boss = e;
   s.bossNo++;
   s.nextBoss = bossTimeAt(s.bossNo);
+  s.bossWarned = false;
   s.stat.bossesTotal++;
   s.stat.bossLog.push({ type, helped: false, time: s.time, helpedAt: 0, returnNo });
   s.events.push('boss:' + type);
@@ -351,6 +357,9 @@ export function bossHelped(s, e) {
     }
   }
   effect(s, 'bubble', e.x, e.y - 44, 2.2, 0, 0, 0, false, k.happyText);
+  // Every helped boss gives one more reroll and one more banish for the level-up cards
+  s.rerolls += CONFIG.upgrades.perBoss;
+  s.banishes += CONFIG.upgrades.perBoss;
   if (s.boss === e) s.boss = null;
   s.events.push('bossHappy:' + e.bossType);
 }

@@ -90,6 +90,17 @@ function glow(radius, color, strength = 0.75) {
   return { canvas: c, w: s, h: s, ax: radius, ay: radius };
 }
 
+/** A copy of a sprite with every opaque pixel tinted (the red blink on enemy projectiles). Made once, never per frame. */
+function tinted(sp, color) {
+  const c = makeCanvas(sp.w, sp.h);
+  const ctx = ctx2d(c);
+  ctx.drawImage(sp.canvas, 0, 0);
+  ctx.globalCompositeOperation = 'source-atop';
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, sp.w, sp.h);
+  return { canvas: c, w: sp.w, h: sp.h, ax: sp.ax, ay: sp.ay };
+}
+
 /** Semi-transparent ellipse shadow under figures. */
 function shadow(w, h) {
   const c = makeCanvas(w, h);
@@ -304,7 +315,19 @@ function makeObjects() {
   const mini = [0, 1].map((f) => make(15, 14, 7, 9, miniDraw(f, false)));
   const miniEvo = [0, 1].map((f) => make(15, 14, 7, 9, miniDraw(f, true)));
 
-  return {
+  /** «Pakke fra leverandøren»: a cardboard box with tape, a label and a gold sticker. */
+  const pkg = make(16, 14, 8, 8, (r) => {
+    r.rect(1, 3, 14, 10, C.WOOD);
+    r.rect(1, 3, 14, 3, C.WOOD_L);
+    r.rect(1, 12, 14, 1, C.WOOD_M);
+    r.rect(7, 3, 2, 10, C.BEIGE);
+    r.rect(2, 8, 4, 3, C.WHITE);
+    r.rect(3, 9, 2, 1, C.GRAY);
+    r.stamp('.#. ### .#.', 10, 8, { '#': C.GOLD });
+  });
+  const items = {
+    package: pkg,
+    packageGlow: glow(18, '#ff9f43', 0.75),
     note, ticketShot: ticketShot(11, 8), ticketSmall: ticketShot(7, 5), cartridge, puddle, sheet, calendar,
     angel, angelEvo, mini, miniEvo,
     angelGlow: glow(14, '#fff2a8', 0.55),
@@ -357,6 +380,13 @@ function makeObjects() {
     crown: make(11, 8, 5, 8, (r) => r.stamp('#...#...# #...#...# ##.###.## ######### ooooooooo #########', 1, 1, { '#': C.GOLD, o: C.GOLD_M })),
     shadows: { small: shadow(14, 5), medium: shadow(18, 6), large: shadow(22, 7), boss: shadow(44, 12), player: shadow(18, 6) },
   };
+  // Red-tinted copies of every enemy projectile that can hurt: they blink between the two, so they are easy to spot.
+  const RED = 'rgba(255, 48, 48, 0.8)';
+  items.red = {
+    email: tinted(items.email, RED), ticket: tinted(items.ticketShot, RED), ticketSmall: tinted(items.ticketSmall, RED),
+    paper: tinted(items.sheet, RED), calendar: tinted(items.calendar, RED), cartridge: items.cartridge.map((c) => tinted(c, RED)),
+  };
+  return items;
 }
 
 // ---------- Office decor ----------

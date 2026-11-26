@@ -48,8 +48,9 @@ Every feature should be checked against these. If a proposal conflicts with a pi
 - Sound is off by default. It is an office.
 
 ### The run
-- A run is one shift. The clock counts up. Difficulty rises in phases, with a steep "overtime" wall that
-  caps realistic runs around the fifteen-minute mark. There is no win state, only how far you got.
+- A run is one shift. The clock counts up. Difficulty rises linearly, with scheduled and rare events for
+  variety, and a steep "overtime" wall that caps realistic runs around the fifteen-minute mark. The last boss
+  and beyond should be decided by the build and the luck of the cards. There is no win state, only how far you got.
 - Helping lawyers gives experience. Levelling up offers a choice of cards: a new weapon, a weapon upgrade, or
   a passive. Weapon slots and passive slots are capped so builds have to be chosen, not hoarded.
 - Tickets dropped by helped lawyers are the score pickup. Letting them expire is the cost of playing badly.
@@ -61,8 +62,10 @@ Every feature should be checked against these. If a proposal conflicts with a pi
 
 ### Weapons, passives and combinations
 - Weapons are IT solutions with a joke name and a distinct firing pattern (orbit, chain, boomerang, beam,
-  homing, shield, summon, area). Each weapon has a level track. Max level plus a specific passive unlocks
-  a combination with a new name and a clearly bigger effect.
+  homing, shield, summon, area). A weapon has no level cap: every level-up card is one specific increment
+  (help, interval, count, range, or an effect modifier), cards have a rarity tier, and counts are capped for
+  performance. Enough increments plus a specific passive unlock a combination with a new name and a clearly
+  bigger effect, which the later increments keep growing from.
 - Discovered combinations are shown on an in-game notice board so players learn the recipes by playing.
 - Passives are simple stat changes with office names (faster SSD, ergonomic chair, certification).
 - Every weapon should be measurable in isolation (help per second) and its combination should be in a
@@ -98,7 +101,8 @@ Every feature should be checked against these. If a proposal conflicts with a pi
 
 ### Accessibility and settings
 - Keyboard and touch are first-class. Touch uses a virtual joystick and on-screen pause.
-- Settings cover volume, fullscreen, game scale, UI scale, minimap size, screen shake and reduced flashing.
+- Settings cover volume, fullscreen, game scale, UI scale, minimap size, screen shake, reduced flashing, hit
+  numbers and frustration bars.
   Reduced flashing defaults on when the browser reports reduced motion. All settings persist locally and
   apply immediately.
 - Any new visual effect must respect the reduced-flashing setting. Any new input must work on touch.

@@ -39,8 +39,10 @@ const input = new Input(window);
 
 /** @type {Game | null} */
 let game = null;
-/** 'start' | 'game' | 'pause' | 'levelUp' | 'settings' | 'ending' | 'gameOver' */
+/** 'start' | 'game' | 'pause' | 'levelUp' | 'package' | 'settings' | 'ending' | 'gameOver' */
 let mode = 'start';
+/** Level-up: «B» was pressed, so the next number banishes a card instead of choosing it. */
+let banishMode = false;
 /** Where the settings were opened from (for «Tilbake» ("Back")). */
 let settingsFrom = 'start';
 let date = dateOslo();
@@ -168,6 +170,7 @@ function pause() {
   if (mode !== 'game' || stress) return;
   mode = 'pause';
   input.active = false;
+  if (game) ui.drawStatSheet(game, 'pauseStats');
   ui.showScreen('pause');
 }
 
@@ -197,20 +200,72 @@ function openLevelUp() {
   if (!game) return;
   mode = 'levelUp';
   input.active = false;
+  banishMode = false;
   cardsReady = performance.now() + 350; // prevents picking a card by accident
-  ui.showCards(game, chooseCard);
+  ui.showCards(game, chooseCard, { reroll, banish });
   ui.showScreen('levelUp');
   sound.play('level');
 }
 
 function chooseCard(i) {
   if (!game || mode !== 'levelUp' || performance.now() < cardsReady) return;
+  if (banishMode) {
+    banish(i);
+    return;
+  }
   game.chooseCard(i);
   handleEvents();
   if (game.status === 'levelUp') {
     openLevelUp(); // several levels at once
     return;
   }
+  backToGame();
+}
+
+/** «Nytt utvalg»: new cards (if there are rerolls left). */
+function reroll() {
+  if (!game || mode !== 'levelUp' || performance.now() < cardsReady) return;
+  if (!game.reroll()) return;
+  handleEvents();
+  banishMode = false;
+  ui.showCards(game, chooseCard, { reroll, banish });
+}
+
+/** «Fjern kortet»: card no. i is never offered again this shift. */
+function banish(i) {
+  if (!game || mode !== 'levelUp' || performance.now() < cardsReady) return;
+  banishMode = false;
+  if (!game.banish(i)) {
+    ui.setBanishMode(false);
+    return;
+  }
+  handleEvents();
+  ui.showCards(game, chooseCard, { reroll, banish });
+}
+
+/** The supplier package: shows what was in it until the player continues. */
+function openPackage() {
+  if (!game || !game.packageCards) return;
+  mode = 'package';
+  input.active = false;
+  cardsReady = performance.now() + 300;
+  ui.showPackage(game, closePackage);
+  ui.showScreen('package');
+  sound.play('bonus');
+}
+
+function closePackage() {
+  if (!game || mode !== 'package' || performance.now() < cardsReady) return;
+  game.closePackage();
+  handleEvents();
+  if (game.status === 'levelUp') {
+    openLevelUp();
+    return;
+  }
+  backToGame();
+}
+
+function backToGame() {
   mode = 'game';
   acc = 0;
   input.reset();
@@ -330,6 +385,9 @@ function handleEvents() {
       case 'drinkSpawned': if (game.stat.drinks === 0 && game.time < 60) hud.showBanner('Energidrikk på kartet – følg den grønne pilen!', 'gold', 3500); break;
       case 'newPcFx': sound.play('newPcFx'); hud.showBanner('Ny PC! Alle på skjermen er fornøyde', 'gold'); break;
       case 'upgraded': hud.iconsChanged(); break;
+      case 'reroll': case 'banish': sound.play('click'); break;
+      case 'revive': sound.play('bonus'); hud.showBanner('Sikkerhetskopi gjenopprettet!', 'gold', 2600); break;
+      case 'packageDropped': hud.showBanner('Pakke fra leverandøren! Hent den', 'gold', 3000); break;
       case 'done': sound.play('done'); break;
       default:
         if (name.startsWith('boss:')) {
@@ -339,6 +397,10 @@ function handleEvents() {
           sound.play(/** @type {any} */ (type === 'deadline' ? 'boss' : type));
           if (type === 'johan') hud.showIntro(renderer.fig.johanPortrait(), k.title, k.line);
           else hud.showBanner(k.intro, 'boss', 4200, k.line);
+        } else if (name.startsWith('bossSoon:')) {
+          const k = CONFIG.bosses[name.slice(9)];
+          sound.play('tell');
+          hud.showBanner(`${k.name} kommer om ${CONFIG.bosses.warnBefore} sekunder`, 'boss', 3000);
         } else if (name.startsWith('bossHappy:')) {
           const type = name.slice(10);
           sound.play('bonus');
@@ -347,6 +409,12 @@ function handleEvents() {
           const id = name.slice(12);
           sound.play('bonus');
           hud.showBanner(`Kombinasjon: ${CONFIG.weapons[id].combination.name}!`, 'gold', 3500);
+        } else if (name.startsWith('event:')) {
+          // Lunch rush, partner meeting, coffee break … (see CONFIG.events)
+          const id = name.slice(6);
+          const k = CONFIG.events.defs[id];
+          sound.play(id === 'serverCrash' || id === 'partnerMeeting' ? 'boss' : 'tell');
+          hud.showBanner(k.name, id === 'serverCrash' || id === 'partnerMeeting' ? 'boss' : id === 'coffeeBreak' || id === 'freeLunch' ? 'gold' : '', 3200, k.text);
         }
     }
   }
@@ -391,6 +459,9 @@ function onFrame(ms) {
     if (game.status === 'levelUp') {
       if (stress) game.chooseCard(0);
       else openLevelUp();
+    } else if (game.status === 'package') {
+      if (stress) game.closePackage();
+      else openPackage();
     } else if (game.status === 'done') {
       // Fired: the game freezes for a moment with «DU HAR FÅTT SPARKEN!» before the end screen
       mode = 'ending';
@@ -523,6 +594,16 @@ window.addEventListener('keydown', (e) => {
     else if (mode === 'settings' && e.code === 'Escape') closeSettings();
   } else if (mode === 'levelUp' && /^(Digit|Numpad)[1-4]$/.test(e.code)) {
     chooseCard(Number(e.code.slice(-1)) - 1);
+  } else if (mode === 'levelUp' && e.code === 'KeyR') {
+    reroll();
+  } else if (mode === 'levelUp' && e.code === 'KeyB') {
+    if (game && game.banishes > 0) {
+      banishMode = !banishMode;
+      ui.setBanishMode(banishMode);
+    }
+  } else if (mode === 'package' && (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape')) {
+    e.preventDefault();
+    closePackage();
   } else if (mode === 'characterSelect') {
     if (/^(Digit|Numpad)[1-4]$/.test(e.code)) selectCharacter(Number(e.code.slice(-1)) - 1, true);
     else if (e.code === 'ArrowRight' || e.code === 'ArrowDown' || e.code === 'KeyD' || e.code === 'KeyS') { e.preventDefault(); selectCharacter(selectedCharacter + 1, false); /** @type {HTMLElement | null} */ (document.querySelectorAll('.character')[selectedCharacter])?.focus(); }
@@ -578,7 +659,7 @@ function startBossTest(n) {
   if (!game) return;
   game.debugBossTest(n, TEST_PLANS[game.character]);
   hud.iconsChanged();
-  console.log(`[bosstest] boss ${n}: ${game.player.weapons.map((w) => w.id + (w.evo ? '*' : ' ' + w.level)).join(', ')}`);
+  console.log(`[bosstest] boss ${n}: ${game.player.weapons.map((w) => w.id + (w.evo ? '*' : '') + ' +' + w.picks).join(', ')}`);
 }
 
 function stressInput() {
@@ -698,6 +779,7 @@ if (DEBUG) {
     hud.iconsChanged();
     handleEvents();
     if (game.status === 'levelUp' && mode === 'game') openLevelUp();
+    if (game.status === 'package' && mode === 'game') openPackage();
   });
   // Make the game available in the console for testing.
   Object.defineProperty(window, 'hds', { get: () => ({ game, CONFIG, mode, renderer, hud, input, settings, perf, startStressTest }) });

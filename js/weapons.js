@@ -14,6 +14,8 @@ const PICKED = /** @type {number[]} */ ([]);
 export function makeProjectile() {
   return {
     type: 'toner', x: 0, y: 0, vx: 0, vy: 0, life: 0, help: 0, splash: 0, through: 0, angle: 0, evo: false,
+    /** The effect modifiers of the weapon that fired it (a reference to the weapon's own object, never copied). @type {any} */
+    fx: null,
     /** The uids of lawyers the key has already hit (reused list). */
     struck: /** @type {number[]} */ ([]), nHit: 0,
     /** Ctrl+Z: on its way out or back, and how far it has flown. Chains: target and hops left. */
@@ -25,9 +27,39 @@ export function makeProjectile() {
   };
 }
 
-/** The numbers that apply to a weapon right now (the level, or the combination). */
+/** The numbers that apply to a weapon right now (computed from base/combination + the increments it has taken). */
 export function weaponStats(w) {
-  return w.evo ? V[w.id].combination.stats : V[w.id].levels[w.level - 1];
+  return w.stats;
+}
+
+/**
+ * Recomputes a weapon's numbers from its base (or the combination's stats) and the increments it has taken
+ * (w.up = steps per stat, w.fx = effect levels). Called when the weapon changes, never per frame.
+ * Growth rules: add = +n per step, pct = +f × base per step, mul = × f per step (with min/max), set/once = one-time.
+ */
+export function refreshWeapon(w) {
+  const def = V[w.id];
+  const base = w.evo ? def.combination.stats : def.base;
+  const t = { ...base, fx: w.fx };
+  for (const stat of Object.keys(def.growth)) {
+    const n = w.up[stat] || 0;
+    if (!n || base[stat] === undefined) continue;
+    const rule = def.growth[stat];
+    if (rule.set !== undefined) {
+      t[stat] = rule.set;
+      continue;
+    }
+    let v = base[stat];
+    if (rule.add) v += rule.add * n;
+    // pct steps are a share of the base (the combination's own base after combining), never compounding
+    if (rule.pct) v += rule.pct * base[stat] * n;
+    if (rule.mul) v *= Math.pow(rule.mul, n);
+    if (rule.min !== undefined) v = Math.max(rule.min, v);
+    if (rule.max !== undefined) v = Math.min(rule.max, v);
+    t[stat] = Math.round(v * 1000) / 1000;
+  }
+  w.stats = t;
+  return t;
 }
 
 /** The name shown (the combination's name if the weapon is combined). */
@@ -42,7 +74,7 @@ function activatePowerCycle(s, w, t) {
   const n = s.grid.find(p.x, p.y, R, out);
   for (let i = 0; i < n; i++) {
     const e = f[out[i]];
-    help(s, e, t.help, 'powerCycle');
+    help(s, e, t.help, 'powerCycle', t.fx);
     if (t.nudge && e.active && e.type !== 'boss') {
       const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1;
       e.x += (dx / d) * t.nudge;
@@ -74,6 +106,8 @@ function activateToner(s, w, t) {
     pr.angle = a;
     pr.evo = w.evo;
     pr.nHit = 0;
+    pr.fx = t.fx;
+    pr.through = t.fx.pierce || 0;
   }
 }
 
@@ -125,6 +159,7 @@ function activatePassword(s, w, t) {
     pr.evo = w.evo;
     pr.nHit = 0;
     pr.targetUid = target.uid;
+    pr.fx = t.fx;
     s.teamsTargets.set(pr, target);
   }
 }
@@ -144,7 +179,7 @@ function activateHdmi(s, w, t) {
       const back = t.back && diff >= Math.PI - t.arc / 2;
       if (!front && !back) continue;
     }
-    help(s, e, t.help, 'hdmi');
+    help(s, e, t.help, 'hdmi', t.fx);
   }
   effect(s, 'swing', p.x, p.y, 0.24, R, base, w.evo ? 2 : t.back ? 1 : 0, true);
 }
@@ -153,12 +188,13 @@ function activateHdmi(s, w, t) {
 function activateRemote(s, w, t) {
   const p = s.player;
   let picked = 0;
+  const reach = t.reach * p.mod.area;
   for (let j = 0; j < t.hits; j++) {
-    const e = closest(s, p.x, p.y, 330, PICKED, picked);
+    const e = closest(s, p.x, p.y, reach, PICKED, picked);
     if (!e) break;
     PICKED[picked++] = e.uid;
     effect(s, 'flash', e.x, e.y, 0.3, e.r, 0, w.evo ? 1 : 0);
-    help(s, e, t.help, 'remote');
+    help(s, e, t.help, 'remote', t.fx);
   }
 }
 
@@ -174,7 +210,7 @@ function updateMouse(s, w, t, dt) {
       const e = f[out[j]];
       if (e.mouseCd <= 0) {
         e.mouseCd = t.hitPause;
-        help(s, e, t.help, 'mouse');
+        help(s, e, t.help, 'mouse', t.fx);
       }
     }
   }
@@ -236,6 +272,7 @@ function activateCtrlz(s, w, t) {
     pr.angle = a;
     pr.evo = false;
     pr.nHit = 0;
+    pr.fx = t.fx;
   }
 }
 
@@ -274,6 +311,8 @@ function launchAlert(s, x, y, angle, t, target, split, evo) {
   pr.range = t.reach * p.mod.area;
   pr.evo = evo;
   pr.nHit = 0;
+  pr.fx = t.fx ?? null;
+  pr.through = t.fx ? t.fx.pierce || 0 : 0;
   pr.targetUid = target.uid;
   s.teamsTargets.set(pr, target);
 }
@@ -329,6 +368,7 @@ function updateAngel(s, w, t, dt) {
     pr.evo = w.evo;
     pr.angle = 0;
     pr.nHit = 0;
+    pr.fx = t.fx;
   }
 }
 
@@ -380,7 +420,7 @@ function beamHits(s, angle, t) {
     const e = f[out[i]];
     const dx = e.x - p.x, dy = e.y - p.y;
     const along = dx * cos + dy * sin, across = Math.abs(-dx * sin + dy * cos);
-    if (along >= -e.r && along <= L + e.r && across <= B / 2 + e.r) help(s, e, t.help, 'beam');
+    if (along >= -e.r && along <= L + e.r && across <= B / 2 + e.r) help(s, e, t.help, 'beam', t.fx);
   }
 }
 
@@ -411,7 +451,7 @@ export function tryBlock(s) {
     const R = t.pulseRadius * p.mod.area;
     const out = s.hitList, f = s.enemies.items;
     const n = s.grid.find(p.x, p.y, R, out);
-    for (let j = 0; j < n; j++) help(s, f[out[j]], t.help, 'headset');
+    for (let j = 0; j < n; j++) help(s, f[out[j]], t.help, 'headset', t.fx);
     effect(s, 'block', p.x, p.y, 0.4, R, 0, w.evo ? 1 : 0, true);
     s.stat.blocked++;
     s.events.push('block');
@@ -433,7 +473,7 @@ function updateSpiral(s, w, t, dt) {
       const e = f[out[j]];
       if (e.ctrlCd <= 0) {
         e.ctrlCd = t.hitPause;
-        help(s, e, t.help, 'ctrlz');
+        help(s, e, t.help, 'ctrlz', t.fx);
       }
     }
   }
@@ -550,7 +590,7 @@ export function updateProjectiles(s, dt) {
       const n = s.grid.find(pr.x, pr.y, 7, out);
       for (let j = 0; j < n; j++) {
         const e = f[out[j]];
-        if (newHit(pr, e.uid)) help(s, e, pr.help, 'ctrlz');
+        if (newHit(pr, e.uid)) help(s, e, pr.help, 'ctrlz', pr.fx);
       }
       if (pr.life <= 0) removeProjectile(s, i);
       continue;
@@ -575,7 +615,7 @@ export function updateProjectiles(s, dt) {
         pr.x = target.x;
         pr.y = target.y;
         newHit(pr, target.uid);
-        help(s, target, pr.help, 'password');
+        help(s, target, pr.help, 'password', pr.fx);
         effect(s, 'flash', target.x, target.y, 0.18, target.r, 0, 3);
         pr.bounces--;
         const next = pr.bounces > 0 ? closest(s, pr.x, pr.y, pr.range, pr.struck, Math.min(pr.nHit, 64)) : null;
@@ -620,18 +660,29 @@ export function updateProjectiles(s, dt) {
       pr.y += pr.vy * dt;
       pr.angle = Math.atan2(pr.vy, pr.vx);
       if (target && (target.x - pr.x) ** 2 + (target.y - pr.y) ** 2 <= (target.r + 4) ** 2) {
-        help(s, target, pr.help, 'teams');
+        newHit(pr, target.uid);
+        help(s, target, pr.help, 'teams', pr.fx);
         effect(s, 'flash', target.x, target.y, 0.2, target.r, 0, 2);
         // Allmøte på Teams (town hall): splits into new homing alerts (which do not split again)
         if (pr.split > 0) {
           let picked = 0;
           PICKED[picked++] = target.uid;
-          const t = weaponStats({ id: 'teams', evo: true, level: 8 });
+          const t = V.teams.combination.stats;
           for (let k = 0; k < pr.split && s.projCounter.teams < MAX_PROJ; k++) {
             const next = closest(s, pr.x, pr.y, pr.range, PICKED, picked);
             if (!next) break;
             PICKED[picked++] = next.uid;
             launchAlert(s, pr.x, pr.y, pr.angle + (k - 1) * 1.2, t, next, 0, true);
+          }
+        }
+        // «Gjennomtrengende»: the alert goes on to the next lawyer it has not hit yet
+        if (pr.through > 0) {
+          const next = closest(s, pr.x, pr.y, pr.range, pr.struck, Math.min(pr.nHit, 64));
+          if (next) {
+            pr.through--;
+            pr.targetUid = next.uid;
+            s.teamsTargets.set(pr, next);
+            continue;
           }
         }
         removeProjectile(s, i);
@@ -664,7 +715,7 @@ export function updateProjectiles(s, dt) {
         if (pr.burst <= 0) {
           pr.burst += 0.5;
           const n = s.grid.find(pr.x, pr.y, pr.radius, out);
-          for (let j = 0; j < n; j++) help(s, f[out[j]], pr.help, 'angel');
+          for (let j = 0; j < n; j++) help(s, f[out[j]], pr.help, 'angel', pr.fx);
           effect(s, 'paperBurst', pr.x, pr.y - 4, 0.35, pr.radius, 0, pr.evo ? 1 : 0);
         }
       }
@@ -672,7 +723,7 @@ export function updateProjectiles(s, dt) {
         if (pr.confetti > 0) {
           // Himmelsk serviceavtale (heavenly service agreement): a final burst of paper confetti
           const n = s.grid.find(pr.x, pr.y, pr.confettiRadius, out);
-          for (let j = 0; j < n; j++) help(s, f[out[j]], pr.confetti, 'angel');
+          for (let j = 0; j < n; j++) help(s, f[out[j]], pr.confetti, 'angel', pr.fx);
           effect(s, 'confetti', pr.x, pr.y, 0.6, pr.confettiRadius);
         }
         effect(s, 'poof', pr.x, pr.y, 0.4, 8);
@@ -686,11 +737,15 @@ export function updateProjectiles(s, dt) {
     let done = pr.life <= 0 || !inView(s, pr.x, pr.y, 24);
     if (pr.type === 'toner') {
       // Bursts on the first hit (or when it lands) and helps everyone in the splash.
-      if (done || s.grid.find(pr.x, pr.y, 4, out, 1) > 0) {
+      // «Gjennomtrengende»: bursts, then flies on and bursts again on the next lawyer it has not hit.
+      let hit = done;
+      if (!hit && s.grid.find(pr.x, pr.y, 4, out, 1) > 0) hit = newHit(pr, f[out[0]].uid);
+      if (hit) {
         const n = s.grid.find(pr.x, pr.y, pr.splash, out);
-        for (let j = 0; j < n; j++) help(s, f[out[j]], pr.help, 'toner');
+        for (let j = 0; j < n; j++) help(s, f[out[j]], pr.help, 'toner', pr.fx);
         effect(s, 'splash', pr.x, pr.y, 0.4, pr.splash, pr.angle, pr.evo ? 1 : 0);
-        done = true;
+        if (pr.through > 0 && !done) pr.through--;
+        else done = true;
       }
     }
     if (done) removeProjectile(s, i);

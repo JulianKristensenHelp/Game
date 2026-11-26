@@ -11,7 +11,7 @@ import { makeShot, makePuddle, updateEnemyShots, spawnBoss, bossTypeAt, bossTime
 import { makeProjectile, updateWeapons, updateProjectiles } from './weapons.js';
 import { makeTicket, makePickup, updateTickets, dropPickup, updateDrinks } from './tickets.js';
 import { makeEffect, updateEffects } from './effects.js';
-import { giveWeapon, givePassive, giveCombination, makeCards, useCard, computeBonuses } from './upgrades.js';
+import { giveWeapon, givePassive, giveCombination, giveEvenUpgrades, makeCards, useCard, computeBonuses, openPackage } from './upgrades.js';
 import { xpNeeded } from './score.js';
 
 const VB = CONFIG.view.width, VH = CONFIG.view.height;
@@ -47,10 +47,14 @@ export class Game {
       crit: new Rng(date + '|krit'),
       /** dodge («Brannmur») */
       luck: new Rng(date + '|flaks'),
+      /** what is in a supplier package */
+      package: new Rng(date + '|pakke'),
+      /** the rare events and which direction the scheduled ones come from */
+      events: new Rng(date + '|hendelser'),
       /** looks only – never affects anything else */
       looks: new Rng(date + '|utseende'),
     };
-    /** 'running' | 'levelUp' | 'done' */
+    /** 'running' | 'levelUp' | 'package' | 'done' */
     this.status = 'running';
     this.time = 0;
     this.player = makePlayer();
@@ -92,11 +96,18 @@ export class Game {
     this.nextWave = CONFIG.waves.first;
     this.nextUrgent = CONFIG.enemies.urgent.from;
     this.nextBoss = bossTimeAt(0);
+    /** The «… kommer om 10 sekunder» banner has been shown for the next boss. */
+    this.bossWarned = false;
     /** The boss that is out right now (see bosses.js). @type {any} */
     this.boss = null;
     /** Set when the player got fired (a boss's countdown ran out). @type {null | {type: string, name: string, time: number}} */
     this.fired = null;
     this.nextDrink = CONFIG.energyDrink.first;
+    /** Events (version 6): when each scheduled event fires next, the last event, and the mood they set. */
+    this.eventTimes = CONFIG.events.scheduled.map((e) => e.at);
+    this.lastEvent = -1e9;
+    this.nextRareCheck = 60;
+    this.mood = { speed: 1, damage: 1, until: 0 };
     this.bossNo = 0;
     this.phaseIndex = -1;
     /** Number who became happy in this update (to shorten the animation when there are many). */
@@ -112,12 +123,19 @@ export class Game {
     this.xpNeeded = xpNeeded(1);
     /** The cards shown at level-up. @type {import('./upgrades.js').Card[] | null} */
     this.cards = null;
+    /** Rerolls and banishes left, and the banished card keys (never offered again this shift). */
+    this.rerolls = CONFIG.upgrades.rerolls;
+    this.banishes = CONFIG.upgrades.banishes;
+    this.banished = new Set();
+    /** What the last supplier package contained (shown while status is 'package'). @type {import('./upgrades.js').Card[] | null} */
+    this.packageCards = null;
 
     this.stat = {
       perType: /** @type {Record<string, number>} */ ({}),
       helpPerWeapon: /** @type {Record<string, number>} */ ({}),
       bossesTotal: 0, bossesHelped: 0, maxMultStep: 0, hits: 0,
       ticketsPicked: 0, ticketsLost: 0, drinks: 0, blocked: 0, dodged: 0, elitesHelped: 0, emails: 0,
+      packages: 0, rerolls: 0, banishes: 0, events: 0, upgrades: 0, revives: 0,
       combinations: /** @type {string[]} */ ([]),
       /** Every boss the player met, and whether it was helped. @type {{type: string, helped: boolean, time: number, helpedAt: number, returnNo: number}[]} */
       bossLog: [],
@@ -188,7 +206,28 @@ export class Game {
     this.xpNeeded = xpNeeded(this.level);
     this.cards = makeCards(this);
     this.status = 'levelUp';
+    this.magnet();
     this.events.push('level');
+  }
+
+  /** Tickets near the player fly in (used at level-up and when a package is opened, so the pause never costs them). */
+  magnet() {
+    const p = this.player, R = CONFIG.levelMagnet;
+    for (let i = 0; i < this.tickets.n; i++) {
+      const l = this.tickets.items[i];
+      if ((l.x - p.x) ** 2 + (l.y - p.y) ** 2 < R * R) l.dragged = true;
+    }
+  }
+
+  /** How many more level-ups are already paid for by the experience collected (shown on the level-up screen). */
+  get queuedLevels() {
+    let x = this.xp, lvl = this.level, n = 0;
+    while (x >= xpNeeded(lvl) && n < 99) {
+      x -= xpNeeded(lvl);
+      lvl++;
+      n++;
+    }
+    return n;
   }
 
   /** The player chooses card no. i. */
@@ -198,6 +237,55 @@ export class Game {
     this.cards = null;
     this.status = 'running';
     useCard(this, selectedCard);
+    if (selectedCard.kind === 'upgrade') this.stat.upgrades++;
+    this.checkLevel();
+  }
+
+  /** «Nytt utvalg»: a new set of cards (costs one reroll). */
+  reroll() {
+    if (this.status !== 'levelUp' || this.rerolls <= 0) return false;
+    this.rerolls--;
+    this.stat.rerolls++;
+    this.cards = makeCards(this);
+    this.events.push('reroll');
+    return true;
+  }
+
+  /** «Fjern kortet»: card no. i is never offered again this shift, and a new card takes its place (costs one banish). */
+  banish(i) {
+    if (this.status !== 'levelUp' || !this.cards || !this.cards[i] || this.banishes <= 0) return false;
+    const card = this.cards[i];
+    if (card.kind === 'coffee') return false;
+    this.banishes--;
+    this.stat.banishes++;
+    this.banished.add(card.key);
+    const shown = new Set(this.banished);
+    for (const c of this.cards) shown.add(c.key);
+    const replacement = makeCards(this, 1, shown, this.rng.cards, { combination: false })[0];
+    if (replacement) this.cards[i] = replacement;
+    else this.cards.splice(i, 1);
+    this.events.push('banish');
+    return true;
+  }
+
+  /** A supplier package was picked up: «count» weapon increments at once, shown until the player continues. */
+  openPackage(count) {
+    if (this.status !== 'running') return;
+    this.stat.packages++;
+    this.packageCards = openPackage(this, count);
+    this.stat.upgrades += this.packageCards.length;
+    if (this.packageCards.length > 0) {
+      this.status = 'package';
+      this.magnet();
+    }
+    this.events.push('package');
+  }
+
+  /** The player has seen what was in the package. */
+  closePackage() {
+    if (this.status !== 'package') return;
+    this.packageCards = null;
+    this.status = 'running';
     this.checkLevel();
   }
 
@@ -214,9 +302,15 @@ export class Game {
     this.time += sec;
     while (bossTimeAt(this.bossNo) <= this.time) this.bossNo++;
     this.nextBoss = bossTimeAt(this.bossNo);
+    this.bossWarned = false;
     while (this.nextDrink <= this.time - CONFIG.energyDrink.interval) this.nextDrink += CONFIG.energyDrink.interval;
     if (this.nextWave < this.time) this.nextWave = this.time + 10;
     if (this.nextUrgent < this.time) this.nextUrgent = this.time + 5;
+    CONFIG.events.scheduled.forEach((e, i) => {
+      while (this.eventTimes[i] < this.time && e.repeat > 0) this.eventTimes[i] += e.repeat;
+      if (this.eventTimes[i] < this.time) this.eventTimes[i] = 1e9;
+    });
+    while (this.nextRareCheck <= this.time) this.nextRareCheck += 60;
   }
 
   debugLevelUp() {
@@ -226,18 +320,21 @@ export class Game {
   }
 
   /**
-   * Four weapons at max level with combinations, and the passives that go with them.
+   * Four weapons with enough increments for their combinations (plus a few more), and the passives that go with them.
    * @param {string[]} [weapons] which four (default: Skru av og på, Trådløse mus, Toner-kast, Fjernstyring)
    * @param {boolean} [combine] turn them into combinations right away
+   * @param {number} [picks] increments per weapon
    */
-  debugMaxBuild(weapons = ['powerCycle', 'mouse', 'toner', 'remote'], combine = false) {
+  debugMaxBuild(weapons = ['powerCycle', 'mouse', 'toner', 'remote'], combine = false, picks = CONFIG.upgrades.combinationAfter + 6) {
     this.debug.used = true;
     this.player.weapons.length = 0;
     for (const id of weapons.slice(0, CONFIG.limits.weapons)) {
-      for (let i = 0; i < CONFIG.limits.weaponLevel; i++) giveWeapon(this, id);
+      giveWeapon(this, id);
+      giveEvenUpgrades(this, id, CONFIG.upgrades.combinationAfter);
       const passive = CONFIG.weapons[id].combination.passive;
       for (let i = 0; i < CONFIG.limits.passiveLevel; i++) givePassive(this, passive);
       if (combine) giveCombination(this, id);
+      giveEvenUpgrades(this, id, picks - CONFIG.upgrades.combinationAfter);
     }
     for (const id of ['sneakers', 'biggerCan']) for (let i = 0; i < CONFIG.limits.passiveLevel; i++) givePassive(this, id);
   }
@@ -249,6 +346,7 @@ export class Game {
     else if (type === 'boss') {
       if (!this.boss || !this.boss.active) spawnBoss(this, bossTypeAt(this.bossNo));
     } else if (type === 'elite') spawnEnemy(this, 'senior', p.x + 190, p.y - 50, 1 + (this.eliteCount % 3));
+    else if (type === 'package') dropPickup(this, 'package', p.x + 40, p.y + 20, CONFIG.package.bossCount);
     else spawnEnemy(this, type, p.x + 190, p.y - 50);
   }
 
@@ -269,16 +367,17 @@ export class Game {
     while (this.nextDrink <= this.time - CONFIG.energyDrink.interval) this.nextDrink += CONFIG.energyDrink.interval;
     this.nextWave = this.time + 15;
     this.nextUrgent = this.time + 20;
-    // A build that is typical for the time: more weapons and levels the later it is
+    // A build that is typical for the time: more weapons and increments the later it is
     const min = at / 60;
     const weapons = Math.min(CONFIG.limits.weapons, 1 + Math.floor(min / 3));
-    const level = Math.min(CONFIG.limits.weaponLevel, 2 + Math.floor(min * 0.5));
+    const level = 1 + Math.floor(min * 0.9);
     this.player.weapons.length = 0;
     plan.slice(0, weapons).forEach((id, i) => {
-      const lv = Math.max(1, level - i);
-      for (let j = 0; j < lv; j++) giveWeapon(this, id);
-      for (let j = 0; j < Math.min(CONFIG.limits.passiveLevel, Math.ceil(lv / 2)); j++) givePassive(this, CONFIG.weapons[id].combination.passive);
-      if (min >= 10 && i === 0) giveCombination(this, id);
+      const lv = Math.max(1, level - 2 * i);
+      giveWeapon(this, id);
+      giveEvenUpgrades(this, id, lv);
+      for (let j = 0; j < Math.min(CONFIG.limits.passiveLevel, Math.ceil(lv / 3)); j++) givePassive(this, CONFIG.weapons[id].combination.passive);
+      if (min >= 10 && i === 0 && lv >= CONFIG.upgrades.combinationAfter) giveCombination(this, id);
     });
     // Enough experience for the levels a player would normally have by now
     this.level = Math.max(this.level, 3 + Math.floor(min * 2.2));

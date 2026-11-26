@@ -24,7 +24,7 @@ const afterY = (a, b) => a.y - b.y;
 export class Renderer {
   /**
    * @param {HTMLCanvasElement} canvas the game canvas (640 × 360)
-   * @param {{shake: boolean, fewerFlashes: boolean}} settings
+   * @param {{shake: boolean, fewerFlashes: boolean, hitNumbers: boolean, bars: boolean}} settings
    */
   constructor(canvas, settings) {
     this.canvas = canvas;
@@ -249,15 +249,15 @@ export class Renderer {
       ctx.globalAlpha = 1;
     }
 
-    // Energy drink and Ny PC (glow and a small bounce)
+    // Energy drink, Ny PC and the supplier package (glow and a small bounce)
     for (let i = 0; i < s.pickups.n; i++) {
       const pk = s.pickups.items[i];
       if (pk.x < x0 || pk.x > x1 || pk.y < y0 || pk.y > y1) continue;
       const bounce = fewerFlashes ? 0 : Math.round(Math.abs(Math.sin(now * 3 + i)) * -3);
       ctx.globalAlpha = fewerFlashes ? 0.7 : 0.55 + Math.sin(now * 4 + i) * 0.25;
-      drawSprite(ctx, pk.type === 'drink' ? item.drinkGlow : item.pcGlow, pk.x, pk.y);
+      drawSprite(ctx, pk.type === 'drink' ? item.drinkGlow : pk.type === 'package' ? item.packageGlow : item.pcGlow, pk.x, pk.y);
       ctx.globalAlpha = 1;
-      drawSprite(ctx, pk.type === 'drink' ? item.drink : item.pc, pk.x, pk.y + bounce);
+      drawSprite(ctx, pk.type === 'drink' ? item.drink : pk.type === 'package' ? item.package : item.pc, pk.x, pk.y + bounce);
       if (!fewerFlashes && this.quality < 2 && Math.floor(now * 2 + i) % 3 === 0) {
         drawSprite(ctx, item.glitter[1], pk.x + 7, pk.y - 9 + bounce);
       }
@@ -310,7 +310,11 @@ export class Renderer {
     this.drawBars(s, n);
     this.drawBossClocks(s, n);
 
-    // Emails and the bosses' projectiles (above the lawyers, with a red glow so they stand out from the player's own effects)
+    // Emails and the bosses' projectiles (above the lawyers). Everything that can hurt blinks red-tinted every
+    // other tenth of a second so it stands out from the player's own effects. With reduced flashing it is
+    // tinted all the time instead of blinking.
+    const red = fewerFlashes || Math.floor(now * 10) % 2 === 0;
+    const RT = item.red;
     for (let i = 0; i < s.enemyShots.n; i++) {
       const q = s.enemyShots.items[i];
       const wobble = fewerFlashes ? 0 : Math.round(Math.sin(now * 10 + i));
@@ -327,13 +331,14 @@ export class Renderer {
         drawSprite(ctx, ring(7, ['#19b5c9', '#e0409a', '#f5cf3a', '#2b2f38'][q.color], 1), lx, ly);
         ctx.globalAlpha = 1;
         if (left < 0.4 && !fewerFlashes && Math.floor(now * 16) % 2 === 0) continue;
-        drawSprite(ctx, item.cartridge[q.color], q.x, q.y - Math.round(Math.sin((q.t / q.flight) * Math.PI) * 14));
+        drawSprite(ctx, (red ? RT.cartridge : item.cartridge)[q.color], q.x, q.y - Math.round(Math.sin((q.t / q.flight) * Math.PI) * 14));
         continue;
       }
       ctx.globalAlpha = 0.45;
       drawSprite(ctx, item.emailGlow, q.x, q.y);
       ctx.globalAlpha = 1;
-      const spr = q.kind === 'ticket' ? item.ticketShot : q.kind === 'ticketSmall' ? item.ticketSmall : q.kind === 'paper' ? item.sheet : q.kind === 'calendar' ? item.calendar : item.email;
+      const set = red ? RT : item;
+      const spr = q.kind === 'ticket' ? (red ? RT.ticket : item.ticketShot) : q.kind === 'ticketSmall' ? set.ticketSmall : q.kind === 'paper' ? (red ? RT.paper : item.sheet) : q.kind === 'calendar' ? set.calendar : set.email;
       drawSprite(ctx, spr, q.x, q.y + wobble);
     }
 
@@ -463,7 +468,7 @@ export class Renderer {
   /** The HDMI cable: drawn as a pixel cable along an arc. type 0 = front, 1 = front and back, 2 = full circle. */
   drawCable(cx, cy, R, angle, type, f) {
     const ctx = this.ctx;
-    const arc = type === 2 ? TAU : CONFIG.weapons.hdmi.levels[0].arc;
+    const arc = type === 2 ? TAU : CONFIG.weapons.hdmi.base.arc;
     const drawArc = (mid) => {
       const from = type === 2 ? mid : mid - arc / 2;
       const sweep = arc * Math.min(1, f * 1.8);
@@ -676,7 +681,7 @@ export class Renderer {
         ctx.fillStyle = '#c8ecff';
         ctx.fillRect(s.camera.x, s.camera.y, VB, VH);
         ctx.globalAlpha = 1;
-      } else if (e.type === 'hit' && this.quality < 2) {
+      } else if (e.type === 'hit' && this.quality < 2 && this.settings.hitNumbers) {
         this.drawHit(e, f);
       }
     }
@@ -694,7 +699,7 @@ export class Renderer {
     const ctx = this.ctx;
     const sorted = this.sorted;
     const t = s.time;
-    const showAll = this.quality < 2;
+    const showAll = this.quality < 2 && this.settings.bars;
     if (this.barX.length < n) {
       this.barX = new Float32Array(n * 2);
       this.barY = new Float32Array(n * 2);
@@ -938,17 +943,21 @@ export class Renderer {
       const label = e.type === 'boss' ? CONFIG.bosses[e.bossType]?.short ?? 'BOSS' : 'HASTESAK';
       this.arrow(e.x - kx, e.y - ky, e.type === 'boss' ? this.spr.arrows.boss : this.spr.arrows.urgentSprite, label, now, null);
     }
-    let best = null, bestD = 1e12;
+    let best = null, bestD = 1e12, pkg = null, pkgD = 1e12;
     for (let i = 0; i < s.pickups.n; i++) {
       const pk = s.pickups.items[i];
-      if (pk.type !== 'drink') continue;
       const d = (pk.x - s.player.x) ** 2 + (pk.y - s.player.y) ** 2;
-      if (d < bestD) {
+      if (pk.type === 'drink' && d < bestD) {
         bestD = d;
         best = pk;
+      } else if (pk.type === 'package' && d < pkgD) {
+        pkgD = d;
+        pkg = pk;
       }
     }
     if (best) this.arrow(best.x - kx, best.y - ky, this.spr.arrows.drink, '', now, this.spr.item.drink);
+    // The nearest supplier package too (gold arrow with the box)
+    if (pkg) this.arrow(pkg.x - kx, pkg.y - ky, this.spr.arrows.urgentSprite, '', now, this.spr.item.package);
   }
 
   arrow(sx, sy, set, text, now, iconSprite) {

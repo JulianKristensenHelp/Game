@@ -1,29 +1,39 @@
 // @ts-check
-// Measures how much help per second each weapon gives at max level and as a combination, under equal conditions.
+// Measures how much help per second each weapon gives with a fixed number of increments and as a combination, under equal conditions.
 // Run:  node tools/measure-weapons.js   (or: powershell -File tools/node.ps1 tools/measure-weapons.js)
 //
 // Setup: the player walks through the open office in a big, slow loop. 150 "dummy" lawyers with infinite
 // frustration are spread evenly 40–300 pixels around the player (those that end up too close or too far away are moved).
-// The combination is measured with its matching passive at level 1 (the minimum needed to unlock it).
+// Every weapon gets PICKS increments spread evenly over its growth rules (help, interval, count …), no effects.
+// The combination is measured with the increments needed to unlock it, its matching passive at level 1, and the
+// rest of the PICKS on top (increments keep applying after the combination).
 // The same numbers are also shown in debug mode in the game (help per second per weapon, last 10 seconds).
 import { Game } from '../js/game.js';
 import { CONFIG } from '../js/config.js';
 import { Rng } from '../js/utils.js';
 import { spawnEnemy } from '../js/enemies.js';
-import { giveWeapon, givePassive, giveCombination } from '../js/upgrades.js';
+import { giveWeapon, givePassive, giveCombination, giveEvenUpgrades } from '../js/upgrades.js';
 
 const SEC = 60;
+/** Increments per weapon in the measurement (a typical build has about this many on its main weapon by minute 12). */
+const PICKS = Number(process.argv[2] || 16);
 
 function target(id, evo) {
   const s = new Game('2026-11-25');
   s.debug.immortal = true;
   s.time = 600;
-  s.nextBoss = s.nextUrgent = s.nextWave = s.nextDrink = 1e9;
+  s.nextBoss = s.nextUrgent = s.nextWave = s.nextDrink = s.nextRareCheck = 1e9;
+  s.eventTimes.fill(1e9);
+  // No level-ups during the measurement (the build must stay exactly as set up)
+  s.xpNeeded = 1e12;
   s.player.weapons.length = 0;
-  for (let i = 0; i < CONFIG.limits.weaponLevel; i++) giveWeapon(s, id);
+  giveWeapon(s, id);
+  const after = CONFIG.upgrades.combinationAfter;
+  giveEvenUpgrades(s, id, evo ? after : PICKS);
   if (evo) {
     givePassive(s, CONFIG.weapons[id].combination.passive);
     giveCombination(s, id);
+    giveEvenUpgrades(s, id, Math.max(0, PICKS - after));
   }
   const rng = new Rng('maal');
   const p = s.player;
@@ -65,7 +75,7 @@ for (const id of Object.keys(CONFIG.weapons)) {
 }
 const avgEvo = rows.filter((r) => r.id !== 'headset').reduce((a, r) => a + r.evo, 0) / (rows.length - 1);
 console.log('Hjelp per sekund (60 s, 150 advokater jevnt spredt 40–300 px rundt spilleren):\n');
-console.log('Våpen'.padEnd(22) + ('Nivå ' + CONFIG.limits.weaponLevel).padStart(9) + '   ' + 'Kombinasjon'.padEnd(30) + 'Hjelp/s'.padStart(9) + '  i forhold til snitt');
+console.log('Våpen'.padEnd(22) + ('+' + PICKS).padStart(9) + '   ' + 'Kombinasjon'.padEnd(30) + 'Hjelp/s'.padStart(9) + '  i forhold til snitt');
 for (const r of rows) {
   console.log(r.name.padEnd(22) + r.n8.toFixed(0).padStart(9) + '   ' + r.evoName.padEnd(30) + r.evo.toFixed(0).padStart(9) + '  ' + (r.id === 'headset' ? '(forsvar – blokkerer treff)' : ((r.evo / avgEvo) * 100).toFixed(0) + ' %'));
 }

@@ -427,7 +427,7 @@ export class Hud {
     }
     for (let i = 0; i < CONFIG.limits.weapons; i++) {
       const vw = s.player.weapons[i];
-      if (vw) drawSlot(i * (slot + gap), vRow, weaponIconId(vw), vw.level, vw.evo, false);
+      if (vw) drawSlot(i * (slot + gap), vRow, weaponIconId(vw), vw.picks, vw.evo, false);
       else drawSlot(i * (slot + gap), vRow, '', 0, false, true);
     }
     this.iconRow = c;

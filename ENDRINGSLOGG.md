@@ -1,5 +1,151 @@
 # Endringslogg
 
+## Versjon 6.1 – 26. november 2026 (endringsprompt 6: finpuss og gjenstander)
+
+### 1. Ikoner som manglet
+- Kaffemaskin, Mekanisk tastatur, Overtid, Hev-senk-pult og Brannmur (fra versjon 5) hadde aldri fått ikon, så
+  kortene, ikonraden og «Dine tall» viste tomt. Alle 57 ikoner (våpen, kombinasjoner, passive, knapper) tegnes nå
+  uten feil i en test med stubbet lerret, og sprite-settet (inkludert pakken og de røde kopiene) lages uten feil.
+
+### 2. Seks nye gjenstander (28 passive)
+- Sikkerhetskopi (overlever dødelige treff, maks 3), Takknemlige advokater (energi per hjulpet), Post-it-blokk
+  (lappene ligger lenger), Bonusordning (+10 % poeng), Termos (bedre energidrikk) og Vaktmester (mindre treghet).
+
+### 3. Tre nye effekter og flere regler
+- Purring (10 % mer hjelp fra alt i 3 sekunder), Eskalering (+15 % mot partnere og bosser) og Innkalling (drar
+  advokaten mot deg, bare våpen med rekkevidde). Ni effekter i alt.
+- Nye regler: dytt (Full omstart), hoppetid (Passord-reset), bue (HDMI-kabelen), rekkevidde (Fjernstyring, som
+  før var fast 330 px), pause per advokat (mus og Ctrl+Alt+Del), takt (strålen), styring (Teams) og papirsalver
+  (Skytsengelen).
+- Hjelp-kort vektes 2,5 ganger og antall-kort 1,5 ganger innenfor et våpen, ellers ble byggen utvannet av småregler
+  (ekspertrobotenes median falt fra 12 til 8 minutter før vektingen, og er 13 etter).
+
+### 3b. Trefftallet viser hele treffet
+- Før viste tallet bare det advokaten trengte (overskytende hjelp ble kuttet), så et stort våpen så lite ut mot
+  juniorfullmektiger. Nå vises hele treffet. Statistikken og måleverktøyet teller fortsatt bare det som trengtes.
+
+### 4. Fem småting (egne forslag)
+1. Nivåkø i overskriften ved nivåopp.
+2. Banner 10 sekunder før hver boss.
+3. Lappemagnet ved nivåopp og pakke.
+4. Bygget på slutt-skjermen, og «Dine tall» i pausemenyen.
+5. Innstillinger for trefftall og frustrasjonsbarer.
+
+`tools/measure-weapons.js 16` (fordelt som kortene kommer: hjelp og antall oftest):
+
+| Våpen | +16 | Kombinasjon | Hjelp/s | I forhold til snittet |
+| --- | --- | --- | --- | --- |
+| Skru av og på | 861 | Full omstart | 2681 | 121 % |
+| Toner-kast | 1156 | Kontorprinteren fra helvete | 2888 | 131 % |
+| Passord-reset | 767 | Tofaktor | 2927 | 132 % |
+| HDMI-kabelen | 961 | Kabelkaos | 2100 | 95 % |
+| Fjernstyring | 345 | Domene-admin | 2310 | 104 % |
+| Trådløse mus | 971 | Musematta | 2442 | 110 % |
+| Ctrl+Z | 1039 | Ctrl+Alt+Del | 1997 | 90 % |
+| Oppdateringsstrålen | 556 | Tvungen oppdatering | 1295 | 59 % |
+| Teams-varsel | 409 | Allmøte på Teams | 1331 | 60 % |
+| Skytsengelen | 1034 | Himmelsk serviceavtale | 2150 | 97 % |
+| Støydempende headset | 0 | Hjemmekontor | 0 | (forsvar – blokkerer treff) |
+
+`tools/simulate.js x 25 --statistikk`: ekspert median 13,2 min (25–75 %: 5,8–14,4, lengst 17,3, 1 av 40 sparket).
+Bygget til robotene er enda litt bedre enn før (gjenstandene hjelper), så veggen i overtid tar dem litt senere.
+
+## Versjon 6.0 – 26. november 2026 (endringsprompt 5: oppgraderinger uten tak)
+
+Våpnene har ikke lenger nivåer. Hvert kort gir én bestemt oppgradering, kortene har sjeldenhet, flaksen avgjør hvor
+langt du kommer, og vanskeligheten stiger lineært med hendelser som gir variasjon.
+
+### 1. Oppgraderinger uten tak
+- **Ett kort = ett steg.** «Trådløse mus: +1 mus (3 → 4)», «Toner-kast: +4,5 hjelp per treff (15 → 19,5)», «Passord-reset:
+  Kortere tid mellom aktiveringer (1,05 s → 0,94 s)». Kortet viser alltid tallet før og etter. Et våpen kan ta
+  så mange oppgraderinger du rekker. Hjelpen vokser lineært (`pct` av grunntallet per steg), intervallene har
+  gulv, og alle antall (mus, kassetter, hopp, treff) har et tak av hensyn til kontor-PC-ene.
+- **Reglene** står i `growth` på hvert våpen i `CONFIG.weapons`, som før, men uten nivålister. `weaponStats()` i
+  js/weapons.js regner ut tallene fra grunntall + oppgraderingene (`w.up`) når noe endrer seg, aldri per bilde.
+- **Kombinasjonen** krever 10 oppgraderinger pluss riktig passiv, og er et nytt utgangspunkt som er tydelig
+  sterkere (1,5–3 × målt). Oppgraderingene etterpå vokser videre fra den. Kombinasjonenes tall er justert ned
+  fra versjon 5, siden de ikke lenger er et sluttpunkt.
+- **Effekter** (sjeldne kort): Gjennomtrengende, Sprut, Venter på IT, Saken ligger i køen, Avvist og Ekstra
+  kaffe. Hvert våpen har en liste over hvilke det kan få. De er koblet inn ett sted (`help()` i js/enemies.js
+  og prosjektilenes `through`), aldri i tegnekoden.
+
+### 2. Kortnivåer og flaks
+- **Fire nivåer:** grå = vanlig (1 steg), grønn = uvanlig (2), blå = sjelden (3, og effektene), oransje =
+  legendarisk (5, eller to effektnivåer). Sjansene er 68/23/7/2 %. Kortene har farget stripe og ramme.
+- **Hesteskoen** erstatter Kontorlotteriet: +25 % flaks per nivå (alt over vanlig ganges med 1 + flaks) og +12 %
+  sjanse for et fjerde kort.
+- **Nytt utvalg (R)** og **Fjern kortet (✕, eller B + tallet)**: ett av hvert fra start, ett til per hjulpet boss.
+  Fjernede kort kommer aldri igjen den vakta.
+- **Kortene vektes** slik at oppgraderinger til våpen du har kommer oftest, og nye våpen 2,5 ganger så ofte mens
+  du har færre enn to.
+
+### 3. Pakke fra leverandøren og partnernes lapper
+- Hver hjulpet boss legger igjen en pakke (3 våpenoppgraderinger, minst uvanlige; Johan 5). En hjulpet partner
+  gjør det i 2,5 % av tilfellene (1 oppgradering). Pakken åpnes med en egen skjerm som viser hva den inneholdt.
+  Gull pil mot pakken når den er utenfor skjermen.
+- Partnerne legger igjen 1–5 ticket-lapper (halv verdi hver) i stedet for én.
+
+### 4. Klassepassive
+- Hvert våpen har en klasse: prosjektil, kjede, område eller hjelper. Fire nye passive gir +15 % hjelp per nivå
+  for én klasse: Kastekurs, Nettverkssertifisering, Åpent landskap og Sommervikar. 22 passive i alt.
+
+### 5. Lineær vanskelighet med hendelser
+- **Kurven er en rett linje:** frustrasjon 1 + 0,15 × (minutter − 3), skade +6 % per minutt, fart +3 % per minutt.
+  Overtid fra 12:30 med × 1,8 per minutt og +22 % fart per minutt – det er veggen.
+- **Faste hendelser** på hver vakt: Lunsjrush (2:30, 7:30, 12:30), Printerkø (4:30, 9:30, 14:30) og Partnermøte
+  (7:30, 13:30). **Sjeldne hendelser** trekkes én gang i minuttet fra sin egen strøm: Kaffepause, Gratis lunsj
+  og Serverkrasj. Alle vises som banner med forklaring. Minst 25 sekunder mellom to hendelser, og de faste venter
+  mens en boss er ute.
+- Trådløse mus starter med tre mus (var to), så musekarakteren ikke ryker i det første rushet.
+
+### 6. Synlighet
+- **Fiendtlige prosjektiler blinker rødt** (annethvert tidels sekund tegnes en rødtonet kopi). Med reduserte
+  blinkeffekter er de rødtonet hele tiden i stedet.
+- **Dine tall** viser nå også hjelp per klasse, flaks, fjerde kort, nytt utvalg og fjerninger igjen, og hvert våpen
+  med alle tallene sine, antall oppgraderinger, hvor langt det er til kombinasjonen og effektene.
+- Ikonraden nederst viser antall oppgraderinger per våpen. Slutt-skjermen teller pakker, oppgraderinger og hendelser.
+
+### 7. Ytelse og determinisme
+- Ingen nye objekter per bilde: de røde kopiene lages én gang, effektene er tall på våpenet, prosjektilene peker
+  på våpenets effektobjekt. Sprut bruker en egen liste og hjelper maks 6 naboer, uten rekursjon.
+- To nye strømmer i «Dagens vakt»: `pakke` og `hendelser`. Simulatoren bekrefter at to like runder gir samme
+  resultat, også med Dobbel skjerm og annet utseende.
+
+`tools/measure-weapons.js 16` (hjelp per sekund, 150 advokater 40–300 px rundt spilleren, 16 oppgraderinger jevnt fordelt):
+
+| Våpen | +16 | Kombinasjon | Hjelp/s | I forhold til snittet |
+| --- | --- | --- | --- | --- |
+| Skru av og på | 945 | Full omstart | 2306 | 133 % |
+| Toner-kast | 1082 | Kontorprinteren fra helvete | 2378 | 137 % |
+| Passord-reset | 731 | Tofaktor | 2781 | 160 % |
+| HDMI-kabelen | 1189 | Kabelkaos | 1635 | 94 % |
+| Fjernstyring | 512 | Domene-admin | 1841 | 106 % |
+| Trådløse mus | 687 | Musematta | 1537 | 88 % |
+| Ctrl+Z | 898 | Ctrl+Alt+Del | 1537 | 88 % |
+| Oppdateringsstrålen | 482 | Tvungen oppdatering | 820 | 47 % |
+| Teams-varsel | 407 | Allmøte på Teams | 1186 | 68 % |
+| Skytsengelen | 993 | Himmelsk serviceavtale | 1361 | 78 % |
+| Støydempende headset | 0 | Hjemmekontor | 0 | (forsvar – blokkerer treff) |
+
+`tools/simulate.js x 25 --statistikk` (10 dager × 4 karakterer):
+
+| Robot | Median | 25–75 % | Lengst | Sparket |
+| --- | --- | --- | --- | --- |
+| God, bygger bevisst | 10,0 min | 5,8–14,7 min | 17,5 min | 1 av 40 |
+| Ekspert | 12,1 min | 6,4–15,0 min | 18,1 min | 1 av 40 |
+
+Medianen for ekspertene ligger altså ved Johan (12:00), som ønsket: om du kommer dit og videre, avgjøres av byggen
+og flaksen med kortene. Veggen i overtid tar nesten alle mellom 15 og 18 minutter. Robotene bygger dårligere enn
+et menneske og unngår skade dårligere, så forvent at folk ligger rundt det samme.
+
+### Antakelser
+- «Hver runde skal føles litt annerledes» er løst med hendelsene, men innenfor «Dagens vakt»: samme dag og samme
+  valg gir fortsatt samme runde (topplisten må være rettferdig). Forskjellen mellom dager er større enn før.
+- Kombinasjonene nullstiller oppgraderingene (de er bakt inn i kombinasjonens tall). Alternativet – å legge dem
+  oppå – ga 6–10 × hopp og ble forkastet.
+- Pakker fra partnere er sjeldne (2,5 %) med vilje: med 8 % snøballet alle gode runder til 20 minutter.
+- Stresstesten (`?debug&utenGPU`) er ikke kjørt i denne omgangen (ingen nettleser i arbeidsmiljøet).
+
 ## Versjon 5.0 – 26. november 2026 (endringsprompt 4: Brotato-retning)
 
 Spillet er fortsatt én sammenhengende vakt som blir vanskeligere og vanskeligere (ingen butikk, ingen runder), men

@@ -15,11 +15,16 @@ long as you can, collect tickets, and climb the shared daily leaderboard.
   images or sound files. Everything (sprites, pixel font, sound) is generated in code. The total size is about 0.4 MB.
 - **Pixel art** rendered at 640 × 360 and scaled up with crisp pixels. Every screen sees the same area of the map.
 - **Four playable characters**, each with its own starting weapon and bonus.
-- **11 weapons with 12 levels each** (max 4 at once), **18 passives** (max 8 at once) and **11 combinations**
-  (evolutions). Every level changes the weapon visibly: more mice in the ring, more cartridges per throw, longer
-  chains. All weapons aim at the nearest lawyer. Levels are generated from growth rules in `js/config.js`.
-- **Brotato-style stats:** critical hits, armour, regeneration, dodge and luck, all shown on a stat sheet at
-  every level-up. Lawyers have frustration bars and every hit shows a number with the weapon's icon.
+- **11 weapons with no level cap** (max 4 at once), **28 passives** (max 8 at once) and **11 combinations**
+  (evolutions). Every level-up card is one specific increment: more help, a shorter interval, one more mouse or
+  cartridge, or an effect modifier (pierce, splash, slow, lingering help, knockback, crit, mark, escalation, pull). Cards have four tiers
+  (common, uncommon, rare, legendary) with bigger increments, and luck («Hesteskoen») makes the rare ones more likely.
+  Rerolls and banishes, supplier packages from bosses, and tag passives for weapon classes. All weapons aim at the
+  nearest lawyer.
+- **Brotato-style stats:** critical hits, armour, regeneration, dodge and luck, all shown on a stat sheet with every
+  weapon's numbers at every level-up. Lawyers have frustration bars and every hit shows a number with the weapon's icon.
+- **Linear difficulty with events:** the curve is a straight line until overtime, with scheduled events on every
+  shift (lunch rush, printer queue, partner meeting) and rare ones rolled per day (coffee break, free lunch, server crash).
 - **Diverse, procedurally composed lawyers**, including a ranged type that sends «Haster!» emails, and rare
   **partners** (elites) with a crown, a big frustration bar and a trait: an aura that shields their neighbours,
   delegating to juniors when helped, or a telegraphed dash.
@@ -30,7 +35,7 @@ long as you can, collect tickets, and climb the shared daily leaderboard.
   plays the same waves and gets the same upgrade offers for the same choices.
 - **Shared daily leaderboard** using a tiny Node.js server with built-in SQLite. It resets at midnight Norwegian time.
 - Keyboard (WASD/arrow keys) and touch (virtual joystick), with settings for volume, screen size, UI scale,
-  minimap, screen shake and reduced flashing. Sound is off by default.
+  minimap, screen shake, reduced flashing, hit numbers and frustration bars. Sound is off by default.
 
 ## Requirements
 
@@ -132,7 +137,7 @@ tools/                Balance simulator, weapon measurement, font generator
 | Command | What it does |
 | --- | --- |
 | `npm run simulate` | Bots play full runs in seconds and report survival times, plus determinism checks |
-| `npm run measure-weapons` | Measures help per second for every weapon at level 12 and as a combination |
+| `npm run measure-weapons` | Measures help per second for every weapon with 16 increments and as a combination (`node tools/measure-weapons.js 24` for another count) |
 | `npm run build-font` | Rebuilds `fonts/kontorpiksel.ttf` from the glyphs in `js/pixelfont.js` |
 
 On Windows without Node.js: `powershell -File tools/node.ps1 tools/simulate.js`.
@@ -147,8 +152,9 @@ that boss with a typical build for the time. Runs where debug buttons were used 
 
 All balance numbers are in **[`js/config.js`](js/config.js)**, with a comment on every field. That includes
 character names, titles, starting weapons and bonuses (`CONFIG.characters`), the bosses' names, lines,
-countdowns and attacks (`CONFIG.bosses`), the elites (`CONFIG.elites`), and each weapon's `base` numbers and
-`growth` rules, from which the 12 levels are generated at load time. See [DOKUMENTASJON.md](DOKUMENTASJON.md)
+countdowns and attacks (`CONFIG.bosses`), the elites (`CONFIG.elites`), the events (`CONFIG.events`), the card
+tiers and effect modifiers (`CONFIG.upgrades`), and each weapon's `base` numbers and `growth` rules (one card = one
+step of one rule; counts have a hard cap for performance). See [DOKUMENTASJON.md](DOKUMENTASJON.md)
 (Norwegian) for how to tune difficulty, edit the map and change the graphics.
 
 ## License

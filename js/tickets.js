@@ -14,7 +14,7 @@ export function makeTicket() {
 }
 
 export function makePickup() {
-  return { x: 0, y: 0, type: 'drink', age: 0 };
+  return { x: 0, y: 0, type: 'drink', age: 0, count: 0 };
 }
 
 /** Drops a ticket where the lawyer stood. */
@@ -28,13 +28,18 @@ export function dropTicket(s, x, y, value) {
   if (s.tickets.n > L.max) merge(s);
 }
 
-/** @param {'drink'|'pc'} type */
-export function dropPickup(s, type, x, y) {
+/**
+ * @param {'drink'|'pc'|'package'} type
+ * @param {number} [count] for a package: how many weapon increments it holds
+ */
+export function dropPickup(s, type, x, y, count = 0) {
   const k = s.pickups.acquire();
   k.x = Math.min(INSIDE.x1 - 10, Math.max(INSIDE.x0 + 10, x));
   k.y = Math.min(INSIDE.y1 - 10, Math.max(INSIDE.y0 + 10, y));
   k.type = type;
   k.age = 0;
+  k.count = count;
+  if (type === 'package') s.events.push('packageDropped');
 }
 
 /** Reused lookup for merging (avoids new objects). */
@@ -119,7 +124,8 @@ export function updateTickets(s, dt) {
         l.dragged = true;
       } else {
         l.age += dt;
-        if (l.age >= L.lifetime) {
+        // «Post-it-blokk»: the tickets stay longer
+        if (l.age >= L.lifetime + p.mod.ticketLife) {
           s.stat.ticketsLost++;
           f.removeAt(i);
         }
@@ -147,9 +153,10 @@ export function updateTickets(s, dt) {
     pk.age += dt;
     const dx = p.x - pk.x, dy = p.y - pk.y, rr = p.r + 10;
     if (dx * dx + dy * dy < rr * rr) {
-      const type = pk.type;
+      const type = pk.type, count = pk.count;
       k.removeAt(i);
       if (type === 'drink') drink(s);
+      else if (type === 'package') s.openPackage(count);
       else newPc(s);
     }
   }

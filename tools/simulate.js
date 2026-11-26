@@ -16,6 +16,11 @@ const maxMin = Number(process.argv[3] || 25);
 if (process.argv.includes('--utenbosser')) for (const b of CONFIG.bosses.schedule) b.at = 1e7;
 // --utenpartnere: no elites (to see how much of the difficulty comes from them)
 if (process.argv.includes('--utenpartnere')) CONFIG.elites.from = 1e9;
+// --utenhendelser: no events (lunch rush, partner meeting, coffee break …)
+if (process.argv.includes('--utenhendelser')) {
+  for (const e of CONFIG.events.scheduled) e.at = 1e9;
+  for (const e of CONFIG.events.rare) e.chance = 0;
+}
 // --ikkejag: the bots ignore the bosses (and the bosses never fire anyone). --ingentreg: no slowdown from notes and ink.
 const NO_CHASE = process.argv.includes('--ikkejag');
 if (NO_CHASE) for (const t of ['nordic', 'printerBoss', 'deadline', 'johan']) /** @type {any} */ (CONFIG.bosses)[t].deadline = 1e7;
@@ -40,7 +45,7 @@ function makeRobot(skill, smartBuild, seed, plan = ['powerCycle', 'mouse', 'tone
   const rng = new Rng('robot' + seed);
   let ix = 0, iy = 0, wait = 0;
   // Combination passives first, then the damage and defence passives a human would pick (8 slots in total)
-  const passivePlan = plan.map((id) => CONFIG.weapons[id].combination.passive).concat(['overtime', 'coffeeMachine', 'ergonomicChair', 'standingDesk', 'biggerCan', 'sneakers', 'firewall', 'mechKeyboard']);
+  const passivePlan = plan.map((id) => CONFIG.weapons[id].combination.passive).concat(['overtime', 'coffeeMachine', 'backup', 'ergonomicChair', 'standingDesk', 'grateful', 'biggerCan', 'sneakers', 'firewall', 'horseshoe', 'mechKeyboard']);
   return {
     steer(s) {
       if (--wait > 0) return [ix, iy];
@@ -146,8 +151,14 @@ function makeRobot(skill, smartBuild, seed, plan = ['powerCycle', 'mouse', 'tone
       cards.forEach((k, i) => {
         let v = 1;
         if (k.kind === 'combination') v = 100;
-        else if (k.kind === 'weapon') v = plan.includes(k.id) ? 50 - plan.indexOf(k.id) + (s.player.weapons.some((w) => w.id === k.id) ? 5 : 0) : 2;
-        else if (k.kind === 'passive') v = passivePlan.includes(k.id) ? 40 - passivePlan.indexOf(k.id) : 3;
+        // A new weapon: the planned ones first, but any weapon beats a passive while the first slots are empty (like a human)
+        else if (k.kind === 'weapon') v = plan.includes(k.id) ? 50 - plan.indexOf(k.id) : s.player.weapons.length < 2 ? 42 : 2;
+        else if (k.kind === 'upgrade') {
+          // Increments on the planned weapons: the rarer the better, help and projectiles first, then effects
+          const g = k.grants ?? [];
+          const good = g.some((x) => x.stat === 'help' || x.stat === 'count' || x.stat === 'hits' || x.stat === 'hops' || x.stat === 'perThrow') ? 4 : 0;
+          v = (plan.includes(k.id) ? 46 - plan.indexOf(k.id) : 20) + k.tier * 3 + good + (g.some((x) => x.fx) ? 2 : 0);
+        } else if (k.kind === 'passive') v = passivePlan.includes(k.id) ? 40 - passivePlan.indexOf(k.id) : 3;
         if (v > bestV) { bestV = v; best = i; }
       });
       return best;
@@ -186,7 +197,8 @@ function playRound(name, skill, smart, seed, log = false, plan = undefined, othe
       if (bossOut && s.enemyShots.n < shotsBefore) lost.bossShots += diff;
     }
     s.events.length = 0;
-    if (s.status === 'levelUp') s.chooseCard(robot.choose(s));
+    if (s.status === 'package') s.closePackage();
+    while (s.status === 'levelUp') s.chooseCard(robot.choose(s));
     if (!firstEvo && s.stat.combinations.length) firstEvo = s.time;
     if (s.enemies.n > maxEnemies) maxEnemies = s.enemies.n;
     const every = process.argv.includes('--tett') ? 15 : 120;
@@ -194,12 +206,12 @@ function playRound(name, skill, smart, seed, log = false, plan = undefined, othe
       console.log(`     ${mmss(s.time)}: nivå ${s.level}, score ${s.score}, fiender ${s.enemies.n}, energi ${Math.round(s.player.energy)}/${s.player.maxEnergy}, treff ${s.stat.hits}, drikker ${s.stat.drinks}, spart ${s.spared}`);
     }
   }
-  const build = s.player.weapons.map((w) => `${weaponName(w)}${w.evo ? '' : ' ' + w.level}`).join(', ');
+  const build = s.player.weapons.map((w) => `${weaponName(w)} +${w.picks}`).join(', ');
   const end = s.fired ? `SPARKET av ${s.fired.name}` : s.status === 'done' ? 'tom for energi' : 'levde ut tiden';
   const bossesHelped = s.stat.bossLog.filter((b) => b.helped).map((b) => `${CONFIG.bosses[b.type].short} ${Math.round(b.helpedAt - b.time)}s`).join(' ');
   console.log(
     `${name.padEnd(24)} tid ${mmss(s.time)}${s.status === 'done' ? ' ' : '+'} | score ${String(s.score).padStart(8)} | nivå ${String(s.level).padStart(3)} | hjulpne ${String(s.helped).padStart(5)} | ` +
-    `maks x${(CONFIG.multiplier.start + s.stat.maxMultStep * CONFIG.multiplier.step).toFixed(1)} | treff ${s.stat.hits} | drikker ${s.stat.drinks} | bosser ${s.stat.bossesHelped}/${s.stat.bossesTotal} | partnere ${s.stat.elitesHelped} | første komb. ${firstEvo ? mmss(firstEvo) : '-'} | maks fiender ${maxEnemies} | ${Date.now() - start} ms`
+    `maks x${(CONFIG.multiplier.start + s.stat.maxMultStep * CONFIG.multiplier.step).toFixed(1)} | treff ${s.stat.hits} | drikker ${s.stat.drinks} | bosser ${s.stat.bossesHelped}/${s.stat.bossesTotal} | partnere ${s.stat.elitesHelped} | pakker ${s.stat.packages} | hendelser ${s.stat.events} | første komb. ${firstEvo ? mmss(firstEvo) : '-'} | maks fiender ${maxEnemies} | ${Date.now() - start} ms`
   );
   console.log(`   slutt: ${end} | bosser hjulpet: ${bossesHelped || '-'} | bygg: ${build}`);
   if (process.argv.includes('--skade')) console.log(`   energi tapt: under boss ${Math.round(lost.boss)} (herav ca. ${Math.round(lost.bossShots)} fra prosjektiler), ellers ${Math.round(lost.other)}`);
@@ -225,7 +237,7 @@ if (process.argv.includes('--statistikk')) {
           fired[name]++;
           byBoss[s.fired.type] = (byBoss[s.fired.type] || 0) + 1;
           const b = s.boss;
-          details.push(`${day} k${k + 1} ${name}: igjen ${Math.round((b.hp / b.maxHp) * 100)} % | bygg ${s.player.weapons.map((w) => w.id + w.level).join(' ')} | avstand ${Math.round(Math.hypot(b.x - s.player.x, b.y - s.player.y))}`);
+          details.push(`${day} k${k + 1} ${name}: igjen ${Math.round((b.hp / b.maxHp) * 100)} % | bygg ${s.player.weapons.map((w) => w.id + '+' + w.picks).join(' ')} | avstand ${Math.round(Math.hypot(b.x - s.player.x, b.y - s.player.y))}`);
         }
       }
     }
@@ -235,6 +247,7 @@ if (process.argv.includes('--statistikk')) {
     list.sort((a, b) => a - b);
     const q = (f) => list[Math.min(list.length - 1, Math.floor(f * list.length))].toFixed(1);
     console.log(`${name.padEnd(14)} median ${q(0.5)} min | 25 % ${q(0.25)} | 75 % ${q(0.75)} | maks ${q(1)} | sparket ${fired[name]} av ${list.length}`);
+    if (process.argv.includes('--detaljer')) console.log('   alle: ' + list.map((v) => v.toFixed(1)).join(' '));
   }
   console.log('sparket av: ' + JSON.stringify(byBoss));
   if (process.argv.includes('--detaljer')) console.log(details.join('\n'));
