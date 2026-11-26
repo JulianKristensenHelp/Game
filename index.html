@@ -14,6 +14,8 @@
   <canvas id="game" aria-label="Spillområde"></canvas>
   <!-- HUD in full screen resolution on top of the game -->
   <canvas id="hud" aria-hidden="true"></canvas>
+  <!-- The Matrix: the short animation when the combination is chosen (the game is paused; click or a key skips it) -->
+  <canvas id="matrixFx" width="640" height="360" aria-label="The Matrix – klikk eller trykk en tast for å hoppe over" hidden></canvas>
 
   <div id="hudButtons" hidden>
     <button id="soundButton" class="round" aria-label="Lyd av/på"></button>
@@ -205,9 +207,12 @@
       <button data-d="swarm">+100 advokater</button>
       <button data-d="elite">Partner</button>
       <button data-d="package">Pakke</button>
+      <button data-d="cookie">Kjeks</button>
+      <button data-d="matrixBuild">The Matrix-bygg</button>
+      <button data-d="pingBuild">Ping-pong + Livvakt</button>
       <button data-d="boss1">Boss 1: Nørdic</button>
       <button data-d="boss2">Boss 2: Printer</button>
-      <button data-d="boss3">Boss 3: Fristen</button>
+      <button data-d="boss3">Boss 3: Frida</button>
       <button data-d="boss4">Boss 4: Johan</button>
       <button data-d="stress" class="important">Stresstest (5 min)</button>
     </div>

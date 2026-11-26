@@ -12,11 +12,14 @@ long as you can, collect tickets, and climb the shared daily leaderboard.
 ## Features
 
 - **Plain JavaScript, no build step.** HTML5 Canvas 2D and ES modules, with no npm packages, external scripts,
-  images or sound files. Everything (sprites, pixel font, sound) is generated in code. The total size is about 0.4 MB.
-- **Pixel art** rendered at 640 × 360 and scaled up with crisp pixels. Every screen sees the same area of the map.
-- **Four playable characters**, each with its own starting weapon and bonus.
-- **11 weapons with no level cap** (max 4 at once), **28 passives** (max 8 at once) and **11 combinations**
-  (evolutions). Every level-up card is one specific increment: more help, a shorter interval, one more mouse or
+  external images or sound files. Everything (sprites, pixel font, sound) is generated in code. The total size is about 0.4 MB.
+- **Pixel art** rendered at 640 × 360 and scaled up with crisp pixels. The only image files are the client's own
+  character art in `assets/karakterer/`. Every screen sees the same area of the map.
+- **Four playable characters**, each with its own starting weapon and bonus, drawn by the client as pixel art
+  (`assets/karakterer/`, used pixel for pixel with integer scaling).
+- **13 weapons with no level cap** (max 4 at once), **28 passives** (max 8 at once), **12 combinations**
+  (evolutions) and the rare special combination **The Matrix** (Skytsengelen + Livvakten + Shopkeeperen, with code
+  rain and bullet time). Every level-up card is one specific increment: more help, a shorter interval, one more mouse or
   cartridge, or an effect modifier (pierce, splash, slow, lingering help, knockback, crit, mark, escalation, pull). Cards have four tiers
   (common, uncommon, rare, legendary) with bigger increments, and luck («Hesteskoen») makes the rare ones more likely.
   Rerolls and banishes, supplier packages from bosses, and tag passives for weapon classes. All weapons aim at the
@@ -28,8 +31,9 @@ long as you can, collect tickets, and climb the shared daily leaderboard.
 - **Diverse, procedurally composed lawyers**, including a ranged type that sends «Haster!» emails, and rare
   **partners** (elites) with a crown, a big frustration bar and a trait: an aura that shields their neighbours,
   delegating to juniors when helped, or a telegraphed dash.
-- **Four different bosses in a fixed order** (3:00, 6:00, 9:00 and the final boss at 12:00, who returns every
-  3 minutes after that), each with its own telegraphed attacks. Bosses are mandatory: if a boss's countdown
+- **Four different bosses in a fixed order** (the consultant at 3:00, the multifunction printer at 6:00, Fiske-Frida
+  and her friends at 9:00 and the final boss at 12:00, who returns every 3 minutes after that), each with its own
+  telegraphed attacks. Bosses are mandatory: if a boss's countdown
   runs out, you're fired («Du har fått sparken!») and the shift ends.
 - **"Today's shift" (Dagens vakt):** all randomness is seeded from today's date (Europe/Oslo), so everyone
   plays the same waves and gets the same upgrade offers for the same choices.
@@ -145,7 +149,7 @@ On Windows without Node.js: `powershell -File tools/node.ps1 tools/simulate.js`.
 **Debug mode:** add `?debug` to the URL for a performance overlay (FPS, frame time, entity counts, memory,
 help per second per weapon) and buttons to skip time, level up, spawn bosses and run a 5-minute stress test.
 `?debug&utenGPU` forces software rendering (the worst case for an office PC). `?debug=karakterer` shows a
-preview of the four playable characters and the final boss. `?debug=boss1` … `?debug=boss4` jumps straight to
+preview of the four playable characters, the final boss and Fiske-Frida. `?debug=boss1` … `?debug=boss4` jumps straight to
 that boss with a typical build for the time. Runs where debug buttons were used are never submitted to the leaderboard.
 
 ## Customising

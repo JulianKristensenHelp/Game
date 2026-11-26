@@ -244,6 +244,19 @@ strong { font-weight: normal; color: var(--primary-dark); }
   box-shadow: 0 -0.25em 0 0 #8a5a00, 0 0.25em 0 0 #8a5a00, -0.25em 0 0 0 #8a5a00, 0.25em 0 0 0 #8a5a00, inset 0 -0.5em 0 0 #f5cf3a, 0 0 0 0.75em rgba(245, 207, 58, 0.45);
 }
 .card.highlighted .level { color: #a15c00; }
+/* The Matrix (Endringsprompt 4): its own card with a green «code» frame */
+.card.matrix {
+  background: #0d1a10; color: #c8ffd4;
+  background-image: repeating-linear-gradient(90deg, rgba(47, 208, 106, 0.10) 0 0.25em, transparent 0.25em 1.5em);
+  box-shadow: 0 -0.25em 0 0 #2fd06a, 0 0.25em 0 0 #2fd06a, -0.25em 0 0 0 #2fd06a, 0.25em 0 0 0 #2fd06a, inset 0 -0.5em 0 0 #145c2e, 0 0 0 0.75em rgba(47, 208, 106, 0.45);
+}
+.card.matrix::before { background: #2fd06a; }
+.card.matrix .level { color: #7dff9e; }
+.card.matrix:hover { background-color: #12261a; }
+/* The Matrix animation: over the game, scaled exactly like it (set by main.js) */
+#matrixFx { position: fixed; z-index: 30; image-rendering: pixelated; cursor: pointer; background: transparent; }
+#noticeBoard li.matrix { background: #0d1a10; color: #c8ffd4; box-shadow: 0 0 0 0.2em #2fd06a; }
+#noticeBoard li.matrix small { color: #7dff9e; }
 @media (max-width: 760px) {
   .card { min-height: 0; flex-direction: row; flex-wrap: wrap; text-align: left; padding: 0.75em 0.9em 0.75em 2.6em; column-gap: 0.75em; }
   .card canvas.icon { width: 3.5em; height: 3.5em; }

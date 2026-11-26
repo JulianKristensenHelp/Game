@@ -4,9 +4,11 @@ import { CONFIG } from './config.js';
 import { TAU } from './utils.js';
 import { effect } from './effects.js';
 import { help, inView } from './enemies.js';
+import { INSIDE } from './map.js';
 
 const V = CONFIG.weapons;
 const MAX_PROJ = CONFIG.maxProjectilesPerWeapon;
+const VB = CONFIG.view.width, VH = CONFIG.view.height;
 /** Reused list of the lawyers already picked as targets in one volley. */
 const PICKED = /** @type {number[]} */ ([]);
 
@@ -24,6 +26,8 @@ export function makeProjectile() {
     turn: 0, split: 0,
     /** Mini printer: thrown from (sx, sy) to (tx, ty); t = time since the throw, burst = time to the next paper burst. */
     sx: 0, sy: 0, tx: 0, ty: 0, t: 0, burst: 0, every: 0, radius: 0, confetti: 0, confettiRadius: 0,
+    /** Ping-pong ball: the start help, the cap on the help increase, bounces so far, and when each lawyer was last hit. */
+    base: 0, boostMax: 0, bounced: 0, hitT: /** @type {number[]} */ ([]),
   };
 }
 
@@ -365,10 +369,207 @@ function updateAngel(s, w, t, dt) {
     pr.radius = t.range * p.mod.area;
     pr.confetti = t.confetti ?? 0;
     pr.confettiRadius = (t.confettiRadius ?? 0) * p.mod.area;
-    pr.evo = w.evo;
+    // 2 = The Matrix (green «code» style, help counted for The Matrix)
+    pr.evo = w.id === 'matrix' ? 2 : w.evo ? 1 : 0;
     pr.angle = 0;
     pr.nHit = 0;
     pr.fx = t.fx;
+  }
+}
+
+// ---------- Endringsprompt 4: Ping-pong, Livvakten (the bodyguard) and The Matrix ----------
+
+const PP = V.pingpong;
+const BG = V.bodyguard;
+
+/** A random diagonal direction (from the ping-pong stream in «Dagens vakt», so it is the same for everyone). */
+function diagonal(s) {
+  const r = s.rng.pingpong;
+  return Math.PI / 4 + r.integer(4) * (Math.PI / 2) + (r.next() - 0.5) * 0.5;
+}
+
+/** Ping-pong: launches new balls while there is room under the cap (count, or maxBalls for Ping of Death). */
+function activatePingpong(s, w, t) {
+  const p = s.player;
+  const cap = Math.min(MAX_PROJ, w.evo ? t.maxBalls : t.count);
+  const room = Math.min(cap - s.projCounter.ball, t.count);
+  for (let i = 0; i < room; i++) launchBall(s, p.x, p.y - 6, diagonal(s), t.speed * p.mod.projSpeed, t.help, t.boostMax, t.bounces, 0, w.evo, t.fx);
+}
+
+function launchBall(s, x, y, angle, speed, helpBase, boostMax, bounces, bounced, evo, fx) {
+  const pr = s.projectiles.acquire();
+  s.projCounter.ball++;
+  pr.type = 'ball';
+  pr.x = x;
+  pr.y = y;
+  pr.speed = speed;
+  pr.vx = Math.cos(angle) * speed;
+  pr.vy = Math.sin(angle) * speed;
+  pr.base = helpBase;
+  pr.boostMax = boostMax;
+  pr.bounced = bounced;
+  pr.help = helpBase * (1 + Math.min(boostMax, PP.helpUp * bounced));
+  pr.bounces = bounces;
+  pr.life = 30;
+  pr.angle = angle;
+  pr.evo = evo;
+  pr.nHit = 0;
+  pr.fx = fx;
+  return pr;
+}
+
+/** Has this ball hit this lawyer within the last «hitPause» seconds? If not, the hit is recorded (16 slots). */
+function ballMayHit(pr, uid, now) {
+  const n = pr.nHit < 16 ? pr.nHit : 16;
+  for (let k = 0; k < n; k++) {
+    if (pr.struck[k] !== uid) continue;
+    if (now - pr.hitT[k] < PP.hitPause) return false;
+    pr.hitT[k] = now;
+    return true;
+  }
+  const k = pr.nHit % 16;
+  pr.struck[k] = uid;
+  pr.hitT[k] = now;
+  pr.nHit++;
+  return true;
+}
+
+/** Where the bodyguard (or The Matrix's bodyguard) stands: logic state on the weapon, so the firewalls are placed the same for everyone. */
+export function guardPos(w) {
+  GUARD[0] = w.gx ?? 0;
+  GUARD[1] = w.gy ?? 0;
+  return GUARD;
+}
+const GUARD = [0, 0];
+
+/** Sectors for finding the densest flocks around the player (reused, no allocation). */
+const SECTORS = 8;
+const SECT_N = new Float64Array(SECTORS), SECT_X = new Float64Array(SECTORS), SECT_Y = new Float64Array(SECTORS);
+const DIRS = /** @type {number[]} */ ([]);
+
+/**
+ * The directions (angles) of the «n» densest flocks within 220 px of the player, densest first. The lawyers are
+ * counted in eight sectors, and the direction of a sector is the average direction of the lawyers in it.
+ */
+function flockDirections(s, n) {
+  const p = s.player, out = s.hitList2, f = s.enemies.items;
+  SECT_N.fill(0);
+  SECT_X.fill(0);
+  SECT_Y.fill(0);
+  const m = s.grid.find(p.x, p.y, 220, out);
+  for (let i = 0; i < m; i++) {
+    const e = f[out[i]];
+    if (!e.active) continue;
+    const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1;
+    const a = Math.atan2(dy, dx);
+    const k = ((Math.floor(((a + Math.PI) / TAU) * SECTORS) % SECTORS) + SECTORS) % SECTORS;
+    // closer lawyers count more (they are the ones the wall must stop)
+    const weight = 1 + 60 / (d + 20);
+    SECT_N[k] += weight;
+    SECT_X[k] += (dx / d) * weight;
+    SECT_Y[k] += (dy / d) * weight;
+  }
+  DIRS.length = 0;
+  for (let j = 0; j < n; j++) {
+    let best = -1, bestN = 0;
+    for (let k = 0; k < SECTORS; k++) {
+      if (SECT_N[k] > bestN) {
+        bestN = SECT_N[k];
+        best = k;
+      }
+    }
+    if (best < 0) break;
+    DIRS.push(Math.atan2(SECT_Y[best], SECT_X[best]));
+    // the neighbouring sectors are part of the same flock
+    SECT_N[best] = 0;
+    SECT_N[(best + 1) % SECTORS] *= 0.35;
+    SECT_N[(best + SECTORS - 1) % SECTORS] *= 0.35;
+  }
+  if (DIRS.length === 0) DIRS.push(Math.atan2(p.dirY, p.dirX));
+  return DIRS;
+}
+
+/**
+ * Livvakten: walks beside the player, and every «interval» seconds lays one or more firewalls between the player and
+ * the densest flocks. With «matrix», the stats are The Matrix's (wallHelp, wallInterval) and the cooldown is w.tick.
+ */
+function updateGuard(s, w, t, dt, matrix) {
+  const p = s.player;
+  // He keeps to the side opposite the walking direction, a little behind
+  const side = p.dirX < 0 ? 1 : -1;
+  const tx = p.x + side * 20 - p.dirX * 6, ty = p.y + 2 - p.dirY * 6;
+  if (w.gx === undefined || (w.gx === 0 && w.gy === 0)) {
+    w.gx = tx;
+    w.gy = ty;
+  }
+  const dx = tx - w.gx, dy = ty - w.gy, d = Math.hypot(dx, dy);
+  if (d > 0.5) {
+    const step = Math.min(d, Math.max(110, d * 4) * dt);
+    w.gx += (dx / d) * step;
+    w.gy += (dy / d) * step;
+  }
+  if (w.pose > 0) w.pose -= dt;
+  const cd = matrix ? 'tick' : 'cd';
+  w[cd] -= dt;
+  if (w[cd] > 0) return;
+  w[cd] = dualMonitor(s) ? 0.4 : (matrix ? t.wallInterval : t.interval) * p.mod.cd;
+  const dirs = flockDirections(s, t.walls);
+  for (let i = 0; i < dirs.length; i++) {
+    if (s.projCounter.wall >= BG.maxWalls) break;
+    placeWall(s, dirs[i], t, matrix);
+  }
+  // he stands still for a moment while he «sets up» the firewall (looks only)
+  w.pose = 0.5;
+  w.aim = dirs[0];
+}
+
+function placeWall(s, a, t, matrix) {
+  const p = s.player;
+  const pr = s.projectiles.acquire();
+  s.projCounter.wall++;
+  pr.type = 'wall';
+  pr.x = p.x + Math.cos(a) * BG.distance;
+  pr.y = p.y + Math.sin(a) * BG.distance;
+  // angle = the direction toward the flock; the wall runs across it
+  pr.angle = a;
+  pr.range = (t.lengthPx * p.mod.area) / 2;
+  pr.life = t.duration * p.mod.duration;
+  pr.t = 0;
+  pr.help = matrix ? t.wallHelp : t.help;
+  pr.burst = 0;
+  pr.every = BG.tick;
+  pr.splash = t.slow;
+  pr.evo = matrix ? 2 : 0;
+  pr.nHit = 0;
+  pr.fx = t.fx;
+}
+
+/**
+ * The Matrix: the angel throws (green) mini printers, the bodyguard lays (green) firewalls, and every «rainEvery»
+ * seconds the code rain starts: all lawyers on screen get a little help, and everything hostile moves slower.
+ */
+function updateMatrix(s, w, t, dt) {
+  updateAngel(s, w, t, dt);
+  updateGuard(s, w, t, dt, true);
+  w.phase -= dt;
+  if (w.phase <= 0) {
+    w.phase = t.rainEvery;
+    s.rain = t.rainTime;
+    s.rainTick = 0;
+    s.events.push('codeRain');
+  }
+  if (s.rain > 0) {
+    s.rain -= dt;
+    s.timeScale = s.rain > 0 ? t.slowMo : 1;
+    s.rainTick -= dt;
+    if (s.rainTick <= 0) {
+      s.rainTick += t.rainTick;
+      const f = s.enemies;
+      for (let i = 0; i < f.n; i++) {
+        const e = f.items[i];
+        if (e.active && inView(s, e.x, e.y, 0)) help(s, e, t.rainHelp, 'matrix', null);
+      }
+    }
   }
 }
 
@@ -498,7 +699,7 @@ function dualMonitor(s) {
 
 const ACTIVATORS = {
   powerCycle: activatePowerCycle, toner: activateToner, password: activatePassword, hdmi: activateHdmi, remote: activateRemote,
-  ctrlz: activateCtrlz, teams: activateTeams,
+  ctrlz: activateCtrlz, teams: activateTeams, pingpong: activatePingpong,
 };
 
 /** Counts down and activates all weapons the player has. */
@@ -527,6 +728,14 @@ export function updateWeapons(s, dt) {
       updateAngel(s, w, t, dt);
       continue;
     }
+    if (w.id === 'bodyguard') {
+      updateGuard(s, w, t, dt, false);
+      continue;
+    }
+    if (w.id === 'matrix') {
+      updateMatrix(s, w, t, dt);
+      continue;
+    }
     w.cd -= dt;
     if (w.cd <= 0) {
       ACTIVATORS[w.id](s, w, t);
@@ -546,6 +755,8 @@ function removeProjectile(s, i) {
     s.teamsTargets.delete(pr);
   } else if (pr.type === 'ctrlz') s.projCounter.ctrlz--;
   else if (pr.type === 'mini') s.projCounter.mini--;
+  else if (pr.type === 'ball') s.projCounter.ball--;
+  else if (pr.type === 'wall') s.projCounter.wall--;
   else if (pr.type === 'sheet') {
     s.projCounter.sheet--;
     s.teamsTargets.delete(pr);
@@ -564,6 +775,71 @@ function newHit(pr, uid) {
   pr.struck[pr.nHit % 64] = uid;
   pr.nHit++;
   return true;
+}
+
+/**
+ * A ping-pong ball: flies straight, bounces off the edges of the screen and the outer walls, and goes through the
+ * lawyers. Every bounce makes it faster and stronger (up to a cap); after its last bounce it is gone.
+ * Ping of Death: every bounce splits the ball in two (up to the fixed cap on balls).
+ */
+function updateBall(s, pr, i, dt) {
+  const out = s.hitList, f = s.enemies.items;
+  pr.x += pr.vx * dt;
+  pr.y += pr.vy * dt;
+  pr.angle += dt * 9;
+  const R = PP.radius, k = s.camera;
+  const left = Math.max(k.x, INSIDE.x0) + R, right = Math.min(k.x + VB, INSIDE.x1) - R;
+  const top = Math.max(k.y, INSIDE.y0) + R, bottom = Math.min(k.y + VH, INSIDE.y1) - R;
+  let bounced = false;
+  if (pr.x < left && pr.vx < 0) {
+    pr.x = left;
+    pr.vx = -pr.vx;
+    bounced = true;
+  } else if (pr.x > right && pr.vx > 0) {
+    pr.x = right;
+    pr.vx = -pr.vx;
+    bounced = true;
+  }
+  if (pr.y < top && pr.vy < 0) {
+    pr.y = top;
+    pr.vy = -pr.vy;
+    bounced = true;
+  } else if (pr.y > bottom && pr.vy > 0) {
+    pr.y = bottom;
+    pr.vy = -pr.vy;
+    bounced = true;
+  }
+  if (bounced) {
+    if (pr.bounces <= 0) {
+      effect(s, 'poof', pr.x, pr.y, 0.3, 5);
+      removeProjectile(s, i);
+      return;
+    }
+    pr.bounces--;
+    pr.bounced++;
+    const speed = Math.min(PP.maxSpeed, pr.speed * (1 + PP.speedUp));
+    const scale = speed / (pr.speed || 1);
+    pr.speed = speed;
+    pr.vx *= scale;
+    pr.vy *= scale;
+    pr.help = pr.base * (1 + Math.min(pr.boostMax, PP.helpUp * pr.bounced));
+    // Every other bounce: a small «PING» / «PONG» (only while there are few balls) and a «pok»
+    if (pr.bounced % 2 === 1 && s.projCounter.ball <= PP.textMaxBalls) {
+      effect(s, 'ping', pr.x, pr.y - 8, 0.45, 0, 0, (pr.bounced >> 1) % 2);
+      s.events.push('pok');
+    }
+    // Ping of Death: the ball splits in two
+    if (pr.evo && s.projCounter.ball < V.pingpong.combination.stats.maxBalls && s.projCounter.ball < MAX_PROJ) {
+      const a = Math.atan2(pr.vy, pr.vx) + 0.55;
+      launchBall(s, pr.x, pr.y, a, pr.speed, pr.base, pr.boostMax, pr.bounces, pr.bounced, true, pr.fx);
+    }
+  }
+  const n = s.grid.find(pr.x, pr.y, R + 2, out);
+  for (let j = 0; j < n; j++) {
+    const e = f[out[j]];
+    if (ballMayHit(pr, e.uid, s.time)) help(s, e, pr.help, 'pingpong', pr.fx);
+  }
+  if (pr.life <= 0) removeProjectile(s, i);
 }
 
 /** Moves all projectiles and checks hits. Anything that leaves the map or the screen is removed. */
@@ -705,7 +981,7 @@ export function updateProjectiles(s, dt) {
       }
       const dx = target.x - pr.x, dy = target.y - pr.y, d = Math.hypot(dx, dy) || 1;
       if (d <= pr.speed * dt + target.r) {
-        help(s, target, pr.help, 'angel', pr.fx);
+        help(s, target, pr.help, pr.evo === 2 ? 'matrix' : 'angel', pr.fx);
         removeProjectile(s, i);
         continue;
       }
@@ -714,6 +990,38 @@ export function updateProjectiles(s, dt) {
       pr.x += pr.vx * dt;
       pr.y += pr.vy * dt;
       pr.angle = Math.atan2(dy, dx);
+      if (pr.life <= 0) removeProjectile(s, i);
+      continue;
+    }
+
+    if (pr.type === 'ball') {
+      updateBall(s, pr, i, dt);
+      continue;
+    }
+
+    if (pr.type === 'wall') {
+      // A firewall: a line of flames across pr.angle. Lawyers in it get help every «tick» seconds and are slowed.
+      pr.t += dt;
+      pr.burst -= dt;
+      if (pr.burst <= 0) {
+        pr.burst += pr.every;
+        const cos = Math.cos(pr.angle), sin = Math.sin(pr.angle);
+        const L = pr.range, B = BG.width / 2;
+        const n = s.grid.find(pr.x, pr.y, L + B + 4, out);
+        const source = pr.evo === 2 ? 'matrix' : 'bodyguard';
+        for (let j = 0; j < n; j++) {
+          const e = f[out[j]];
+          const dx = e.x - pr.x, dy = e.y - pr.y;
+          const along = -dx * sin + dy * cos, across = dx * cos + dy * sin;
+          if (Math.abs(along) > L + e.r || Math.abs(across) > B + e.r) continue;
+          help(s, e, pr.help, source, pr.fx);
+          if (e.active && e.type !== 'boss') {
+            if (e.slowT <= 0) e.slowBy = 0;
+            e.slowT = Math.max(e.slowT, pr.every + 0.1);
+            e.slowBy = Math.max(e.slowBy, pr.splash);
+          }
+        }
+      }
       if (pr.life <= 0) removeProjectile(s, i);
       continue;
     }
@@ -764,7 +1072,7 @@ export function updateProjectiles(s, dt) {
         if (pr.confetti > 0) {
           // Himmelsk serviceavtale (heavenly service agreement): a final burst of paper confetti
           const n = s.grid.find(pr.x, pr.y, pr.confettiRadius, out);
-          for (let j = 0; j < n; j++) help(s, f[out[j]], pr.confetti, 'angel', pr.fx);
+          for (let j = 0; j < n; j++) help(s, f[out[j]], pr.confetti, pr.evo === 2 ? 'matrix' : 'angel', pr.fx);
           effect(s, 'confetti', pr.x, pr.y, 0.6, pr.confettiRadius);
         }
         effect(s, 'poof', pr.x, pr.y, 0.4, 8);

@@ -25,6 +25,12 @@ const SOUNDS = {
   fired: { max: 1, tones: [[330, 0, 0.3, 'saw', 0.4], [262, 0.32, 0.3, 'saw', 0.4], [196, 0.64, 0.8, 'saw', 0.45, 120]] },
   tell: { max: 2, tones: [[880, 0, 0.06, 'square', 0.15], [880, 0.1, 0.06, 'square', 0.15]] },
   jam: { max: 1, tones: [[200, 0, 0.08, 'square', 0.3], [200, 0.1, 0.08, 'square', 0.3], [200, 0.2, 0.08, 'square', 0.3]] },
+  // ----- Endringsprompt 4 -----
+  /** Ping-pong: a short «pok». */
+  pok: { max: 2, tones: [[1500, 0, 0.03, 'sine', 0.35, 900]] },
+  cookie: { max: 1, tones: [[700, 0, 0.06, 'triangle', 0.35, 900], [1050, 0.06, 0.08, 'triangle', 0.3]] },
+  frida: { max: 1, tones: [[659, 0, 0.12, 'triangle', 0.4], [784, 0.14, 0.12, 'triangle', 0.4], [988, 0.28, 0.12, 'triangle', 0.4], [784, 0.42, 0.3, 'sine', 0.35, 700]] },
+  matrix: { max: 1, tones: [[110, 0, 0.5, 'saw', 0.3, 220], [440, 0.5, 0.12, 'square', 0.25], [660, 0.65, 0.12, 'square', 0.25], [880, 0.8, 0.35, 'triangle', 0.35]] },
 };
 
 /** Computes a sound as raw audio samples (done once per sound). */

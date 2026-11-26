@@ -7,7 +7,8 @@ import { CONFIG } from './config.js';
 import { TAU } from './utils.js';
 import { effect } from './effects.js';
 import { damagePlayer } from './player.js';
-import { spawnEnemy, inView, trySpawn } from './enemies.js';
+import { spawnEnemy, inView, trySpawn, becomesHappy, countPickups } from './enemies.js';
+import { dropPickup } from './tickets.js';
 import { INSIDE } from './map.js';
 import { POSE } from './figures.js';
 
@@ -18,9 +19,12 @@ const SHOTS = CONFIG.enemyShots;
 const ATTACKS = {
   nordic: ['queue', 'forward', 'callBack'],
   printerBoss: ['cmyk', 'printJob'],
-  deadline: ['emails'],
+  frida: ['hook', 'herring', 'phish', 'bait'],
   johan: ['sprint', 'calendar', 'meeting', 'forwarded'],
 };
+
+/** Fiske-Frida's fake pickups («Lokkemat»). @type {('fakeDrink'|'fakePc')[]} */
+export const BAIT_TYPES = ['fakeDrink', 'fakePc'];
 
 /** Cooldown (seconds) for an attack. */
 function cooldown(type, id) {
@@ -34,6 +38,9 @@ function poseFor(type, id) {
   if (type === 'nordic') return id === 'queue' ? POSE.raise : id === 'forward' ? POSE.point : POSE.clap;
   if (type === 'printerBoss') return id === 'cmyk' ? POSE.point : POSE.raise;
   if (type === 'johan') return id === 'sprint' ? POSE.point : id === 'calendar' ? POSE.raise : id === 'meeting' ? POSE.clap : POSE.raise;
+  // Frida swings the rod over her head before the hook, and points up at the sky before the herring rain.
+  // The forwarded emails are warned by the friends (they raise their phones), and the bait has no warning at all.
+  if (type === 'frida') return id === 'hook' ? POSE.raise : id === 'herring' ? POSE.point : -1;
   return -1;
 }
 
@@ -104,8 +111,9 @@ export function spawnBoss(s, type) {
   e.vy = 0;
   const list = ATTACKS[type];
   for (let i = 0; i < e.cds.length; i++) e.cds[i] = i < list.length ? cooldown(type, list[i]) * (0.25 + 0.3 * i) : 0;
-  if (type !== 'deadline') e.variant = 0;
+  e.variant = 0;
   s.boss = e;
+  if (type === 'frida') spawnFriends(s, e);
   s.bossNo++;
   s.nextBoss = bossTimeAt(s.bossNo);
   s.bossWarned = false;
@@ -113,6 +121,74 @@ export function spawnBoss(s, type) {
   s.stat.bossLog.push({ type, helped: false, time: s.time, helpedAt: 0, returnNo });
   s.events.push('boss:' + type);
   return e;
+}
+
+/** Fiske-Frida's two friends: smaller, each with her own frustration (a share of Frida's), following close behind her. */
+function spawnFriends(s, e) {
+  const F = B.frida.friends;
+  for (let i = 0; i < F.count; i++) {
+    const f = spawnEnemy(s, 'friend', e.x + (i ? 1 : -1) * F.follow, e.y + 14);
+    f.hp = f.maxHp = e.maxHp * F.frustration;
+    f.points = Math.round(e.points * F.points);
+    f.damage = F.damage * damageScale(e);
+    f.speed = B.frida.speed * F.speed;
+    f.bossUid = e.uid;
+    f.slot = i;
+    // each friend has her own look (looks only)
+    f.variant = i;
+  }
+}
+
+/**
+ * One of Frida's friends: walks to a spot behind Frida (seen from the player), one on each side. While Frida warns
+ * about the forwarded emails, the friends stand still and raise their phones.
+ */
+export function updateFriend(s, e, dt, dx, dy) {
+  const b = s.boss;
+  if (!b || !b.active || b.uid !== e.bossUid) {
+    // Frida is gone (only in debug mode): they simply walk toward the player like everyone else
+    e.x += dx * e.speed * s.timeScale * dt;
+    e.y += dy * e.speed * s.timeScale * dt;
+    e.pose = -1;
+    return;
+  }
+  const F = B.frida.friends;
+  const warning = b.attack === 'phish' && b.tell;
+  e.pose = warning ? POSE.raise : -1;
+  e.alert = warning;
+  if (warning) return;
+  // behind Frida (away from the player) and to the side
+  const bx = s.player.x - b.x, by = s.player.y - b.y, bd = Math.hypot(bx, by) || 1;
+  const ux = bx / bd, uy = by / bd, side = e.slot ? 1 : -1;
+  const tx = b.x - ux * F.follow * 0.6 - uy * side * F.follow, ty = b.y - uy * F.follow * 0.6 + ux * side * F.follow + 6;
+  const mx = tx - e.x, my = ty - e.y, md = Math.hypot(mx, my);
+  if (md > 2) {
+    const step = Math.min(md, e.speed * s.timeScale * (md > 80 ? 2.5 : 1) * dt);
+    e.x += (mx / md) * step;
+    e.y += (my / md) * step;
+  }
+  if (Math.abs(dx) > 0.15) e.direction = dx < 0 ? -1 : 1;
+}
+
+/** Frida is helped (or the shift is over): the friends become happy too, and the fake pickups disappear. */
+function fridaDone(s, e, happy) {
+  const f = s.enemies;
+  for (let i = 0; i < f.n; i++) {
+    const o = f.items[i];
+    if (!o.active || o.type !== 'friend' || o.bossUid !== e.uid) continue;
+    if (happy) {
+      // no extra points: the friends' bonus is for helping them on their own
+      o.points = 0;
+      becomesHappy(s, o);
+    } else o.pose = POSE.sad;
+  }
+  const k = s.pickups;
+  for (let i = k.n - 1; i >= 0; i--) {
+    if (BAIT_TYPES.includes(k.items[i].type)) {
+      effect(s, 'poof', k.items[i].x, k.items[i].y, 0.4, 8);
+      k.removeAt(i);
+    }
+  }
 }
 
 // ---------- One boss, one update ----------
@@ -162,16 +238,18 @@ export function updateBoss(s, e, dt, dx, dy) {
   }
 
   // Movement: toward the player, except while warning, sprinting or on «Vi ringer deg tilbake» ("We'll call you back").
+  // Bullet time (The Matrix's code rain) slows the movement and the attack cooldowns, never the countdown.
+  const ts = s.timeScale;
   const fast = e.phase2 ? B.johan.phase2.speed : 1;
   if (e.attack === 'sprint' && !e.tell) {
-    e.x += e.vx * dt;
-    e.y += e.vy * dt;
-  } else if (!e.attack || (e.attack === 'printJob' && !e.tell) || (e.attack === 'emails' && !e.tell)) {
+    e.x += e.vx * ts * dt;
+    e.y += e.vy * ts * dt;
+  } else if (!e.attack || (e.attack === 'printJob' && !e.tell) || (e.attack === 'herring' && !e.tell) || e.attack === 'phish') {
     // Far away, the boss jogs to catch up (so the fight actually happens, even if the player keeps running)
     const d = Math.hypot(p.x - e.x, p.y - e.y);
     const jog = d > B.catchUpFrom ? B.catchUpSpeed : 1;
-    e.x += dx * e.speed * fast * jog * dt;
-    e.y += dy * e.speed * fast * jog * dt;
+    e.x += dx * e.speed * fast * jog * ts * dt;
+    e.y += dy * e.speed * fast * jog * ts * dt;
   }
   if (Math.abs(e.attack === 'sprint' ? e.vx : dx) > 0.15) e.direction = (e.attack === 'sprint' ? e.vx : dx) < 0 ? -1 : 1;
 
@@ -195,15 +273,17 @@ export function updateBoss(s, e, dt, dx, dy) {
   }
   const list = ATTACKS[e.bossType];
   const faster = e.phase2 ? B.johan.phase2.cooldowns : 1;
-  for (let i = 0; i < list.length; i++) if (e.cds[i] > 0) e.cds[i] -= dt;
+  for (let i = 0; i < list.length; i++) if (e.cds[i] > 0) e.cds[i] -= dt * ts;
   if (e.fightT < B.calmStart || !inView(s, e.x, e.y, -8)) return;
   for (let i = 0; i < list.length; i++) {
     const id = list[i];
     if (e.cds[i] > 0) continue;
     if (id === 'forwarded' && !e.phase2) continue;
     if (id === 'meeting' && s.enemies.n > CONFIG.spawn.maxConcurrent - 10) continue;
+    if (id === 'phish' && !hasFriends(s, e)) continue;
+    if (id === 'bait' && baitCount(s) >= B.frida.bait.max) continue;
     // Wait for room under the cap on enemy projectiles
-    if (id !== 'callBack' && id !== 'sprint' && id !== 'meeting' && s.enemyShots.n > SHOTS.max - 6) continue;
+    if (id !== 'callBack' && id !== 'sprint' && id !== 'meeting' && id !== 'bait' && s.enemyShots.n > SHOTS.max - 8) continue;
     e.cds[i] = cooldown(e.bossType, id) * faster;
     e.attack = id;
     e.pose = poseFor(e.bossType, id);
@@ -212,6 +292,13 @@ export function updateBoss(s, e, dt, dx, dy) {
     if (id === 'forwarded') {
       // Johan alternates between the Nørdic consultant's ticket and the printer's cartridges
       e.attack = e.alt++ % 2 === 0 ? 'forward' : 'cmyk';
+    }
+    if (id === 'bait') {
+      // «Lokkemat»: deliberately no warning – the fake pickups simply appear (they can be told apart by looking closely)
+      spawnBait(s);
+      e.attack = '';
+      e.pose = -1;
+      return;
     }
     if (id === 'callBack') {
       // Not dangerous, so no warning: the headset comes off, and he cannot be helped for a while
@@ -262,9 +349,41 @@ function startAttack(s, e) {
       e.streamT = 0;
       e.streamA = a - P.printJob.arc / 2;
       break;
-    case 'emails': {
-      const D = B.deadline.emails;
-      for (let j = 0; j < D.count; j++) shoot(s, 'email', e.x, e.y - 10, a + (j - (D.count - 1) / 2) * D.spread, SHOTS.speed, e.damage * D.damage, SHOTS.lifetime);
+    case 'hook': {
+      // «Klikk på lenken!»: the hook flies in a straight line toward where the player stood (the dashed line)
+      const H = B.frida.hook;
+      shoot(s, 'hook', e.x + e.direction * 14, e.y - 26, a, H.speed, e.damage * H.damage, H.range / H.speed);
+      e.attackT = H.range / H.speed;
+      break;
+    }
+    case 'herring': {
+      // «Silderegn»: shadows on the floor – one where the player stands, the rest around – and herring land on them
+      const H = B.frida.herring, rs = s.rng.special;
+      for (let j = 0; j < H.count; j++) {
+        const v = rs.next() * TAU, d = j === 0 ? 0 : 18 + rs.next() * H.spread;
+        const x = Math.min(INSIDE.x1 - 8, Math.max(INSIDE.x0 + 8, e.aimX + Math.cos(v) * d));
+        const y = Math.min(INSIDE.y1 - 8, Math.max(INSIDE.y0 + 8, e.aimY + Math.sin(v) * d));
+        const q = shoot(s, 'herring', x, y, 0, 0, H.damage * damageScale(e), H.fall);
+        if (q) q.r = H.radius;
+      }
+      e.attackT = 0.3;
+      break;
+    }
+    case 'phish': {
+      // «Videresendt svindel-e-post»: each friend sends fish-shaped emails that swim in a wavy line toward the player
+      const P = B.frida.phish, p = s.player, f = s.enemies;
+      for (let i = 0; i < f.n; i++) {
+        const o = f.items[i];
+        if (!o.active || o.type !== 'friend' || o.bossUid !== e.uid) continue;
+        const base = Math.atan2(p.y - o.y, p.x - o.x);
+        for (let j = 0; j < P.perFriend; j++) {
+          const q = shoot(s, 'fishMail', o.x, o.y - 12, base + (j - (P.perFriend - 1) / 2) * P.spread, P.speed, P.damage * damageScale(e), P.lifetime);
+          if (q) {
+            q.speed = P.speed;
+            q.color = j;
+          }
+        }
+      }
       e.attackT = 0.2;
       break;
     }
@@ -313,6 +432,31 @@ function continueAttack(s, e, dt) {
   }
 }
 
+/** Does Frida still have a friend who can send emails? */
+function hasFriends(s, e) {
+  const f = s.enemies;
+  for (let i = 0; i < f.n; i++) if (f.items[i].active && f.items[i].type === 'friend' && f.items[i].bossUid === e.uid) return true;
+  return false;
+}
+
+function baitCount(s) {
+  return countPickups(s, BAIT_TYPES[0]) + countPickups(s, BAIT_TYPES[1]);
+}
+
+/**
+ * «Lokkemat»: fake pickups appear a little away from the player (special stream, so they are the same for everyone).
+ * A fake energy drink or a fake «Ny PC», each with a small fish hook. Never on the minimap.
+ */
+function spawnBait(s) {
+  const K = B.frida.bait, p = s.player, rs = s.rng.special;
+  const n = K.max - baitCount(s);
+  for (let i = 0; i < Math.min(2, n); i++) {
+    const v = rs.next() * TAU, d = K.minDistance + rs.next() * (K.maxDistance - K.minDistance);
+    const type = BAIT_TYPES[rs.integer(2)];
+    dropPickup(s, type, p.x + Math.cos(v) * d, p.y + Math.sin(v) * d);
+  }
+}
+
 /** The bosses' projectile damage follows the boss's own damage growth. */
 function damageScale(e) {
   return B[e.bossType].damage > 0 ? e.damage / B[e.bossType].damage : 0;
@@ -325,6 +469,7 @@ function fired(s, e) {
   e.tell = false;
   e.alert = false;
   e.pose = POSE.sad;
+  if (e.bossType === 'frida') fridaDone(s, e, false);
   s.fired = { type: e.bossType, name: B[e.bossType].name, time: s.time };
   s.status = 'done';
   s.events.push('fired');
@@ -357,6 +502,7 @@ export function bossHelped(s, e) {
     }
   }
   effect(s, 'bubble', e.x, e.y - 44, 2.2, 0, 0, 0, false, k.happyText);
+  if (e.bossType === 'frida') fridaDone(s, e, true);
   // Every helped boss gives one more reroll and one more banish for the level-up cards
   s.rerolls += CONFIG.upgrades.perBoss;
   s.banishes += CONFIG.upgrades.perBoss;
@@ -368,10 +514,10 @@ export function bossHelped(s, e) {
 
 /** Empty enemy projectile for the pool. */
 export function makeShot() {
-  return { kind: 'email', x: 0, y: 0, vx: 0, vy: 0, life: 0, t: 0, damage: 0, angle: 0, r: 4, color: 0, flight: 0 };
+  return { kind: 'email', x: 0, y: 0, vx: 0, vy: 0, life: 0, t: 0, damage: 0, angle: 0, r: 4, color: 0, flight: 0, speed: 0 };
 }
 
-const RADIUS = { email: 4, note: 4, ticket: 6, ticketSmall: 4, cartridge: 4, paper: 4, calendar: 5 };
+const RADIUS = { email: 4, note: 4, ticket: 6, ticketSmall: 4, cartridge: 4, paper: 4, calendar: 5, hook: 6, herring: 11, fishMail: 5 };
 
 /**
  * Sends a projectile in a straight line (not homing). Returns it, or null if the cap is reached.
@@ -392,6 +538,7 @@ export function shoot(s, kind, x, y, angle, speed, damage, life) {
   q.angle = angle;
   q.r = RADIUS[kind] ?? 4;
   q.color = 0;
+  q.speed = speed;
   if (kind === 'email') s.events.push('email');
   return q;
 }
@@ -420,12 +567,33 @@ function addPuddle(s, x, y, color) {
 export function updateEnemyShots(s, dt) {
   const pool = s.enemyShots, p = s.player;
   const N = B.nordic;
+  // Bullet time (The Matrix): the projectiles fly slower but just as far
+  const sdt = dt * s.timeScale;
   for (let i = pool.n - 1; i >= 0; i--) {
     const q = pool.items[i];
-    q.x += q.vx * dt;
-    q.y += q.vy * dt;
-    q.t += dt;
-    q.life -= dt;
+    if (q.kind === 'fishMail') {
+      // swims toward the player in a wavy line (the wave is across the direction it was sent)
+      const P = B.frida.phish;
+      const w = Math.cos(q.t * P.waveSpeed + q.color * 1.6) * P.wave * P.waveSpeed;
+      const c = Math.cos(q.angle), sn = Math.sin(q.angle);
+      q.x += (c * q.speed - sn * w) * sdt;
+      q.y += (sn * q.speed + c * w) * sdt;
+    } else {
+      q.x += q.vx * sdt;
+      q.y += q.vy * sdt;
+    }
+    q.t += sdt;
+    q.life -= sdt;
+    if (q.kind === 'herring') {
+      // The herring lands on its shadow: it only hurts right then, and only if the player stands on the shadow
+      if (q.life <= 0) {
+        const rr = q.r + p.r * 0.5;
+        if ((q.x - p.x) ** 2 + (q.y - p.y) ** 2 < rr * rr && p.invulnerable <= 0) damagePlayer(s, q.damage);
+        effect(s, 'fishSplash', q.x, q.y, 0.35, q.r);
+        pool.removeAt(i);
+      }
+      continue;
+    }
     if (q.kind === 'cartridge' && q.life <= 0) {
       // The cartridge lands and bursts into an ink puddle in its own colour
       addPuddle(s, q.x, q.y, q.color);
@@ -451,6 +619,20 @@ export function updateEnemyShots(s, dt) {
         p.slow = N.queue.slowTime;
         p.slowBy = N.queue.slow;
         s.events.push('slowed');
+      } else if (q.kind === 'hook') {
+        // «Klikk på lenken!»: normal damage, and the player is pulled a short way toward Frida
+        if (p.invulnerable <= 0) {
+          damagePlayer(s, q.damage);
+          const b = s.boss, H = B.frida.hook;
+          if (b && b.active) {
+            const bx = b.x - p.x, by = b.y - p.y, bd = Math.hypot(bx, by) || 1;
+            const pull = Math.min(H.pull, Math.max(0, bd - b.r - p.r - 4));
+            p.pullT = H.pullTime;
+            p.pullVx = (bx / bd) * (pull / H.pullTime);
+            p.pullVy = (by / bd) * (pull / H.pullTime);
+          }
+          s.events.push('hooked');
+        }
       } else if (p.invulnerable <= 0) damagePlayer(s, q.damage);
       pool.removeAt(i);
     }

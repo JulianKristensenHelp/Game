@@ -24,7 +24,7 @@ const WEIGHT = U.weight;
 
 /**
  * @typedef {Object} Card
- * @property {'weapon'|'upgrade'|'passive'|'combination'|'coffee'} kind
+ * @property {'weapon'|'upgrade'|'passive'|'combination'|'matrix'|'coffee'} kind
  * @property {string} id weapon or passive id (the icon is fetched from icons.js)
  * @property {string} icon icon id (for combinations: 'evo:' + weapon id)
  * @property {string} name
@@ -38,7 +38,7 @@ const WEIGHT = U.weight;
  */
 
 /** Stats that are counts (projectiles, hits, hops …): they grow by whole numbers and need a max. */
-const COUNT_LIKE = new Set(['count', 'perThrow', 'hits', 'hops', 'chains', 'charges', 'max']);
+const COUNT_LIKE = new Set(['count', 'perThrow', 'hits', 'hops', 'chains', 'charges', 'max', 'bounces', 'walls']);
 
 const findWeapon = (s, id) => s.player.weapons.find((w) => w.id === id);
 const findPassive = (s, id) => s.player.passives.find((p) => p.id === id);
@@ -98,7 +98,7 @@ export function computeBonuses(s) {
 export function giveWeapon(s, id) {
   if (findWeapon(s, id)) return;
   if (s.player.weapons.length >= G.weapons) return;
-  const w = { id, picks: 0, up: /** @type {Record<string, number>} */ ({}), fx: /** @type {Record<string, number>} */ ({}), stats: /** @type {any} */ (null), evo: false, cd: 0.3, angle: 0, phase: 0, active: 0, tick: 0, charges: 1 };
+  const w = { id, picks: 0, up: /** @type {Record<string, number>} */ ({}), fx: /** @type {Record<string, number>} */ ({}), stats: /** @type {any} */ (null), evo: false, cd: 0.3, angle: 0, phase: 0, active: 0, tick: 0, charges: 1, gx: 0, gy: 0, pose: 0, aim: 0 };
   refreshWeapon(w);
   s.player.weapons.push(w);
   s.events.push('upgraded');
@@ -201,7 +201,39 @@ export function giveCombination(s, id) {
 
 /** Combinations that can be chosen now: enough increments + the matching passive (at any level). */
 export function availableCombinations(s) {
-  return s.player.weapons.filter((w) => !w.evo && w.picks >= U.combinationAfter && passiveLevel(s, V[w.id].combination.passive) > 0);
+  return s.player.weapons.filter((w) => !w.evo && V[w.id].combination && w.picks >= U.combinationAfter && passiveLevel(s, V[w.id].combination.passive) > 0);
+}
+
+/**
+ * The Matrix (Endringsprompt 4): Skytsengelen with enough increments (or as Himmelsk serviceavtale), Livvakten with
+ * enough increments, and Shopkeeperen at any level. «Enough» is the same as for the combinations (version 6 has no levels).
+ */
+export function matrixReady(s) {
+  const R = V.matrix.requires;
+  if (findWeapon(s, 'matrix')) return false;
+  const a = findWeapon(s, R.angel), g = findWeapon(s, R.bodyguard);
+  return !!a && (a.evo || a.picks >= U.combinationAfter) && !!g && g.picks >= U.combinationAfter && passiveLevel(s, R.passive) > 0;
+}
+
+/**
+ * Merges Skytsengelen and Livvakten into The Matrix: it takes the angel's slot, and the bodyguard's slot is freed.
+ * The effect modifiers of both are kept (the highest level of each). Shopkeeperen stays as a passive.
+ */
+export function giveMatrix(s) {
+  if (!matrixReady(s)) return;
+  const R = V.matrix.requires;
+  const list = s.player.weapons;
+  const a = /** @type {any} */ (findWeapon(s, R.angel)), g = /** @type {any} */ (findWeapon(s, R.bodyguard));
+  /** @type {Record<string, number>} */
+  const fx = {};
+  for (const w of [a, g]) for (const [k, n] of Object.entries(w.fx)) if (V.matrix.effects.includes(k)) fx[k] = Math.max(fx[k] || 0, n);
+  const m = { id: 'matrix', picks: 0, up: /** @type {Record<string, number>} */ ({}), fx, stats: /** @type {any} */ (null), evo: false, cd: 0.4, angle: a.angle, phase: V.matrix.base.rainEvery, active: 0, tick: 1, charges: 1, gx: g.gx, gy: g.gy, pose: 0, aim: 0 };
+  refreshWeapon(m);
+  list.splice(list.indexOf(a), 1, m);
+  list.splice(list.indexOf(g), 1);
+  s.stat.combinations.push('matrix');
+  s.events.push('matrix');
+  s.events.push('upgraded');
 }
 
 // ---------- Card text ----------
@@ -341,8 +373,11 @@ function candidates(s, exclude, onlyWeapons) {
     }
   }
   if (onlyWeapons) return list;
+  const hasMatrix = !!findWeapon(s, 'matrix');
   for (const id of Object.keys(V)) {
     if (findWeapon(s, id) || used >= G.weapons || exclude.has(id)) continue;
+    // The Matrix is never offered as a new weapon, and the two weapons it is made of are not offered again after it
+    if (V[id].hidden || (hasMatrix && (id === V.matrix.requires.angel || id === V.matrix.requires.bodyguard))) continue;
     // Only when there is free space – so you have to commit to a build. More often while the first slots are empty.
     list.push({ kind: 'weapon', id, key: id, weight: WEIGHT.fresh * (used < U.earlySlots ? U.earlyWeaponBoost : 1) });
   }
@@ -376,7 +411,7 @@ function makeCard(s, c, tier) {
   const w = /** @type {any} */ (findWeapon(s, c.id));
   const grants = c.fx ? effectGrants(w, c.fx, tier) : grantsFor(w, c.stat, tier);
   const left = Math.max(0, U.combinationAfter - w.picks - 1);
-  const combo = w.evo ? '' : left === 0 ? ' · klar for kombinasjon' : ` · ${left} igjen til kombinasjon`;
+  const combo = w.evo || !V[c.id].combination ? '' : left === 0 ? ' · klar for kombinasjon' : ` · ${left} igjen til kombinasjon`;
   return { kind: 'upgrade', id: c.id, icon: w.evo ? 'evo:' + c.id : c.id, name: weaponName(w), levelText: `${tierName} · Oppgradering ${w.picks + 1}${combo}`, text: grantsText(w, grants), tier, highlighted: false, key: c.key, grants, weight: c.weight };
 }
 
@@ -417,6 +452,10 @@ export function makeCards(s, count = 0, exclude = s.banished, rng = s.rng.cards,
       const k = V[w.id].combination;
       cards.push({ kind: 'combination', id: w.id, icon: 'evo:' + w.id, name: k.name, levelText: 'Kombinasjon!', text: k.text, tier: 3, highlighted: true, key: 'evo:' + w.id });
     }
+    // The Matrix is always shown as its own extra card when the requirements are met, also next to a combination
+    if (matrixReady(s)) {
+      cards.push({ kind: 'matrix', id: 'matrix', icon: 'matrix', name: V.matrix.name, levelText: 'Spesialkombinasjon!', text: V.matrix.cardText, tier: 3, highlighted: true, key: 'matrix' });
+    }
   }
   // «Hesteskoen»: a chance of a fourth card (the roll only happens when the player has the passive).
   if (!count) count = 3 + (sp.mod.fourthCard > 0 && rng.next() < sp.mod.fourthCard ? 1 : 0);
@@ -446,6 +485,7 @@ export function useCard(s, card) {
   else if (card.kind === 'upgrade') for (const g of card.grants ?? []) giveUpgrade(s, card.id, g);
   else if (card.kind === 'passive') givePassive(s, card.id);
   else if (card.kind === 'combination') giveCombination(s, card.id);
+  else if (card.kind === 'matrix') giveMatrix(s);
   else if (card.kind === 'coffee') givePoints(s, CONFIG.coffeeBreakBonus);
 }
 

@@ -85,7 +85,7 @@ const TIERS = CONFIG.upgrades.tiers;
  * @param {import('./upgrades.js').Card} k
  */
 function cardElement(k, i, choose, banish) {
-  const b = make('button', `card tier${k.tier}` + (k.highlighted ? ' highlighted' : ''));
+  const b = make('button', `card tier${k.tier}` + (k.highlighted ? ' highlighted' : '') + (k.kind === 'matrix' ? ' matrix' : ''));
   if (i >= 0) b.append(make('kbd', 'keyHint', i + 1));
   b.append(iconElement(k.icon), make('span', 'name', k.name), make('span', 'level', k.levelText), make('span', 'text', k.text));
   if (choose) b.addEventListener('click', () => choose(i));
@@ -200,7 +200,8 @@ export function drawStatSheet(s, holderId = 'levelStats') {
   for (const w of p.weapons) {
     const box = make('div', 'weaponBox' + (w.evo ? ' evo' : ''));
     const head = make('div', 'weaponHead');
-    const combo = w.evo ? 'kombinasjon' : w.picks >= after ? `klar for kombinasjon med ${CONFIG.passives[CONFIG.weapons[w.id].combination.passive].name}` : `${after - w.picks} igjen til kombinasjon`;
+    const k = CONFIG.weapons[w.id].combination;
+    const combo = w.id === 'matrix' ? 'spesialkombinasjon' : w.evo ? 'kombinasjon' : !k ? (w.picks >= after ? 'klar for The Matrix' : `${after - w.picks} igjen til The Matrix`) : w.picks >= after ? `klar for kombinasjon med ${CONFIG.passives[k.passive].name}` : `${after - w.picks} igjen til kombinasjon`;
     head.append(iconElement(weaponIconId(w)), make('span', 'name', weaponName(w)), make('span', 'muted', `+${w.picks} · ${combo}`));
     box.append(head);
     const t = weaponStats(w);
@@ -213,7 +214,7 @@ export function drawStatSheet(s, holderId = 'levelStats') {
     };
     add('hjelp per treff', statValue('help', t.help * m.help * tag));
     for (const stat of Object.keys(t)) {
-      if (stat === 'help' || stat === 'fx' || stat === 'back' || stat === 'spread' || stat === 'hopTime' || stat === 'tick' || stat === 'period' || stat === 'nudge' || stat === 'split' || stat === 'confetti' || stat === 'confettiRadius' || stat === 'burst') continue;
+      if (stat === 'help' || stat === 'fx' || stat === 'back' || stat === 'spread' || stat === 'hopTime' || stat === 'tick' || stat === 'period' || stat === 'nudge' || stat === 'split' || stat === 'confetti' || stat === 'confettiRadius' || stat === 'burst' || stat === 'rainTick' || stat === 'slowMo') continue;
       const label = STAT_LABEL[stat]?.[0] ?? stat;
       let v = t[stat];
       if (stat === 'interval' || stat === 'pause' || stat === 'charge') v *= m.cd;
@@ -336,12 +337,18 @@ export function saveCombinations(ids) {
   }
 }
 
+/** The name of a combination the player unlocked (The Matrix is not tied to one weapon). */
+export function combinationName(id) {
+  return id === 'matrix' ? CONFIG.weapons.matrix.name : CONFIG.weapons[id]?.combination?.name ?? id;
+}
+
 export function drawNoticeBoard() {
   const holder = el('noticeBoard');
   holder.replaceChildren();
   const found = loadCombinations();
   for (const [id, v] of Object.entries(CONFIG.weapons)) {
-    const k = v.combination;
+    const k = /** @type {any} */ (v).combination;
+    if (!k) continue;
     if (found.includes(id)) {
       const li = make('li');
       const text = make('div');
@@ -353,6 +360,19 @@ export function drawNoticeBoard() {
       li.append(iconElement('lock'), make('span', '', 'Ikke oppdaget ennå'));
       holder.append(li);
     }
+  }
+  // The Matrix: the rarest one, with its own frame when it is unlocked
+  if (found.includes('matrix')) {
+    const R = CONFIG.weapons.matrix.requires, after = CONFIG.upgrades.combinationAfter;
+    const li = make('li', 'matrix');
+    const text = make('div');
+    text.append(make('span', '', CONFIG.weapons.matrix.name), make('small', '', `${CONFIG.weapons[R.angel].name} (${after} oppgraderinger eller kombinert) + ${CONFIG.weapons[R.bodyguard].name} (${after}) + ${CONFIG.passives[R.passive].name}`));
+    li.append(iconElement('matrix'), text);
+    holder.append(li);
+  } else {
+    const li = make('li', 'locked');
+    li.append(iconElement('lock'), make('span', '', 'Spesialkombinasjon: ikke oppdaget ennå'));
+    holder.append(li);
   }
 }
 
@@ -380,6 +400,9 @@ export function drawStats(s) {
   line(`${st.upgrades} oppgraderinger på våpnene${st.rerolls + st.banishes > 0 ? ` (${st.rerolls} nye utvalg, ${st.banishes} kort fjernet)` : ''}`);
   if (st.events > 0) line(`${st.events} ${st.events === 1 ? 'hendelse' : 'hendelser'} på kontoret`);
   if (st.drinks > 0) line(`Du fant ${st.drinks} ${st.drinks === 1 ? 'energidrikk' : 'energidrikker'} på kartet`);
+  if (st.cookies > 0) line(`Du spiste ${st.cookies} ${st.cookies === 1 ? 'helsekjeks' : 'helsekjeks'} fra glade advokater`);
+  if (st.baited > 0) line(`Du gikk på Fiske-Fridas lokkemat ${st.baited} ${st.baited === 1 ? 'gang' : 'ganger'}`);
+  if (st.combinations.includes('matrix')) line('Du låste opp The Matrix!');
   line(`Høyeste multiplikator: ${multText(CONFIG.multiplier.start + st.maxMultStep * CONFIG.multiplier.step)}`);
   let best = '', bestHelp = 0;
   for (const [id, h] of Object.entries(st.helpPerWeapon)) {
@@ -393,7 +416,7 @@ export function drawStats(s) {
     line(`Mest effektive våpen: ${w ? weaponName(w) : CONFIG.weapons[best].name} (${formatNumber(bestHelp)} hjelp gitt)`);
   }
   if (st.combinations.length > 0) {
-    line(`Kombinasjoner låst opp: ${st.combinations.map((id) => CONFIG.weapons[id].combination.name).join(', ')}`);
+    line(`Kombinasjoner låst opp: ${st.combinations.map((id) => combinationName(id)).join(', ')}`);
   } else {
     line(`Ingen kombinasjoner denne vakta – ${CONFIG.upgrades.combinationAfter} oppgraderinger på et våpen + riktig passiv gir én`);
   }
@@ -426,7 +449,7 @@ export function drawBosses(s, fig) {
     const ctx = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
     if (b.type === 'johan' && b.helped) ctx.drawImage(fig.johanPortrait(), 0, 0);
     else {
-      const type = b.type === 'deadline' ? 'boss' : b.type;
+      const type = b.type;
       if (b.helped) {
         const sheet = fig.sheet(type, 0);
         ctx.drawImage(sheet.canvas, 8 * sheet.w, sheet.sy, sheet.w, sheet.h, 0, 0, 64, 64);
@@ -490,7 +513,7 @@ export function showCharacterPreview(fig) {
   root.append(make2('h1', 'margin:0 0 4px;font-size:2em', 'Forhåndsvisning: de fire spillbare karakterene'));
   root.append(make2('p', 'margin:0 0 20px;color:#c8d6e5', 'Bildene er oppdragsgivers egne (assets/karakterer/), brukt piksel for piksel. Gangsyklusen endrer bare beina og føttene. Navn og tittel står i js/config.js (CONFIG.characters).'));
   const grid = make2('div', 'display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px');
-  /** @type {{c: HTMLCanvasElement, i: number}[]} */
+  /** @type {{c: HTMLCanvasElement, i: number, type?: string, variant?: number}[]} */
   const animated = [];
   CONFIG.characters.forEach((k, i) => {
     const cardEl = make2('div', 'background:#f4f1ea;color:#1d1626;padding:16px;box-shadow:0 0 0 4px #1d1626');
@@ -570,6 +593,41 @@ export function showCharacterPreview(fig) {
   johanCard.append(frames);
   root.append(johanCard);
 
+  // Boss 3, Fiske-Frida and her friends (Endringsprompt 4), in the same style
+  root.append(make2('h1', 'margin:32px 0 4px;font-size:2em', 'Boss 3: Fiske-Frida og venninnene'));
+  root.append(make2('p', 'margin:0 0 20px;color:#c8d6e5', 'Samme stil som Johan og de fire karakterene. Frida er 64 × 64, venninnene 32 × 40. Utseendet justeres i js/frida.js.'));
+  const fridaCard = make2('div', 'background:#f4f1ea;color:#1d1626;padding:16px;box-shadow:0 0 0 4px #1d1626');
+  const fridaFrames = make2('div', 'display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px');
+  const addTo = (type, variant, caption, frame, pose) => {
+    const box = make2('div', 'text-align:center');
+    const sh = fig.sheet(type, variant);
+    const c = document.createElement('canvas');
+    c.width = sh.w;
+    c.height = sh.h;
+    c.style.background = '#a9b8c8';
+    crisp(c, type === 'frida' ? 128 : 80);
+    const ctx = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
+    if (frame < 0) animated.push({ c, i: -9, type, variant });
+    else if (pose >= 0) {
+      const ps = fig.poses(type, variant);
+      ctx.drawImage(ps.canvas, pose * ps.w, 0, ps.w, ps.h, 0, 0, ps.w, ps.h);
+    } else ctx.drawImage(sh.canvas, frame * sh.w, sh.sy, sh.w, sh.h, 0, 0, sh.w, sh.h);
+    box.append(c, make2('p', 'margin:2px 0 0;font-size:0.75em;color:#5d6b7a', caption));
+    fridaFrames.append(box);
+  };
+  addTo('frida', 0, 'Gange (animert)', -1, -1);
+  addTo('frida', 0, '«Klikk på lenken!» (stanga over hodet)', 0, 2);
+  addTo('frida', 0, 'Silderegn (peker opp)', 0, 0);
+  addTo('frida', 0, 'Glad: tommel opp', 8, -1);
+  addTo('frida', 0, 'Skuffet (sparken)', 0, 3);
+  addTo('friend', 0, 'Venninne 1 (animert)', -1, -1);
+  addTo('friend', 0, 'Venninne 1: løfter mobilen', 0, 2);
+  addTo('friend', 1, 'Venninne 2 (animert)', -1, -1);
+  addTo('friend', 1, 'Venninne 2: løfter mobilen', 0, 2);
+  addTo('friend', 1, 'Venninne 2: glad', 8, -1);
+  fridaCard.append(fridaFrames);
+  root.append(fridaCard);
+
   const close = make2('button', 'margin-top:20px', 'Lukk forhåndsvisningen');
   close.addEventListener('click', () => root.remove());
   root.append(close);
@@ -578,8 +636,8 @@ export function showCharacterPreview(fig) {
   const tick = () => {
     if (!root.isConnected) return;
     frame = (frame + 1) & 3;
-    for (const { c, i } of animated) {
-      const sheet = i >= 0 ? fig.sheet('player', i) : fig.sheet('johan', -1 - i);
+    for (const { c, i, type, variant } of animated) {
+      const sheet = type ? fig.sheet(type, variant ?? 0) : i >= 0 ? fig.sheet('player', i) : fig.sheet('johan', -1 - i);
       const ctx = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
       ctx.clearRect(0, 0, c.width, c.height);
       ctx.drawImage(sheet.canvas, frame * sheet.w, sheet.sy, sheet.w, sheet.h, 0, 0, sheet.w, sheet.h);

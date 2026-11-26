@@ -2,8 +2,9 @@
 // Tickets (points + experience) and pickups (energy drink on the map, Ny PC).
 import { CONFIG } from './config.js';
 import { givePoints } from './score.js';
-import { drink } from './player.js';
+import { drink, damagePlayer } from './player.js';
 import { newPc } from './enemies.js';
+import { effect } from './effects.js';
 import { INSIDE } from './map.js';
 
 const L = CONFIG.tickets;
@@ -29,7 +30,7 @@ export function dropTicket(s, x, y, value) {
 }
 
 /**
- * @param {'drink'|'pc'|'package'} type
+ * @param {'drink'|'pc'|'package'|'cookie'|'fakeDrink'|'fakePc'} type cookie = «Helsekjeks», fake… = Fiske-Frida's bait
  * @param {number} [count] for a package: how many weapon increments it holds
  */
 export function dropPickup(s, type, x, y, count = 0) {
@@ -148,16 +149,47 @@ export function updateTickets(s, dt) {
   }
 
   const k = s.pickups;
+  const CK = CONFIG.cookie;
   for (let i = k.n - 1; i >= 0; i--) {
     const pk = k.items[i];
     pk.age += dt;
-    const dx = p.x - pk.x, dy = p.y - pk.y, rr = p.r + 10;
+    // The cookie only lies for a while (like the tickets)
+    if (pk.type === 'cookie' && pk.age >= CK.lifetime) {
+      k.removeAt(i);
+      continue;
+    }
+    // The cookie is picked up with the same radius as the tickets, everything else when the player walks over it
+    const rr = pk.type === 'cookie' ? R : p.r + 10;
+    const dx = p.x - pk.x, dy = p.y - pk.y;
     if (dx * dx + dy * dy < rr * rr) {
       const type = pk.type, count = pk.count;
       k.removeAt(i);
       if (type === 'drink') drink(s);
       else if (type === 'package') s.openPackage(count);
+      else if (type === 'cookie') eatCookie(s, pk.x, pk.y);
+      else if (type === 'fakeDrink' || type === 'fakePc') baited(s, pk.x, pk.y);
       else newPc(s);
     }
   }
+}
+
+/** «Helsekjeks»: a little energy, no sugar rush. */
+function eatCookie(s, x, y) {
+  const p = s.player;
+  p.energy = Math.min(p.maxEnergy, p.energy + CONFIG.cookie.fill);
+  s.stat.cookies++;
+  effect(s, 'text', x, y - 12, 0.9, 0, 0, 0, false, '+' + CONFIG.cookie.fill);
+  s.events.push('cookie');
+}
+
+/** Fiske-Frida's «Lokkemat»: the player took the bait – a little damage and slowed for a while. */
+function baited(s, x, y) {
+  const K = CONFIG.bosses.frida.bait, p = s.player;
+  p.invulnerable = 0;
+  damagePlayer(s, K.damage * (1 + CONFIG.scaling.damagePerMin * (s.time / 60)));
+  p.slow = K.slowTime;
+  p.slowBy = K.slow;
+  s.stat.baited++;
+  effect(s, 'text', x, y - 14, 1.1, 0, 0, 0, false, 'Svindel!');
+  s.events.push('baited');
 }

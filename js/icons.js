@@ -300,14 +300,63 @@ const DRAW = {
     r.px(12, 14, C.NEAR_BLACK);
   },
   certification: (r) => {
-    // diploma with rosette
-    r.rect(1, 2, 12, 10, C.PAPER);
-    r.rect(3, 4, 8, 1, C.GRAY);
-    r.rect(3, 6, 6, 1, C.GRAY);
-    r.rect(3, 8, 7, 1, C.GRAY);
-    r.ellipse(12, 11, 3, 3, C.GOLD);
-    r.rect(10, 13, 2, 3, C.RED);
-    r.rect(13, 13, 2, 3, C.RED);
+    // Shopkeeperen (Endringsprompt 4): a friendly shop assistant in a black sweater with a big white «A»
+    r.rect(2, 9, 12, 7, C.NEAR_BLACK);
+    r.rect(1, 11, 14, 5, C.NEAR_BLACK);
+    r.stamp('.#. #.# ### #.#', 6, 11, { '#': C.WHITE });
+    r.ellipse(8, 5, 3.6, 3.8, C.WOOD_L);
+    r.ellipse(8, 2.2, 4, 2, C.POT);
+    r.px(6, 5, C.NEAR_BLACK);
+    r.px(10, 5, C.NEAR_BLACK);
+    r.rect(7, 7, 3, 1, C.DARK_RED);
+  },
+  // ----- Endringsprompt 4 -----
+  pingpong: (r) => {
+    // a red ping-pong paddle and a white ball
+    r.ellipse(6, 6, 5, 5, C.RED);
+    r.ellipse(5, 5, 2.5, 2.5, C.WINE_L);
+    r.rect(9, 9, 2, 2, C.WOOD);
+    r.rect(10, 10, 3, 3, C.WOOD_M);
+    r.rect(12, 12, 3, 3, C.WOOD_M);
+    r.ellipse(12.5, 3.5, 2.5, 2.5, C.NEAR_WHITE);
+  },
+  'evo:pingpong': (r) => {
+    // Ping of Death: a red-hot ball splitting in two, with glowing trails behind both
+    for (let i = 0; i < 5; i++) {
+      r.px(1 + i, 14 - i, i < 2 ? C.YELLOW : C.ORANGE);
+      r.px(2 + i, 14 - i, C.ORANGE);
+      r.px(1 + i, 9 - Math.floor(i / 2), C.ORANGE);
+    }
+    r.ellipse(10, 8.5, 3.6, 3.6, C.RED);
+    r.rect(9, 7, 2, 2, C.YELLOW);
+    r.ellipse(13, 3, 2.2, 2.2, C.RED);
+    r.px(12, 2, C.YELLOW);
+  },
+  bodyguard: (r) => {
+    // Livvakten: head with sunglasses and an earpiece, black suit, and a small flame
+    r.rect(2, 11, 12, 5, C.NEAR_BLACK);
+    r.rect(7, 11, 2, 3, C.WHITE);
+    r.ellipse(8, 6, 4, 4.3, C.POT_M);
+    r.rect(4, 2, 8, 2, C.NEAR_BLACK);
+    r.rect(5, 5, 6, 2, C.NEAR_BLACK);
+    r.px(5, 5, C.DARK_GRAY);
+    r.px(9, 5, C.DARK_GRAY);
+    r.px(12, 7, C.LIGHT_GRAY);
+    r.px(13, 8, C.LIGHT_GRAY);
+    r.px(12, 9, C.LIGHT_GRAY);
+    r.ellipse(13, 13, 2, 2.6, C.ORANGE);
+    r.px(13, 13, C.YELLOW);
+  },
+  matrix: (r) => {
+    // The Matrix: green falling code with a pair of black sunglasses
+    for (const [x, h] of [[1, 9], [4, 13], [7, 6], [10, 11], [13, 8]]) {
+      for (let y = 0; y < h; y += 2) r.px(x, 15 - h + y, y === h - 1 || y === h - 2 ? C.LIGHT_GREEN : C.GREEN);
+    }
+    r.rect(1, 6, 6, 3, C.NEAR_BLACK);
+    r.rect(9, 6, 6, 3, C.NEAR_BLACK);
+    r.rect(7, 6, 2, 1, C.NEAR_BLACK);
+    r.px(2, 6, C.LIGHT_GREEN);
+    r.px(10, 6, C.LIGHT_GREEN);
   },
   // ----- Version 4 -----
   angel: (r) => {

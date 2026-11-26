@@ -7,7 +7,7 @@ import { givePoints, registerHelped } from './score.js';
 import { damagePlayer } from './player.js';
 import { dropTicket, dropPickup } from './tickets.js';
 import { INSIDE, DOORS } from './map.js';
-import { updateBoss, updateBossSchedule, bossContactDamage, bossHelpFactor, checkBossPhase, bossHelped, shoot } from './bosses.js';
+import { updateBoss, updateBossSchedule, bossContactDamage, bossHelpFactor, checkBossPhase, bossHelped, shoot, updateFriend } from './bosses.js';
 
 const F = CONFIG.enemies;
 const SP = CONFIG.spawn;
@@ -25,12 +25,12 @@ export const MAX_HITS = 120;
 const HIT_MERGE = 0.25;
 
 /** Type codes used by the happy animation (effects store numbers, not text). */
-export const TYPE_CODE = { junior: 0, printer: 1, senior: 2, urgent: 3, boss: 4, sender: 5, nordic: 6, printerBoss: 7, johan: 8 };
-export const TYPE_NAMES = ['junior', 'printer', 'senior', 'urgent', 'boss', 'sender', 'nordic', 'printerBoss', 'johan'];
+export const TYPE_CODE = { junior: 0, printer: 1, senior: 2, urgent: 3, boss: 4, sender: 5, nordic: 6, printerBoss: 7, johan: 8, frida: 9, friend: 10 };
+export const TYPE_NAMES = ['junior', 'printer', 'senior', 'urgent', 'boss', 'sender', 'nordic', 'printerBoss', 'johan', 'frida', 'friend'];
 
-/** The figure type used to draw an enemy (the bosses have their own figures; «deadline» is the classic lawyer boss). */
+/** The figure type used to draw an enemy (the bosses have their own figures). */
 export function figureType(e) {
-  return e.type === 'boss' && e.bossType !== 'deadline' ? e.bossType : e.type;
+  return e.type === 'boss' ? e.bossType : e.type;
 }
 
 /** Empty enemy object for the pool. */
@@ -62,6 +62,8 @@ export function makeEnemy() {
     slowT: 0, slowBy: 0, lingerT: 0, linger: 0, lingerSrc: '',
     /** «Purring»: seconds left of taking more help, and how much more. */
     markT: 0, markBy: 0,
+    /** Fiske-Frida's friends: the uid of the boss they follow, and which side they walk on (0 or 1). */
+    bossUid: 0, slot: 0,
   };
 }
 
@@ -161,6 +163,8 @@ export function spawnEnemy(s, type, x, y, elite = 0) {
   e.linger = 0;
   e.markT = 0;
   e.markBy = 0;
+  e.bossUid = 0;
+  e.slot = 0;
   if (type === 'boss') {
     // The real values are set by spawnBoss() in bosses.js
     e.hp = k.frustration;
@@ -174,7 +178,7 @@ export function spawnEnemy(s, type, x, y, elite = 0) {
     if (type === 'urgent') e.timer = k.lifetime;
     if (type === 'printer') e.timer = k.paperInterval;
     // The cap on the number of lawyers is reached: the next ones become stronger instead of more numerous.
-    if (s.spared > 0 && type !== 'urgent') {
+    if (s.spared > 0 && type !== 'urgent' && type !== 'friend') {
       const u = Math.min(s.spared, SP.maxSaved);
       s.spared -= u;
       e.hp *= 1 + SP.strengthPerSaved * u;
@@ -452,6 +456,8 @@ export function updateEnemies(s, dt) {
   const p = s.player;
   const f = s.enemies;
   const out = s.hitList;
+  // «Bullet time» from The Matrix's code rain: everything hostile moves slower (1 = normal)
+  const ts = s.timeScale;
   s.senderCount = 0;
   s.eliteCount = 0;
   s.elites.length = 0;
@@ -479,7 +485,7 @@ export function updateEnemies(s, dt) {
         effect(s, 'poof', e.x, e.y, 0.4, e.r);
         continue;
       }
-      const speed = e.speed * (d > F.urgent.slowDistance ? F.urgent.slowFactor : 1);
+      const speed = e.speed * ts * (d > F.urgent.slowDistance ? F.urgent.slowFactor : 1);
       e.phase += dt * 3;
       const swing = Math.sin(e.phase) * 0.6;
       let vx = -dx - dy * swing, vy = -dy + dx * swing;
@@ -507,8 +513,8 @@ export function updateEnemies(s, dt) {
         vx = -dy * side * 0.5;
         vy = dx * side * 0.5;
       }
-      e.x += vx * e.speed * dt;
-      e.y += vy * e.speed * dt;
+      e.x += vx * e.speed * ts * dt;
+      e.y += vy * e.speed * ts * dt;
       e.direction = dx < 0 ? -1 : 1;
       s.senderCount++;
       // Email: only when the sender is on screen, so the alert can always be seen.
@@ -541,6 +547,9 @@ export function updateEnemies(s, dt) {
       // The bosses move and attack on their own (bosses.js)
       updateBoss(s, e, dt, dx, dy);
       if (s.status !== 'running') return;
+    } else if (e.type === 'friend') {
+      // Fiske-Frida's friends walk close behind her, one on each side (bosses.js decides when they send emails)
+      updateFriend(s, e, dt, dx, dy);
     } else {
       if (e.type === 'printer') {
         e.timer -= dt;
@@ -549,8 +558,8 @@ export function updateEnemies(s, dt) {
           if (inView(s, e.x, e.y, 40)) dropPaper(s, e.x, e.y);
         }
       }
-      // «Venter på IT» (slowed by an effect modifier), «Kaffepause» / «Serverkrasj» (the mood of the office)
-      let speed = e.speed * s.mood.speed;
+      // «Venter på IT» (slowed by an effect modifier), «Kaffepause» / «Serverkrasj» (the mood of the office), bullet time
+      let speed = e.speed * s.mood.speed * ts;
       if (e.slowT > 0) {
         e.slowT -= dt;
         speed *= 1 - e.slowBy;
@@ -570,8 +579,8 @@ export function updateEnemies(s, dt) {
         const R = EL.traits.rush;
         if (e.dashT > 0) {
           e.dashT -= dt;
-          e.x += e.vx * dt;
-          e.y += e.vy * dt;
+          e.x += e.vx * ts * dt;
+          e.y += e.vy * ts * dt;
         } else {
           e.rushT -= dt;
           e.alert = e.rushT <= R.tell;
@@ -781,6 +790,13 @@ export function becomesHappy(s, e) {
     dropPickup(s, 'pc', e.x - 14, e.y + 10);
     dropPickup(s, 'package', e.x + 16, e.y + 12, e.bossType === 'johan' ? CONFIG.package.johanCount : CONFIG.package.bossCount);
     bossHelped(s, e);
+  } else if (e.type === 'friend') {
+    // One of Fiske-Frida's friends: extra points if she is helped on her own (none when Frida is helped first)
+    if (e.points > 0) {
+      const points = givePoints(s, e.points);
+      effect(s, 'text', e.x, e.y - 26, 1.2, 0, 0, 0, false, '+' + points);
+    }
+    s.events.push('friendHappy');
   } else if (e.elite) {
     // A partner drops 1–5 tickets (drops stream) and now and then a supplier package
     const D = CONFIG.eliteDrops;
@@ -794,8 +810,17 @@ export function becomesHappy(s, e) {
   } else {
     dropTicket(s, e.x, e.y, e.points);
     if (s.rng.drops.next() < CONFIG.newPc.dropChance) dropPickup(s, 'pc', e.x, e.y);
+    // «Helsekjeks»: now and then a small cookie with a little energy (drops stream, capped on the map)
+    if (s.rng.drops.next() < CONFIG.cookie.chance && countPickups(s, 'cookie') < CONFIG.cookie.max) dropPickup(s, 'cookie', e.x + 5, e.y + 4);
   }
   registerHelped(s);
+}
+
+/** How many pickups of one type are on the map. */
+export function countPickups(s, type) {
+  let n = 0;
+  for (let i = 0; i < s.pickups.n; i++) if (s.pickups.items[i].type === type) n++;
+  return n;
 }
 
 /** «Delegerer»: the partner hands the problem to a few junior associates. */
@@ -815,7 +840,7 @@ export function newPc(s) {
   for (let i = 0; i < n; i++) {
     const e = f.items[i];
     if (!e.active || e.leaving || !inView(s, e.x, e.y, 0)) continue;
-    if (e.type === 'boss' || e.type === 'urgent') help(s, e, CONFIG.newPc.helpToSpecial, 'newPcFx');
+    if (e.type === 'boss' || e.type === 'urgent' || e.type === 'friend') help(s, e, CONFIG.newPc.helpToSpecial, 'newPcFx');
     else becomesHappy(s, e);
   }
   const p = s.player;

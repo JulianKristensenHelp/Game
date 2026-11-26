@@ -29,7 +29,11 @@ function target(id, evo) {
   s.player.weapons.length = 0;
   giveWeapon(s, id);
   const after = CONFIG.upgrades.combinationAfter;
-  giveEvenUpgrades(s, id, evo ? after : PICKS);
+  if (id === 'matrix') {
+    // The Matrix is measured as it is when it is made: the increments needed, and the rest of PICKS on top
+    giveEvenUpgrades(s, id, Math.max(0, PICKS - after));
+    evo = false;
+  } else giveEvenUpgrades(s, id, evo ? after : PICKS);
   if (evo) {
     givePassive(s, CONFIG.weapons[id].combination.passive);
     giveCombination(s, id);
@@ -69,11 +73,17 @@ function target(id, evo) {
 }
 
 const rows = [];
+const only = process.argv[3];
 for (const id of Object.keys(CONFIG.weapons)) {
-  const n8 = target(id, false), evo = target(id, true);
-  rows.push({ id, name: CONFIG.weapons[id].name, n8: n8.hps, evoName: CONFIG.weapons[id].combination.name, evo: evo.hps });
+  if (only && !only.split(',').includes(id)) continue;
+  const def = /** @type {any} */ (CONFIG.weapons[id]);
+  if (def.hidden) continue;
+  const n8 = target(id, false);
+  // Livvakten has no regular combination: The Matrix (with Skytsengelen and Shopkeeperen) takes its place in the table
+  const evo = def.combination ? target(id, true) : target('matrix', false);
+  rows.push({ id, name: def.name, n8: n8.hps, evoName: def.combination ? def.combination.name : 'The Matrix', evo: evo.hps });
 }
-const avgEvo = rows.filter((r) => r.id !== 'headset').reduce((a, r) => a + r.evo, 0) / (rows.length - 1);
+const avgEvo = rows.filter((r) => r.id !== 'headset' && r.id !== 'bodyguard').reduce((a, r) => a + r.evo, 0) / Math.max(1, rows.filter((r) => r.id !== 'headset' && r.id !== 'bodyguard').length);
 console.log('Hjelp per sekund (60 s, 150 advokater jevnt spredt 40–300 px rundt spilleren):\n');
 console.log('Våpen'.padEnd(22) + ('+' + PICKS).padStart(9) + '   ' + 'Kombinasjon'.padEnd(30) + 'Hjelp/s'.padStart(9) + '  i forhold til snitt');
 for (const r of rows) {

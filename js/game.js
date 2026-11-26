@@ -11,7 +11,7 @@ import { makeShot, makePuddle, updateEnemyShots, spawnBoss, bossTypeAt, bossTime
 import { makeProjectile, updateWeapons, updateProjectiles } from './weapons.js';
 import { makeTicket, makePickup, updateTickets, dropPickup, updateDrinks } from './tickets.js';
 import { makeEffect, updateEffects } from './effects.js';
-import { giveWeapon, givePassive, giveCombination, giveEvenUpgrades, makeCards, useCard, computeBonuses, openPackage } from './upgrades.js';
+import { giveWeapon, givePassive, giveCombination, giveEvenUpgrades, makeCards, useCard, computeBonuses, openPackage, giveMatrix } from './upgrades.js';
 import { xpNeeded } from './score.js';
 
 const VB = CONFIG.view.width, VH = CONFIG.view.height;
@@ -51,6 +51,8 @@ export class Game {
       package: new Rng(date + '|pakke'),
       /** the rare events and which direction the scheduled ones come from */
       events: new Rng(date + '|hendelser'),
+      /** the direction of each new ping-pong ball (Endringsprompt 4) */
+      pingpong: new Rng(date + '|pingpong'),
       /** looks only – never affects anything else */
       looks: new Rng(date + '|utseende'),
     };
@@ -63,7 +65,14 @@ export class Game {
 
     this.enemies = new Pool(makeEnemy);
     this.projectiles = new Pool(makeProjectile);
-    this.projCounter = { toner: 0, key: 0, ctrlz: 0, teams: 0, mini: 0, sheet: 0 };
+    this.projCounter = { toner: 0, key: 0, ctrlz: 0, teams: 0, mini: 0, sheet: 0, ball: 0, wall: 0 };
+    /**
+     * The Matrix's code rain (Endringsprompt 4): seconds left of it, time to the next help tick, and the «bullet time»
+     * factor on everything hostile (1 = normal speed). The player is never slowed.
+     */
+    this.rain = 0;
+    this.rainTick = 0;
+    this.timeScale = 1;
     this.tickets = new Pool(makeTicket);
     this.pickups = new Pool(makePickup);
     this.paper = new Pool(makePaper);
@@ -136,6 +145,8 @@ export class Game {
       bossesTotal: 0, bossesHelped: 0, maxMultStep: 0, hits: 0,
       ticketsPicked: 0, ticketsLost: 0, drinks: 0, blocked: 0, dodged: 0, elitesHelped: 0, emails: 0,
       packages: 0, rerolls: 0, banishes: 0, events: 0, upgrades: 0, revives: 0,
+      /** Endringsprompt 4: cookies eaten, and how many times the player took Fiske-Frida's bait. */
+      cookies: 0, baited: 0,
       combinations: /** @type {string[]} */ ([]),
       /** Every boss the player met, and whether it was helped. @type {{type: string, helped: boolean, time: number, helpedAt: number, returnNo: number}[]} */
       bossLog: [],
@@ -180,6 +191,8 @@ export class Game {
       this.events.push('phase');
     }
 
+    // Bullet time only lasts while the code rain falls (set again by The Matrix every update while it does)
+    if (this.rain <= 0) this.timeScale = 1;
     updatePlayer(this, DT, ix, iy);
     this.updateCamera();
     updateDirector(this, DT);
@@ -331,12 +344,36 @@ export class Game {
     for (const id of weapons.slice(0, CONFIG.limits.weapons)) {
       giveWeapon(this, id);
       giveEvenUpgrades(this, id, CONFIG.upgrades.combinationAfter);
-      const passive = CONFIG.weapons[id].combination.passive;
-      for (let i = 0; i < CONFIG.limits.passiveLevel; i++) givePassive(this, passive);
-      if (combine) giveCombination(this, id);
+      // Livvakten has no regular combination (he is part of The Matrix)
+      const k = /** @type {any} */ (CONFIG.weapons[id]).combination;
+      if (k) for (let i = 0; i < CONFIG.limits.passiveLevel; i++) givePassive(this, k.passive);
+      if (combine && k) giveCombination(this, id);
       giveEvenUpgrades(this, id, picks - CONFIG.upgrades.combinationAfter);
     }
     for (const id of ['sneakers', 'biggerCan']) for (let i = 0; i < CONFIG.limits.passiveLevel; i++) givePassive(this, id);
+  }
+
+  /**
+   * The Matrix right away: Skytsengelen and Livvakten with the increments needed, Shopkeeperen, and the merge.
+   * The other weapons the player has are kept (as many as there is room for).
+   */
+  debugMatrixBuild() {
+    this.debug.used = true;
+    const keep = this.player.weapons.splice(0);
+    const after = CONFIG.upgrades.combinationAfter;
+    for (const id of ['angel', 'bodyguard']) {
+      giveWeapon(this, id);
+      giveEvenUpgrades(this, id, after);
+    }
+    givePassive(this, 'certification');
+    giveMatrix(this);
+    for (const w of keep) if (this.player.weapons.length < CONFIG.limits.weapons && w.id !== 'angel' && w.id !== 'bodyguard' && w.id !== 'matrix') this.player.weapons.push(w);
+  }
+
+  /** Gives one level of a passive (debug builds). */
+  debugGivePassive(id) {
+    this.debug.used = true;
+    givePassive(this, id);
   }
 
   debugSpawn(type) {
@@ -347,6 +384,10 @@ export class Game {
       if (!this.boss || !this.boss.active) spawnBoss(this, bossTypeAt(this.bossNo));
     } else if (type === 'elite') spawnEnemy(this, 'senior', p.x + 190, p.y - 50, 1 + (this.eliteCount % 3));
     else if (type === 'package') dropPickup(this, 'package', p.x + 40, p.y + 20, CONFIG.package.bossCount);
+    else if (type === 'cookie') dropPickup(this, 'cookie', p.x + 40, p.y - 10);
+    else if (type === 'frida') {
+      if (!this.boss || !this.boss.active) spawnBoss(this, 'frida');
+    }
     else spawnEnemy(this, type, p.x + 190, p.y - 50);
   }
 

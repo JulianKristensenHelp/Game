@@ -24,6 +24,8 @@ export function makePlayer() {
     inInk: false,
     /** Hold music from the Nørdic consultant: seconds left of slowdown, and how much (0.4 = 40 %). */
     slow: 0, slowBy: 0,
+    /** Fiske-Frida's hook: seconds left of being pulled toward her, and the pull velocity. */
+    pullT: 0, pullVx: 0, pullVy: 0,
     /** @type {any[]} the weapons (see giveWeapon() in upgrades.js: id, picks, up, fx, stats, evo …) */
     weapons: [],
     /** @type {{id:string, level:number}[]} */
@@ -100,8 +102,15 @@ export function updatePlayer(s, dt, ix, iy) {
   if (p.inPaper) speed *= 1 - pk.paperSlow * res;
   if (p.inInk) speed *= 1 - ink.puddleSlow * res;
   if (p.slow > 0) speed *= 1 - p.slowBy * res;
-  p.x = Math.min(INSIDE.x1 - p.r, Math.max(INSIDE.x0 + p.r, p.x + ix * speed * dt));
-  p.y = Math.min(INSIDE.y1 - p.r, Math.max(INSIDE.y0 + p.r, p.y + iy * speed * dt));
+  let px = p.x + ix * speed * dt, py = p.y + iy * speed * dt;
+  // Fiske-Frida's hook pulls the player a short way toward her
+  if (p.pullT > 0) {
+    p.pullT -= dt;
+    px += p.pullVx * dt;
+    py += p.pullVy * dt;
+  }
+  p.x = Math.min(INSIDE.x1 - p.r, Math.max(INSIDE.x0 + p.r, px));
+  p.y = Math.min(INSIDE.y1 - p.r, Math.max(INSIDE.y0 + p.r, py));
 }
 
 /** A lawyer touches the player. Does nothing while the player is invulnerable. */

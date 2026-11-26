@@ -1,5 +1,115 @@
 # Endringslogg
 
+## Versjon 7.0 – 26. november 2026 (Kristensens endringsprompt 4, bygget på versjon 6.1)
+
+Bygget videre på versjon 6.1 (den andre utviklerens grein). Det han la til, er ikke endret, fjernet eller
+rebalansert, med unntakene som står under «Konflikter». Versjon 4.1 (stillestående mini-printere og
+oppdragsgivers karakterbilder, laget på `main` før 6.1 var kjent) er flettet inn og tilpasset systemet i versjon 6.
+
+### Konflikter med versjon 5–6.1, og hvordan de er løst
+1. **«Maks våpennivå 9» og «kombinasjoner krever nivå 9».** I versjon 6 har våpnene ikke nivåer: hvert kort gir én
+   oppgradering uten tak, og en kombinasjon krever 10 oppgraderinger + riktig passiv. Et nivåtak på 9 ville betydd å
+   skrive om hele oppgraderingssystemet. Det er derfor ikke innført. Kravet «litt senere kombinasjoner» er allerede
+   oppfylt (10 oppgraderinger ≈ «nivå 11»). Passord-reset (maks 24 hopp) og Skytsengelen (maks 6 per kast, 12
+   samtidig) har allerede høyere tak enn «nivå 9» (11 hopp, 3 per kast og 7 samtidig), så tallene er ikke endret.
+   Ping-pong og Livvakten har fått nivåtabellene fra endringsprompten som vekstregler, og The Matrix og Ping of Death
+   krever 10 oppgraderinger, som de andre kombinasjonene. Passive har fortsatt maks nivå 5.
+2. **Skytsengelen.** Mini-printerne i 6.1 tuslet mot advokatene og hjalp alle i en radius med papirsalver (regelen
+   `burst`). Seksjon 1 sier eksplisitt at de skal stå stille og skyte papirark, så det er endret: `burst` betyr nå tid
+   mellom arkene (0,3 s, med gulv 0,15 s), og `radius` (salveradius) er byttet med `range` (rekkevidde 60 piksler,
+   +9 per steg, maks 130). De andre reglene (antall per kast, maks samtidig, intervall, levetid) er uendret. Hjelpen er
+   justert så våpenet måler det samme som i 6.1 (+16: 1027 mot 1034, kombinasjon: 2108 mot 2150).
+3. **«Brannmur»** er allerede navnet på en passiv (unnvikelse). Livvaktens flammelinje heter også brannmur i
+   teksten, men våpenet heter Livvakten (`bodyguard`), så ingenting kolliderer.
+4. **Joggesko** var ikke brukt i noen kombinasjon, så Ping of Death bruker Joggesko som ønsket.
+5. **Klassepassivene** Kastekurs og Sommervikar lister våpnene i klassen sin. Teksten har fått Ping-pong og Livvakten
+   lagt til (effekten er uendret).
+6. **Bossenes frustrasjon** ble hevet i versjon 5. Fiske-Frida har samme tall som bossen hun erstatter (6 600).
+
+### 1. Skytsengelens mini-printere står stille
+Fra versjon 4.1: printerne lander der advokaten stod, står helt stille, skyter et papirark mot nærmeste advokat
+innenfor 60 piksler hvert 0,3. sekund, og forsvinner etter ca. 4 sekunder i en papirsky. Landingshopp, støvsky,
+ark som mates ut og en svak rekkeviddesirkel. Himmelsk serviceavtale står også stille og avslutter med konfetti.
+
+### 2. Oppdragsgivers bilder av karakterene
+Fra versjon 4.1: de 8 PNG-filene ligger i `assets/karakterer/` og brukes piksel for piksel med heltallsskalering
+og nærmeste nabo. Gangsyklusen endrer bare beina og føttene (hopp på 1 piksel), venstre er speilet, og effekter
+legges oppå. Topplisten bruker 32 × 32-figuren. De gamle spritene og portrettene er fjernet. Johan er tegnet i
+samme stil. Forhåndsvisningen (`?debug=karakterer`) viser de fire, Johan og nå også Fiske-Frida med venninnene.
+
+### 3. Nivå 9
+Se «Konflikter», punkt 1.
+
+### 4. Nytt våpen: Ping-pong
+Spretter mot skjermkantene og ytterveggene, blir 6 % raskere og gir 10 % mer hjelp per sprett (tak +60 %, høyere
+med oppgraderinger), går gjennom advokatene (samme ball maks hvert 0,5. sekund per advokat) og forsvinner etter et
+fast antall sprett. «PING»/«PONG» annethvert sprett (bare når det er få baller) og «pok» når lyden er på. Retningen
+kommer fra en ny strøm i «Dagens vakt» (`pingpong`). **Ping of Death** (+ Joggesko): ballen deler seg ved hvert
+sprett (maks 12) og etterlater et glødende spor. Ballene bruker objektpoolen.
+
+### 5. Nytt våpen: Livvakten
+Følger spilleren og lager en brannmur av animerte flammer 30 piksler unna, på tvers av den tetteste flokken (eller
+de 2–3 tetteste). Hjelp hvert kvarte sekund og 30 % sinking (opptil 50 %), blokkerer ingenting og skader aldri
+spilleren. Hengelåser, enere og nuller stiger opp fra gløden. Maks 3 brannmurer samtidig, likt for alle.
+
+### 6. Shopkeeperen
+Sertifisering heter nå Shopkeeperen, med nytt ikon (svart genser med hvit «A») og en liten figur som følger
+spilleren. Effekten er uendret. Tvungen oppdatering krever Oppdateringsstrålen + Shopkeeperen.
+
+### 7. The Matrix
+Tilbys som eget kort med grønn kode-ramme når Skytsengelen (10 oppgraderinger eller kombinert), Livvakten (10
+oppgraderinger) og Shopkeeperen er samlet. Slår sammen engelen og livvakten (frigjør én våpenplass), spiller en
+animasjon på 2,5 sekunder mens spillet står på pause (kan hoppes over, følger reduserte blinkeffekter, påvirker
+ikke tiden eller «Dagens vakt»), og gir grønne mini-printere og brannmurer, kode-regn hvert 12. sekund (litt hjelp
+til alle på skjermen) og bullet time (advokater, bosser og fiendeprosjektiler 50 % saktere i 3 sekunder; bossens
+nedtelling går som normalt). Egen grønn ramme på oppslagstavla, og nevnt på slutt-skjermen. Bruker spillets egen
+pikselfont – ingen logo, skrifttype eller figurer fra filmen.
+
+### 8. Ny boss 3: Fiske-Frida og venninnene
+Erstatter «Fristen er om 2 minutter!» (fjernet, nedtellingsklokka er beholdt for alle bossene). Fire angrep: «Klikk
+på lenken!» (stiplet linje, kroken drar deg mot henne), silderegn (skygger, sild etter 1 sekund), videresendt
+svindel-e-post (venninnene løfter mobilen, fisk i bølgete linje) og lokkemat (falsk drikk eller PC med fiskekrok,
+kan avsløres på farge, krok og blink, aldri på minikartet, maks 3, borte når Frida er hjulpet). Venninnene har 15 %
+av Fridas frustrasjon hver og gir ekstra poeng om de hjelpes for seg. Johans «Videresendt fra tidligere bosser» er
+uendret (Nørdic og printeren).
+
+### 9. Helsekjeks
+Ca. 1 av 100 vanlige glade advokater legger igjen en kjeks (drop-strømmen): 5 energi, ingen sukkerkick, ligger i 10
+sekunder og blinker de siste 3, maks 6 på kartet, samme plukkradius som lappene, svak varm glød, ikke på minikartet.
+Partnerne (som allerede gir lapper og pakker), bossene, venninnene og hastesaken dropper ikke kjeks.
+
+### Målinger
+`tools/measure-weapons.js 16`:
+
+| Våpen | +16 | Kombinasjon | Hjelp/s | I forhold til snittet |
+| --- | --- | --- | --- | --- |
+| Skytsengelen | 1027 | Himmelsk serviceavtale | 2108 | 95 % |
+| Ping-pong | 855 | Ping of Death | 2312 | 104 % |
+| Livvakten | 776 | The Matrix (med Skytsengelen og Shopkeeperen) | 2664 | 120 % |
+
+De andre våpnene er uendret fra 6.1. The Matrix er med vilje litt sterkere enn en vanlig kombinasjon, siden den er
+mye vanskeligere å få.
+
+`tools/simulate.js x 25 --statistikk` (10 dager × 4 karakterer):
+
+| Robot | Median | 25–75 % | Lengst | Sparket |
+| --- | --- | --- | --- | --- |
+| God, bygger bevisst | 10,0 min | 7,0–14,1 min | 15,5 min | 0 av 40 |
+| Ekspert | 10,8 min | 7,1–14,7 min | 16,7 min | 1 av 40 |
+| Ekspert, `--utennye` (uten Ping-pong og Livvakten i kortene) | 14,0 min | 8,2–15,0 min | 16,4 min | 1 av 40 |
+
+De beste rundene ryker fortsatt rundt 15–17 minutter (veggen i overtid). Medianen er lavere enn i 6.1 fordi
+robotene, som bygger etter en fast plan, får sjeldnere tilbud om sine planlagte våpen når det er to flere våpen i
+bunken. Med de nye våpnene holdt utenfor er medianen 14,0 (6.1: 13,2). Fiske-Frida ble hjulpet på 12–24 sekunder
+av robotene i prøverundene. Determinismen holder: to like runder gir samme resultat, også med Dobbel skjerm og annet
+utseende.
+
+**Stresstest** (`?debug&utenGPU`, minutt 15, 400 advokater, Tofaktor + Kontorprinteren + Ping of Death + The
+Matrix, Fiske-Frida ute hele tiden, kjørt bilde for bilde i nettleseren): snitt 5,1 ms per bilde (oppdatering 0,3 ms,
+tegning 4,8 ms), median 2,7 ms, p99 11,9 ms – godt under 16,7 ms for 60 FPS. 12 baller, 3 brannmurer og kode-regn
+samtidig. Kode-regnet koster ikke målbart (3,08 mot 3,04 ms tegning med og uten). Minnet er flatt (5,6 → 5,3 MB).
+Stresstesten bør likevel kjøres på en ekte kontor-PC før publisering.
+
 ## Versjon 6.1 – 26. november 2026 (endringsprompt 6: finpuss og gjenstander)
 
 ### 1. Ikoner som manglet

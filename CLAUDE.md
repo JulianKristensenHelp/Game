@@ -83,7 +83,7 @@ Every feature should be checked against these. If a proposal conflicts with a pi
   If it runs out before the boss is helped, the player is fired («Du har fått sparken!») and the shift ends.
   Fired runs can still be submitted and are marked on the leaderboard.
 - Each boss is a caricature of an IT-support archetype (the consultant, the multifunction printer, the
-  urgent deadline, the manager) with a small set of telegraphed attacks that teach a dodge pattern.
+  grandmother who believes every phishing email, the manager) with a small set of telegraphed attacks that teach a dodge pattern.
 - The final boss returns at a regular interval and grows stronger each time, and from mid-frustration can
   borrow earlier bosses' attacks. That recurrence is the late-game pressure.
 - While a boss is active, regular spawns thin out so the fight is readable. A boss far from the player

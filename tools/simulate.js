@@ -14,6 +14,10 @@ const date = process.argv[2] || '2026-11-25';
 const maxMin = Number(process.argv[3] || 25);
 // --utenbosser: no bosses at all (to see how much of the difficulty comes from them)
 if (process.argv.includes('--utenbosser')) for (const b of CONFIG.bosses.schedule) b.at = 1e7;
+// --utennye: Ping-pong and Livvakten are never offered (to see how much the bigger card pool changes the bots' builds)
+if (process.argv.includes('--utennye')) for (const id of ['pingpong', 'bodyguard']) /** @type {any} */ (CONFIG.weapons)[id].hidden = true;
+// --utenkjeks: no cookies
+if (process.argv.includes('--utenkjeks')) CONFIG.cookie.chance = 0;
 // --utenpartnere: no elites (to see how much of the difficulty comes from them)
 if (process.argv.includes('--utenpartnere')) CONFIG.elites.from = 1e9;
 // --utenhendelser: no events (lunch rush, partner meeting, coffee break …)
@@ -23,7 +27,7 @@ if (process.argv.includes('--utenhendelser')) {
 }
 // --ikkejag: the bots ignore the bosses (and the bosses never fire anyone). --ingentreg: no slowdown from notes and ink.
 const NO_CHASE = process.argv.includes('--ikkejag');
-if (NO_CHASE) for (const t of ['nordic', 'printerBoss', 'deadline', 'johan']) /** @type {any} */ (CONFIG.bosses)[t].deadline = 1e7;
+if (NO_CHASE) for (const t of ['nordic', 'printerBoss', 'frida', 'johan']) /** @type {any} */ (CONFIG.bosses)[t].deadline = 1e7;
 if (process.argv.includes('--ingentreg')) {
   CONFIG.bosses.nordic.queue.slow = 0;
   CONFIG.bosses.printerBoss.cmyk.puddleSlow = 0;
@@ -31,7 +35,7 @@ if (process.argv.includes('--ingentreg')) {
 // --ufarligebosser: the bosses do no damage at all (to separate the damage from the time pressure and the chase)
 if (process.argv.includes('--ufarligebosser')) {
   const B = /** @type {any} */ (CONFIG.bosses);
-  for (const t of ['nordic', 'printerBoss', 'deadline', 'johan']) B[t].damage = 1e-6;
+  for (const t of ['nordic', 'printerBoss', 'frida', 'johan']) B[t].damage = 1e-6;
   B.nordic.forward.damage = B.printerBoss.cmyk.damage = B.printerBoss.printJob.damage = B.johan.calendar.damage = 1e-6;
 }
 
@@ -87,7 +91,9 @@ function makeRobot(skill, smartBuild, seed, plan = ['powerCycle', 'mouse', 'tone
       const needsDrink = p.energy < p.maxEnergy * (skill > 0.8 ? 0.7 : 0.5);
       for (let i = 0; i < s.pickups.n; i++) {
         const k = s.pickups.items[i];
-        const d = Math.hypot(k.x - p.x, k.y - p.y) * (k.type === 'drink' ? (needsDrink ? 0.05 : 2) : 0.3);
+        // Fiske-Frida's bait: a good player sees the hook and leaves it alone
+        if ((k.type === 'fakeDrink' || k.type === 'fakePc') && skill >= 0.8) continue;
+        const d = Math.hypot(k.x - p.x, k.y - p.y) * (k.type === 'drink' || k.type === 'fakeDrink' ? (needsDrink ? 0.05 : 2) : 0.3);
         if (d < best) { best = d; tx = k.x - p.x; ty = k.y - p.y; }
       }
       const l = s.tickets;
