@@ -7,6 +7,8 @@ import { help, inView } from './enemies.js';
 
 const V = CONFIG.weapons;
 const MAX_PROJ = CONFIG.maxProjectilesPerWeapon;
+/** Reused list of the lawyers already picked as targets in one volley. */
+const PICKED = /** @type {number[]} */ ([]);
 
 /** Empty projectile for the pool. */
 export function makeProjectile() {
@@ -50,11 +52,11 @@ function activatePowerCycle(s, w, t) {
   effect(s, 'pulse', p.x, p.y, 0.35, R, 0, w.evo ? 1 : 0, true);
 }
 
-/** Toner-kast (toner throw): cartridges in a fan shape where the player is heading (all directions as a combination). */
+/** Toner-kast (toner throw): cartridges in a fan toward the nearest lawyer (all directions as a combination). */
 function activateToner(s, w, t) {
   const p = s.player;
   const n = t.count + p.mod.extraProj;
-  const base = Math.atan2(p.dirY, p.dirX);
+  const base = w.evo ? Math.atan2(p.dirY, p.dirX) : aimAngle(s, t.range + t.splash);
   const speed = t.speed * p.mod.duration * p.mod.projSpeed;
   for (let i = 0; i < n; i++) {
     if (s.projCounter.toner >= MAX_PROJ) break;
@@ -127,11 +129,11 @@ function activatePassword(s, w, t) {
   }
 }
 
-/** HDMI-kabelen (the HDMI cable): arc in front (and behind from level 4, full circle as a combination). */
+/** HDMI-kabelen (the HDMI cable): arc toward the nearest lawyer (and behind from level 4, full circle as a combination). */
 function activateHdmi(s, w, t) {
   const p = s.player, out = s.hitList, f = s.enemies.items;
   const R = t.lengthPx * p.mod.area;
-  const base = Math.atan2(p.dirY, p.dirX);
+  const base = w.evo ? Math.atan2(p.dirY, p.dirX) : aimAngle(s, R + 12);
   const n = s.grid.find(p.x, p.y, R, out);
   for (let i = 0; i < n; i++) {
     const e = f[out[i]];
@@ -147,22 +149,14 @@ function activateHdmi(s, w, t) {
   effect(s, 'swing', p.x, p.y, 0.24, R, base, w.evo ? 2 : t.back ? 1 : 0, true);
 }
 
-/** Fjernstyring (remote control): random lawyers on screen get help. */
+/** Fjernstyring (remote control): the nearest lawyers get help via a flash from above. */
 function activateRemote(s, w, t) {
-  const f = s.enemies, cand = s.candidates;
-  let k = 0;
-  for (let i = 0; i < f.n; i++) {
-    const e = f.items[i];
-    if (!e.active || e.leaving || !inView(s, e.x, e.y, 0)) continue;
-    cand[k++] = i;
-  }
-  const count = Math.min(t.hits, k);
-  for (let j = 0; j < count; j++) {
-    const r = j + s.rng.weapons.integer(k - j);
-    const tmp = cand[j];
-    cand[j] = cand[r];
-    cand[r] = tmp;
-    const e = f.items[cand[j]];
+  const p = s.player;
+  let picked = 0;
+  for (let j = 0; j < t.hits; j++) {
+    const e = closest(s, p.x, p.y, 330, PICKED, picked);
+    if (!e) break;
+    PICKED[picked++] = e.uid;
     effect(s, 'flash', e.x, e.y, 0.3, e.r, 0, w.evo ? 1 : 0);
     help(s, e, t.help, 'remote');
   }
@@ -189,24 +183,32 @@ function updateMouse(s, w, t, dt) {
 
 // ---------- The four new weapons ----------
 
-/** The nearest active lawyer within radius R of (x, y) that is not in the `excluded` list. */
-function closest(s, x, y, R, excluded = null, nExcluded = 0, bounce = null) {
-  const out = s.hitList2, f = s.enemies.items;
-  const n = s.grid.find(x, y, R, out);
-  let best = null, bestD = 1e12;
-  for (let i = 0; i < n; i++) {
-    const e = f[out[i]];
-    if (!e.active || e.leaving || e === bounce) continue;
-    let set = false;
-    for (let k = 0; k < nExcluded; k++) if (excluded[k] === e.uid) { set = true; break; }
-    if (set) continue;
-    const d = (e.x - x) ** 2 + (e.y - y) ** 2;
-    if (d < bestD) {
-      bestD = d;
-      best = e;
-    }
-  }
-  return best;
+/** Exclusion state for closest() – module level so the filter never allocates a closure per call. */
+let EXCL = /** @type {number[] | null} */ (null), N_EXCL = 0, BOUNCE = /** @type {any} */ (null);
+const notExcluded = (e) => {
+  if (e === BOUNCE) return false;
+  for (let k = 0; k < N_EXCL; k++) if (/** @type {number[]} */ (EXCL)[k] === e.uid) return false;
+  return true;
+};
+
+/**
+ * The nearest active lawyer within radius R of (x, y) that is not in the `excluded` list.
+ * Every weapon aims with this: it walks the spatial grid in rings from the point and stops early,
+ * so it costs a few cells even with 400 lawyers on the map.
+ */
+export function closest(s, x, y, R, excluded = null, nExcluded = 0, bounce = null) {
+  if (!bounce && nExcluded === 0) return s.grid.nearest(x, y, R);
+  EXCL = excluded;
+  N_EXCL = nExcluded;
+  BOUNCE = bounce;
+  return s.grid.nearest(x, y, R, notExcluded);
+}
+
+/** The direction from the player toward the nearest lawyer within R, or the walking direction if there is none. */
+function aimAngle(s, R) {
+  const p = s.player;
+  const target = s.grid.nearest(p.x, p.y, R);
+  return target ? Math.atan2(target.y - p.y, target.x - p.x) : Math.atan2(p.dirY, p.dirX);
 }
 
 /** Ctrl+Z: a big key is thrown at the nearest lawyer, turns around and comes back (boomerang). */
@@ -236,9 +238,6 @@ function activateCtrlz(s, w, t) {
     pr.nHit = 0;
   }
 }
-
-/** Reused list of the lawyers already picked as targets in one volley. */
-const PICKED = /** @type {number[]} */ ([]);
 
 /**
  * Teams-varsel (Teams alert): homing alerts. Each alert is shot out in a fan and steers toward its own lawyer.
@@ -349,7 +348,7 @@ function updateBeam(s, w, t, dt) {
   }
   if (w.active > 0) {
     w.active -= dt;
-    w.angle = Math.atan2(p.dirY, p.dirX);
+    w.angle = aimAngle(s, t.lengthPx * p.mod.area);
     w.tick -= dt;
     if (w.tick <= 0) {
       w.tick += t.tick;
@@ -367,7 +366,7 @@ function updateBeam(s, w, t, dt) {
     w.active = t.duration * p.mod.duration;
     w.phase = w.active;
     w.tick = 0;
-    w.angle = Math.atan2(p.dirY, p.dirX);
+    w.angle = aimAngle(s, t.lengthPx * p.mod.area);
   }
 }
 

@@ -16,7 +16,11 @@ const G = CONFIG.limits;
  * @property {string} levelText e.g. "Nytt våpen (2 av 4 plasser brukt)" or "Nivå 3" (new weapon, 2 of 4 slots used / level 3)
  * @property {string} text one short sentence about what the card does
  * @property {boolean} highlighted combination card
+ * @property {number} [weight] how likely the card is to be offered (owned weapons and passives are weighted up)
  */
+
+/** Card weights: upgrades to what the player already has show up more often than new things. */
+const WEIGHT = { ownedWeapon: 2.5, ownedPassive: 1.5, fresh: 1 };
 
 const findWeapon = (s, id) => s.player.weapons.find((w) => w.id === id);
 const findPassive = (s, id) => s.player.passives.find((p) => p.id === id);
@@ -45,6 +49,15 @@ export function computeBonuses(s) {
   m.projSpeed = 1 + P.shortcuts.value * passiveLevel(s, 'shortcuts');
   m.damageRed = Math.min(0.3, P.ergonomicChair.value * passiveLevel(s, 'ergonomicChair'));
   m.xp = 1 + P.certification.value * passiveLevel(s, 'certification');
+  // Version 5: the stat passives
+  const overtime = passiveLevel(s, 'overtime');
+  m.help *= 1 + P.overtime.value * overtime;
+  m.speed -= P.overtime.speedCost * overtime;
+  m.crit = P.coffeeMachine.value * passiveLevel(s, 'coffeeMachine');
+  m.critMult = CONFIG.critMult + P.mechKeyboard.value * passiveLevel(s, 'mechKeyboard');
+  m.regen = P.standingDesk.value * passiveLevel(s, 'standingDesk');
+  m.dodge = Math.min(P.firewall.max, P.firewall.value * passiveLevel(s, 'firewall'));
+  m.luck = Math.min(1, P.lottery.value * passiveLevel(s, 'lottery'));
 }
 
 /** Gives the player a new weapon, or one level up on a weapon the player has. */
@@ -77,7 +90,7 @@ export function givePassive(s, id) {
   s.events.push('upgraded');
 }
 
-/** Swaps a level 8 weapon for the combination. It takes the same slot as the weapon. */
+/** Swaps a max-level weapon for the combination. It takes the same slot as the weapon. */
 export function giveCombination(s, id) {
   const w = findWeapon(s, id);
   if (!w || w.evo) return;
@@ -89,7 +102,7 @@ export function giveCombination(s, id) {
   s.events.push('upgraded');
 }
 
-/** Combinations that can be chosen now: level 8 weapon + the matching passive (at any level). */
+/** Combinations that can be chosen now: max-level weapon + the matching passive (at any level). */
 export function availableCombinations(s) {
   return s.player.weapons.filter((w) => !w.evo && w.level >= G.weaponLevel && passiveLevel(s, V[w.id].combination.passive) > 0);
 }
@@ -110,11 +123,11 @@ export function makeCards(s) {
     const w = findWeapon(s, id);
     if (w) {
       if (!w.evo && w.level < G.weaponLevel) {
-        candidates.push({ kind: 'weapon', id, icon: id, name: V[id].name, levelText: 'Nivå ' + (w.level + 1), text: V[id].levels[w.level].text, highlighted: false });
+        candidates.push({ kind: 'weapon', id, icon: id, name: V[id].name, levelText: 'Nivå ' + (w.level + 1), text: V[id].levels[w.level].text, highlighted: false, weight: WEIGHT.ownedWeapon });
       }
     } else if (used < G.weapons) {
       // Only when there is free space – so you have to commit to a build.
-      candidates.push({ kind: 'weapon', id, icon: id, name: V[id].name, levelText: `Nytt våpen (${used} av ${G.weapons} plasser brukt)`, text: V[id].description, highlighted: false });
+      candidates.push({ kind: 'weapon', id, icon: id, name: V[id].name, levelText: `Nytt våpen (${used} av ${G.weapons} plasser brukt)`, text: V[id].description, highlighted: false, weight: WEIGHT.fresh });
     }
   }
   for (const id of Object.keys(P)) {
@@ -122,7 +135,7 @@ export function makeCards(s) {
     const level = p ? p.level : 0;
     if (p ? level < G.passiveLevel : sp.passives.length < G.passives) {
       const text = P[id].levelText ? P[id].levelText[level] : P[id].text;
-      candidates.push({ kind: 'passive', id, icon: id, name: P[id].name, levelText: p ? 'Nivå ' + (level + 1) : `Ny passiv (${sp.passives.length} av ${G.passives} brukt)`, text, highlighted: false });
+      candidates.push({ kind: 'passive', id, icon: id, name: P[id].name, levelText: p ? 'Nivå ' + (level + 1) : `Ny passiv (${sp.passives.length} av ${G.passives} brukt)`, text, highlighted: false, weight: p ? WEIGHT.ownedPassive : WEIGHT.fresh });
     }
   }
 
@@ -135,8 +148,21 @@ export function makeCards(s) {
     const k = V[w.id].combination;
     cards.push({ kind: 'combination', id: w.id, icon: 'evo:' + w.id, name: k.name, levelText: 'Kombinasjon!', text: k.text, highlighted: true });
   }
-  while (cards.length < 3 && candidates.length > 0) {
-    cards.push(candidates.splice(rng.integer(candidates.length), 1)[0]);
+  // «Kontorlotteriet»: a chance of a fourth card (the roll only happens when the player has the passive).
+  const count = 3 + (sp.mod.luck > 0 && rng.next() < sp.mod.luck ? 1 : 0);
+  while (cards.length < count && candidates.length > 0) {
+    // Weighted draw without replacement
+    let total = 0;
+    for (const c of candidates) total += c.weight ?? 1;
+    let r = rng.next() * total, pick = candidates.length - 1;
+    for (let i = 0; i < candidates.length; i++) {
+      r -= candidates[i].weight ?? 1;
+      if (r <= 0) {
+        pick = i;
+        break;
+      }
+    }
+    cards.push(candidates.splice(pick, 1)[0]);
   }
   // All maxed out: only «Kaffepause-bonus» ("Coffee break bonus") is offered (not the energy drink – it has to be picked up on the map).
   if (cards.length === 0 || (cards.length < 3 && candidates.length === 0 && !cards.some((k) => k.kind === 'coffee'))) {

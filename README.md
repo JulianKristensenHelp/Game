@@ -15,9 +15,14 @@ long as you can, collect tickets, and climb the shared daily leaderboard.
   images or sound files. Everything (sprites, pixel font, sound) is generated in code. The total size is about 0.4 MB.
 - **Pixel art** rendered at 640 × 360 and scaled up with crisp pixels. Every screen sees the same area of the map.
 - **Four playable characters**, each with its own starting weapon and bonus.
-- **11 weapons** (max 4 at once), **12 passives** (max 6 at once) and **11 combinations** (evolutions), including a
-  chain-lightning key, homing Teams alerts and a guardian angel who throws mini printers.
-- **Diverse, procedurally composed lawyers**, including a ranged type that sends «Haster!» emails.
+- **11 weapons with 12 levels each** (max 4 at once), **18 passives** (max 8 at once) and **11 combinations**
+  (evolutions). Every level changes the weapon visibly: more mice in the ring, more cartridges per throw, longer
+  chains. All weapons aim at the nearest lawyer. Levels are generated from growth rules in `js/config.js`.
+- **Brotato-style stats:** critical hits, armour, regeneration, dodge and luck, all shown on a stat sheet at
+  every level-up. Lawyers have frustration bars and every hit shows a number with the weapon's icon.
+- **Diverse, procedurally composed lawyers**, including a ranged type that sends «Haster!» emails, and rare
+  **partners** (elites) with a crown, a big frustration bar and a trait: an aura that shields their neighbours,
+  delegating to juniors when helped, or a telegraphed dash.
 - **Four different bosses in a fixed order** (3:00, 6:00, 9:00 and the final boss at 12:00, who returns every
   3 minutes after that), each with its own telegraphed attacks. Bosses are mandatory: if a boss's countdown
   runs out, you're fired («Du har fått sparken!») and the shift ends.
@@ -127,7 +132,7 @@ tools/                Balance simulator, weapon measurement, font generator
 | Command | What it does |
 | --- | --- |
 | `npm run simulate` | Bots play full runs in seconds and report survival times, plus determinism checks |
-| `npm run measure-weapons` | Measures help per second for every weapon at level 8 and as a combination |
+| `npm run measure-weapons` | Measures help per second for every weapon at level 12 and as a combination |
 | `npm run build-font` | Rebuilds `fonts/kontorpiksel.ttf` from the glyphs in `js/pixelfont.js` |
 
 On Windows without Node.js: `powershell -File tools/node.ps1 tools/simulate.js`.
@@ -141,8 +146,9 @@ that boss with a typical build for the time. Runs where debug buttons were used 
 ## Customising
 
 All balance numbers are in **[`js/config.js`](js/config.js)**, with a comment on every field. That includes
-character names, titles, starting weapons and bonuses (`CONFIG.characters`), and the bosses' names, lines,
-countdowns and attacks (`CONFIG.bosses`). See [DOKUMENTASJON.md](DOKUMENTASJON.md)
+character names, titles, starting weapons and bonuses (`CONFIG.characters`), the bosses' names, lines,
+countdowns and attacks (`CONFIG.bosses`), the elites (`CONFIG.elites`), and each weapon's `base` numbers and
+`growth` rules, from which the 12 levels are generated at load time. See [DOKUMENTASJON.md](DOKUMENTASJON.md)
 (Norwegian) for how to tune difficulty, edit the map and change the graphics.
 
 ## License

@@ -1,0 +1,224 @@
+{
+  "js/bosses.js": {
+    "mtime": 1795680837.549464,
+    "seen": 1795681665.000415,
+    "ast_hash": "6f4b0eb43ab95bb2cb6f8a1b1d67d285",
+    "semantic_hash": "6f4b0eb43ab95bb2cb6f8a1b1d67d285"
+  },
+  "js/config.js": {
+    "mtime": 1795680837.5505223,
+    "seen": 1795681665.00042,
+    "ast_hash": "d67595d91e2750107089dc828b9621cd",
+    "semantic_hash": "d67595d91e2750107089dc828b9621cd"
+  },
+  "js/effects.js": {
+    "mtime": 1795680837.5510495,
+    "seen": 1795681665.0004222,
+    "ast_hash": "d1729993408a92f5e060dd7030335d76",
+    "semantic_hash": "d1729993408a92f5e060dd7030335d76"
+  },
+  "js/enemies.js": {
+    "mtime": 1795680837.5521655,
+    "seen": 1795681665.0004234,
+    "ast_hash": "4fc8417872dd04b15789f31bc0e84757",
+    "semantic_hash": "4fc8417872dd04b15789f31bc0e84757"
+  },
+  "js/figures.js": {
+    "mtime": 1795680837.5529704,
+    "seen": 1795681665.0004244,
+    "ast_hash": "b949aefff6396e049635d2d315e84c44",
+    "semantic_hash": "b949aefff6396e049635d2d315e84c44"
+  },
+  "js/game.js": {
+    "mtime": 1795680837.5534751,
+    "seen": 1795681665.0004256,
+    "ast_hash": "348819f37c1a87e6d627aa45437685ad",
+    "semantic_hash": "348819f37c1a87e6d627aa45437685ad"
+  },
+  "js/hud.js": {
+    "mtime": 1795680837.5551753,
+    "seen": 1795681665.0004263,
+    "ast_hash": "066fda63ce82e7a8299a00b273a590bf",
+    "semantic_hash": "066fda63ce82e7a8299a00b273a590bf"
+  },
+  "js/icons.js": {
+    "mtime": 1795680837.5556972,
+    "seen": 1795681665.000427,
+    "ast_hash": "750516895d261e249cde7e48e9afd04a",
+    "semantic_hash": "750516895d261e249cde7e48e9afd04a"
+  },
+  "js/input.js": {
+    "mtime": 1795680837.556391,
+    "seen": 1795681665.0004277,
+    "ast_hash": "6149b33d8472112f93a829d7e59c932e",
+    "semantic_hash": "6149b33d8472112f93a829d7e59c932e"
+  },
+  "js/leaderboard.js": {
+    "mtime": 1795680837.5569274,
+    "seen": 1795681665.000429,
+    "ast_hash": "8a8f6014cadc5d471ff6066d191567bc",
+    "semantic_hash": "8a8f6014cadc5d471ff6066d191567bc"
+  },
+  "js/main.js": {
+    "mtime": 1795680837.5578544,
+    "seen": 1795681665.0004296,
+    "ast_hash": "a84a19c71ddeff0c372e5381aa98750c",
+    "semantic_hash": "a84a19c71ddeff0c372e5381aa98750c"
+  },
+  "js/map.js": {
+    "mtime": 1795680837.5583682,
+    "seen": 1795681665.0004303,
+    "ast_hash": "a524e1aa53c1683f4894e3bd05d0287d",
+    "semantic_hash": "a524e1aa53c1683f4894e3bd05d0287d"
+  },
+  "js/pixel.js": {
+    "mtime": 1795680837.5583682,
+    "seen": 1795681665.000431,
+    "ast_hash": "739600f131b57a286bbd9c89256aefe9",
+    "semantic_hash": "739600f131b57a286bbd9c89256aefe9"
+  },
+  "js/pixelfont.js": {
+    "mtime": 1795680837.5610795,
+    "seen": 1795681665.000432,
+    "ast_hash": "484d5a743335074a1a073acfb2245df7",
+    "semantic_hash": "484d5a743335074a1a073acfb2245df7"
+  },
+  "js/player.js": {
+    "mtime": 1795680837.5610795,
+    "seen": 1795681665.000433,
+    "ast_hash": "0d5854984d18eb2cc088ea2e9dc27312",
+    "semantic_hash": "0d5854984d18eb2cc088ea2e9dc27312"
+  },
+  "js/renderer.js": {
+    "mtime": 1795680837.5627174,
+    "seen": 1795681665.0004337,
+    "ast_hash": "9e74675b9cdc3b646d95cdead6a22a4e",
+    "semantic_hash": "9e74675b9cdc3b646d95cdead6a22a4e"
+  },
+  "js/score.js": {
+    "mtime": 1795680837.5627174,
+    "seen": 1795681665.0004346,
+    "ast_hash": "068288d4d78715941030a4300d52b71c",
+    "semantic_hash": "068288d4d78715941030a4300d52b71c"
+  },
+  "js/settings.js": {
+    "mtime": 1795680837.5627174,
+    "seen": 1795681665.0004354,
+    "ast_hash": "11d0d992d6309c9808bd881a040f9096",
+    "semantic_hash": "11d0d992d6309c9808bd881a040f9096"
+  },
+  "js/sound.js": {
+    "mtime": 1795680837.5627174,
+    "seen": 1795681665.0004363,
+    "ast_hash": "263a957df9beec9d8fa5dbead2dd1bac",
+    "semantic_hash": "263a957df9beec9d8fa5dbead2dd1bac"
+  },
+  "js/sprites.js": {
+    "mtime": 1795680837.565915,
+    "seen": 1795681665.000437,
+    "ast_hash": "6d2db37667e087f9f5168ed96e0fe0b8",
+    "semantic_hash": "6d2db37667e087f9f5168ed96e0fe0b8"
+  },
+  "js/tickets.js": {
+    "mtime": 1795680837.565915,
+    "seen": 1795681665.0004375,
+    "ast_hash": "898280785926a53c5bf3c04b57a058fa",
+    "semantic_hash": "898280785926a53c5bf3c04b57a058fa"
+  },
+  "js/ui.js": {
+    "mtime": 1795680837.565915,
+    "seen": 1795681665.0004385,
+    "ast_hash": "d1c59af4b6f5b12863966dd27694d85c",
+    "semantic_hash": "d1c59af4b6f5b12863966dd27694d85c"
+  },
+  "js/upgrades.js": {
+    "mtime": 1795680837.5674777,
+    "seen": 1795681665.0004396,
+    "ast_hash": "fe73a7177f67b9db1a5519b06bdb97c6",
+    "semantic_hash": "fe73a7177f67b9db1a5519b06bdb97c6"
+  },
+  "js/utils.js": {
+    "mtime": 1795680837.5685637,
+    "seen": 1795681665.0004404,
+    "ast_hash": "fba7e669876c54fdadcde478af6acf64",
+    "semantic_hash": "fba7e669876c54fdadcde478af6acf64"
+  },
+  "js/weapons.js": {
+    "mtime": 1795680837.569355,
+    "seen": 1795681665.0004408,
+    "ast_hash": "7b0e7b38c0f0fb7053bc72294fb53ccd",
+    "semantic_hash": "7b0e7b38c0f0fb7053bc72294fb53ccd"
+  },
+  "package.json": {
+    "mtime": 1795680837.5700815,
+    "seen": 1795681665.0004416,
+    "ast_hash": "c7c87476b4f09109f9bd705326551317",
+    "semantic_hash": "c7c87476b4f09109f9bd705326551317"
+  },
+  "server/server.js": {
+    "mtime": 1795680837.5700815,
+    "seen": 1795681665.0004425,
+    "ast_hash": "a823ddfa7df3734752512d45f465c3f6",
+    "semantic_hash": "a823ddfa7df3734752512d45f465c3f6"
+  },
+  "start.ps1": {
+    "mtime": 1795680837.5720887,
+    "seen": 1795681665.0004432,
+    "ast_hash": "76f74f908f9e609ab713b50745335223",
+    "semantic_hash": "76f74f908f9e609ab713b50745335223"
+  },
+  "tools/build-font.js": {
+    "mtime": 1795680837.5720887,
+    "seen": 1795681665.000444,
+    "ast_hash": "1e85838c629c8610327a8b1ac86689ea",
+    "semantic_hash": "1e85838c629c8610327a8b1ac86689ea"
+  },
+  "tools/measure-weapons.js": {
+    "mtime": 1795680837.5720887,
+    "seen": 1795681665.0004447,
+    "ast_hash": "e6cc7c66e823e6cd09b4e47c39af02df",
+    "semantic_hash": "e6cc7c66e823e6cd09b4e47c39af02df"
+  },
+  "tools/node.ps1": {
+    "mtime": 1795680837.5720887,
+    "seen": 1795681665.0004454,
+    "ast_hash": "e17d3d2e355928bf792c083368de830b",
+    "semantic_hash": "e17d3d2e355928bf792c083368de830b"
+  },
+  "tools/simulate.js": {
+    "mtime": 1795680837.5754144,
+    "seen": 1795681665.0004463,
+    "ast_hash": "0b2a7475dd6b38a8c0dc59a72477a0d4",
+    "semantic_hash": "0b2a7475dd6b38a8c0dc59a72477a0d4"
+  },
+  "DOKUMENTASJON.md": {
+    "mtime": 1795680837.536869,
+    "seen": 1795681665.000447,
+    "ast_hash": "98c191053f3e28aea2b373b82be57a68",
+    "semantic_hash": "98c191053f3e28aea2b373b82be57a68"
+  },
+  "ENDRINGSLOGG.md": {
+    "mtime": 1795680837.542492,
+    "seen": 1795681665.000448,
+    "ast_hash": "1109643302a480863f537b709dbacb1e",
+    "semantic_hash": "1109643302a480863f537b709dbacb1e"
+  },
+  "README.md": {
+    "mtime": 1795680837.542492,
+    "seen": 1795681665.0004485,
+    "ast_hash": "7ea3fbd9eb4775308d3698ee828bd793",
+    "semantic_hash": "7ea3fbd9eb4775308d3698ee828bd793"
+  },
+  "fonts/LISENS.txt": {
+    "mtime": 1795680837.5465784,
+    "seen": 1795681665.0004492,
+    "ast_hash": "0862c191e454458d9ac32d48179b5266",
+    "semantic_hash": "0862c191e454458d9ac32d48179b5266"
+  },
+  "index.html": {
+    "mtime": 1795680837.5484047,
+    "seen": 1795681665.0004501,
+    "ast_hash": "93b666e90282ec7b9fe861cff6f3011f",
+    "semantic_hash": "93b666e90282ec7b9fe861cff6f3011f"
+  }
+}

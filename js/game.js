@@ -43,6 +43,10 @@ export class Game {
       weapons: new Rng(date + '|vaapen'),
       /** «Dobbel skjerm» ("Dual monitor"): whether a weapon is activated twice in a row */
       dual: new Rng(date + '|dobbel'),
+      /** critical hits («Kaffemaskin») */
+      crit: new Rng(date + '|krit'),
+      /** dodge («Brannmur») */
+      luck: new Rng(date + '|flaks'),
       /** looks only – never affects anything else */
       looks: new Rng(date + '|utseende'),
     };
@@ -64,6 +68,11 @@ export class Game {
     /** Ink puddles from the printer boss's cartridges. */
     this.puddles = new Pool(makePuddle);
     this.senderCount = 0;
+    /** Elites («Partnere») out right now, and the ones with an aura (rebuilt every update). @type {any[]} */
+    this.elites = [];
+    this.eliteCount = 0;
+    /** Hit numbers alive right now (capped, see enemies.js). */
+    this.hitCount = 0;
     this.effects = new Pool(makeEffect);
     this.grid = new Grid();
     /** Reused lists (avoids new objects in every update). */
@@ -108,7 +117,7 @@ export class Game {
       perType: /** @type {Record<string, number>} */ ({}),
       helpPerWeapon: /** @type {Record<string, number>} */ ({}),
       bossesTotal: 0, bossesHelped: 0, maxMultStep: 0, hits: 0,
-      ticketsPicked: 0, ticketsLost: 0, drinks: 0, blocked: 0, emails: 0,
+      ticketsPicked: 0, ticketsLost: 0, drinks: 0, blocked: 0, dodged: 0, elitesHelped: 0, emails: 0,
       combinations: /** @type {string[]} */ ([]),
       /** Every boss the player met, and whether it was helped. @type {{type: string, helped: boolean, time: number, helpedAt: number, returnNo: number}[]} */
       bossLog: [],
@@ -239,7 +248,8 @@ export class Game {
     if (type === 'pc' || type === 'drink') dropPickup(this, type, p.x + 40, p.y);
     else if (type === 'boss') {
       if (!this.boss || !this.boss.active) spawnBoss(this, bossTypeAt(this.bossNo));
-    } else spawnEnemy(this, type, p.x + 190, p.y - 50);
+    } else if (type === 'elite') spawnEnemy(this, 'senior', p.x + 190, p.y - 50, 1 + (this.eliteCount % 3));
+    else spawnEnemy(this, type, p.x + 190, p.y - 50);
   }
 
   /**

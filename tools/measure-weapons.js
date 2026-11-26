@@ -1,5 +1,5 @@
 // @ts-check
-// Measures how much help per second each weapon gives at level 8 and as a combination, under equal conditions.
+// Measures how much help per second each weapon gives at max level and as a combination, under equal conditions.
 // Run:  node tools/measure-weapons.js   (or: powershell -File tools/node.ps1 tools/measure-weapons.js)
 //
 // Setup: the player walks through the open office in a big, slow loop. 150 "dummy" lawyers with infinite
@@ -20,7 +20,7 @@ function target(id, evo) {
   s.time = 600;
   s.nextBoss = s.nextUrgent = s.nextWave = s.nextDrink = 1e9;
   s.player.weapons.length = 0;
-  for (let i = 0; i < 8; i++) giveWeapon(s, id);
+  for (let i = 0; i < CONFIG.limits.weaponLevel; i++) giveWeapon(s, id);
   if (evo) {
     givePassive(s, CONFIG.weapons[id].combination.passive);
     giveCombination(s, id);
@@ -65,7 +65,7 @@ for (const id of Object.keys(CONFIG.weapons)) {
 }
 const avgEvo = rows.filter((r) => r.id !== 'headset').reduce((a, r) => a + r.evo, 0) / (rows.length - 1);
 console.log('Hjelp per sekund (60 s, 150 advokater jevnt spredt 40–300 px rundt spilleren):\n');
-console.log('Våpen'.padEnd(22) + 'Nivå 8'.padStart(9) + '   ' + 'Kombinasjon'.padEnd(30) + 'Hjelp/s'.padStart(9) + '  i forhold til snitt');
+console.log('Våpen'.padEnd(22) + ('Nivå ' + CONFIG.limits.weaponLevel).padStart(9) + '   ' + 'Kombinasjon'.padEnd(30) + 'Hjelp/s'.padStart(9) + '  i forhold til snitt');
 for (const r of rows) {
   console.log(r.name.padEnd(22) + r.n8.toFixed(0).padStart(9) + '   ' + r.evoName.padEnd(30) + r.evo.toFixed(0).padStart(9) + '  ' + (r.id === 'headset' ? '(forsvar – blokkerer treff)' : ((r.evo / avgEvo) * 100).toFixed(0) + ' %'));
 }

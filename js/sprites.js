@@ -353,6 +353,8 @@ function makeObjects() {
       }
     }, false)),
     power: make(9, 9, 4, 4, (r) => r.stamp('...#... .#.#.#. #..#..# #..#..# #.....# .#...#. ..###..', 1, 1, { '#': C.WHITE })),
+    /** Small gold crown over the elites («Partnere»). */
+    crown: make(11, 8, 5, 8, (r) => r.stamp('#...#...# #...#...# ##.###.## ######### ooooooooo #########', 1, 1, { '#': C.GOLD, o: C.GOLD_M })),
     shadows: { small: shadow(14, 5), medium: shadow(18, 6), large: shadow(22, 7), boss: shadow(44, 12), player: shadow(18, 6) },
   };
 }

@@ -1,5 +1,105 @@
 # Endringslogg
 
+## Versjon 5.0 – 26. november 2026 (endringsprompt 4: Brotato-retning)
+
+Spillet er fortsatt én sammenhengende vakt som blir vanskeligere og vanskeligere (ingen butikk, ingen runder), men
+oppgraderingene er dypere, alt er synlig, og alle våpen sikter selv.
+
+### 1. Alle våpen sikter på nærmeste advokat
+- **Toner-kast, HDMI-kabelen og Oppdateringsstrålen** siktet før dit du gikk. Nå sikter de på nærmeste advokat
+  (strålen følger den mens den varer). **Fjernstyring** tok tilfeldige advokater på skjermen, nå de nærmeste.
+  Passord-reset, Ctrl+Z, Teams-varsel og Skytsengelen siktet på nærmeste fra før. Puls og mus er områdevåpen.
+- **Nytt oppslag i rutenettet:** `Grid.nearest()` i js/utils.js går ut i ringer fra punktet og stopper så snart
+  det beste treffet er nærmere enn neste ring kan være. Det koster noen få celler også med 400 advokater, og
+  lager ingen objekter. Alle våpen bruker samme funksjon (`closest()` i js/weapons.js).
+
+### 2. Tolv nivåer per våpen, laget av vekstregler
+- **Nivåtaket er 12** (var 8). Kombinasjonen krever nivå 12 pluss riktig passiv, som før.
+- **Hvert våpen har `base` (nivå 1) og `growth`** i `CONFIG.weapons`, og `buildLevels()` nederst i js/config.js
+  lager de tolv nivåene og kortteksten. Eksempler: Trådløse mus får +1 mus annethvert nivå (2 → 8, 12 som
+  kombinasjon), større bane og raskere rotasjon hvert nivå. Toner-kast får +1 kassett hvert tredje nivå (2 → 6).
+  Passord-reset +1 hopp per nivå (3 → 14). Teams-varsel +1 varsel annethvert nivå (1 → 7). Fjernstyring +1 treff
+  annethvert nivå (1 → 7). Skytsengelen flere mini-printere (2 → 5 samtidig). Headsetet får 2 ladninger fra nivå 7.
+- Kortteksten lages av det som faktisk endret seg: «+1 mus, større bane, raskere rotasjon, +12 % hjelp.»
+- `CONFIG.newWeapons` er tom (beholdt for verktøy); alle våpen står i `CONFIG.weapons`.
+
+### 3. Frustrasjonsbarer og trefftall
+- **Bar over hodet** på hver advokat som er skadet og ble hjulpet i løpet av de siste 1,5 sekundene (2 piksler høy,
+  12 brede). Posisjonene samles i ett pass og fylles i to, så fyllfargen byttes to ganger uansett antall barer.
+- **Trefftall** stiger og blekner over advokaten, med et 8 × 8-ikon av våpenet. Kritiske treff er gule. Treff på samme
+  advokat innen 0,25 sekunder slås sammen til ett voksende tall (ingen tallsky fra kjeder og mus). Maks 120 tall
+  samtidig. Sifrene kopieres fra et ferdiglaget ark – ingen tekstbehandling eller strenger per bilde.
+- **Automatisk kvalitet:** middels skrur av ikonene, lav skrur av tall og barer (partnerne beholder baren).
+
+### 4. Seks nye passive og «Dine tall» ved nivåopp
+- **18 passive, maks 8 samtidig** (var 12 og 6). Nye: Kaffemaskin (+5 % kritisk sjanse, kritisk = 1,5 × hjelp),
+  Mekanisk tastatur (+25 % kritisk hjelp), Overtid (+15 % hjelp, −4 % fart), Hev-senk-pult (+0,35 energi/s),
+  Brannmur (+6 % unnvikelse, maks 30 %, «Unngikk!»), Kontorlotteriet (+20 % sjanse for et fjerde kort).
+- Kritiske treff og unnvikelse har egne tilfeldighetsstrømmer i «Dagens vakt».
+- **Kortene vektes:** våpen du har, kommer 2,5 ganger så ofte som nye, passive du har 1,5 ganger. Da kan du bygge.
+- **«Dine tall»** under kortene: 17 tall (hjelp, kritisk, intervall, område, fart, varighet, prosjektiler, dobbel
+  aktivering, energi, regenerering, skadereduksjon, unnvikelse, bevegelse, plukkradius, erfaring, fjerde kort) og
+  alle våpen og passive med nivå. Tast 4 velger det fjerde kortet.
+
+### 5. Partnere (eliter)
+- Fra minutt 5: 1 % sjanse per advokat, +0,6 prosentpoeng per minutt, maks 8 %, maks 4 samtidig. Aldri avsendere.
+- 6 × frustrasjon, 1,6 × skade, 0,85 × fart, 12 × poeng, litt større. Gullkrone, bred bar som alltid vises, og
+  egenskapen som tekst over baren.
+- **Partner-aura:** andre advokater innen 70 piksler tar halv hjelp (gul ring). **Delegerer:** tre juniorer når den
+  er hjulpet. **Har hastverk:** «!» i 0,5 sekunder, så 0,6 sekunders spurt (3,2 × fart) mot der du stod.
+- Slutt-skjermen teller partnerne. Debug-knapp «Partner».
+
+### 6. Vanskelighet
+- **Ingen advokat dør av ett treff i starten:** juniorfullmektig 18 frustrasjon (var 10), seniorpartner 140 (80),
+  printerentusiast 60 (35), «Haster!»-avsender 50 (30), hastesak 220 (150). Startvåpnene gir 11–18 hjelp, så det
+  er to treff på en junior.
+- **Kurven:** +9 % frustrasjon per minutt etter minutt 3 (var +8 %), +7 % skade per minutt (6 %), +3 % fart (2,5 %).
+  Overtid fra 13:00 er uendret – runden går «mot uendelig», men ingen overlever den.
+- **Bossene** har 1,5 × frustrasjon (1 300 / 3 400 / 6 600 / 9 800), siden våpnene vokser lenger.
+- **Raskere levling** (10 + 1,2 per nivå i stedet for 13 + 1,5), fordi det er 88 oppgraderinger å kjøpe mot 62.
+- Topplistens tak på poeng per sekund er hevet til 9 000 (partnerne gir store lapper).
+
+`tools/measure-weapons.js` (hjelp per sekund, 150 advokater 40–300 px rundt spilleren):
+
+| Våpen | Nivå 12 | Kombinasjon | Hjelp/s | I forhold til snittet |
+| --- | --- | --- | --- | --- |
+| Skru av og på | 1129 | Full omstart | 1269 | 102 % |
+| Toner-kast | 1444 | Kontorprinteren fra helvete | 1271 | 102 % |
+| Passord-reset | 672 | Tofaktor | 1268 | 101 % |
+| HDMI-kabelen | 1037 | Kabelkaos | 1255 | 100 % |
+| Fjernstyring | 523 | Domene-admin | 1238 | 99 % |
+| Trådløse mus | 903 | Musematta | 1269 | 101 % |
+| Ctrl+Z | 1118 | Ctrl+Alt+Del | 1241 | 99 % |
+| Oppdateringsstrålen | 481 | Tvungen oppdatering | 1249 | 100 % |
+| Teams-varsel | 472 | Allmøte på Teams | 1254 | 100 % |
+| Skytsengelen | 833 | Himmelsk serviceavtale | 1183 | 95 % |
+| Støydempende headset | 0 | Hjemmekontor | 0 | (forsvar – blokkerer treff) |
+
+`tools/simulate.js --statistikk` (10 dager × 4 karakterer):
+
+| Robot | Median | 25–75 % | Lengst | Sparket |
+| --- | --- | --- | --- | --- |
+| God, bygger bevisst | 7,0 min | 5,8–11,0 min | 14,3 min | 1 av 40 |
+| Ekspert | 7,8 min | 5,6–11,1 min | 14,4 min | 0 av 40 |
+
+I versjon 4 var medianene 9,4 og 10,1 minutter, så vakta er omtrent to minutter hardere for robotene. Uten partnere
+(`--utenpartnere`) og uten bosser (`--utenbosser`) er medianen rundt ett minutt lenger hver. Robotene bygger
+dårligere enn et menneske med 12 nivåer og 18 passive, så forvent at folk holder lenger.
+
+### 7. Ytelse
+- Ingen nye objekter per bilde eller per treff: barposisjoner i typed arrays, sifre fra ett ark, ikoner laget én gang,
+  trefftall i den eksisterende effektpoolen med eget tak.
+- Nærmeste-søket er billigere enn før (ringer i rutenettet i stedet for alle advokater innen rekkevidde).
+- Partnerauraen koster maks 4 avstandssjekker per treff.
+- Stresstesten (`?debug&utenGPU`, knappen «Stresstest») bør kjøres på en kontor-PC før publisering; den er ikke
+  kjørt i denne omgangen (ingen nettleser i arbeidsmiljøet).
+
+### Antakelser
+- «Litt mer Brotato» er tolket som: statistikk-passive, synlige tall, kritiske treff, eliter og vektede kort – ikke
+  butikk, runder eller materialer. Vakta er fortsatt én sammenhengende runde.
+- Puls og mus er bevisst holdt som områdevåpen («sikter» ikke), siden de omgir spilleren.
+- Partnerne kommer fra minutt 5 så den rolige starten beholdes. Flytt `elites.from` for å endre det.
+
 ## Versjon 4.0 – 25. november 2026 (endringsprompt 3)
 
 ### 1. Fire forskjellige bosser i fast rekkefølge, og «Du har fått sparken!»

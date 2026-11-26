@@ -11,7 +11,16 @@ import { updateBoss, updateBossSchedule, bossContactDamage, bossHelpFactor, chec
 
 const F = CONFIG.enemies;
 const SP = CONFIG.spawn;
+const EL = CONFIG.elites;
 const VB = CONFIG.view.width, VH = CONFIG.view.height;
+
+/** Elite trait codes stored on the enemy (numbers, never text, so effects and the grid stay allocation-free). */
+export const ELITE = { none: 0, aura: 1, split: 2, rush: 3 };
+export const ELITE_TRAIT = ['', 'aura', 'split', 'rush'];
+/** Max hit numbers on screen at once (performance). */
+export const MAX_HITS = 120;
+/** Hits on the same lawyer within this many seconds are merged into one growing number. */
+const HIT_MERGE = 0.25;
 
 /** Type codes used by the happy animation (effects store numbers, not text). */
 export const TYPE_CODE = { junior: 0, printer: 1, senior: 2, urgent: 3, boss: 4, sender: 5, nordic: 6, printerBoss: 7, johan: 8 };
@@ -41,7 +50,19 @@ export function makeEnemy() {
     /** Bosses (see bosses.js): which boss, the current attack, warning, pose and cooldowns. */
     bossType: '', attack: '', tell: false, attackT: 0, pose: -1, cds: [0, 0, 0, 0, 0], fightT: 0, deadline: 0,
     invuln: 0, jam: 0, jamCd: 0, phase2: false, alt: 0, aimX: 0, aimY: 0, vx: 0, vy: 0, streamT: 0, streamA: 0, returnNo: 0,
+    /** Elite («Partner»): which trait (see ELITE), the rush timer and the dash time left. */
+    elite: 0, rushT: 0, dashT: 0,
+    /** When the lawyer was last helped (game time) – the frustration bar is shown for a moment after. */
+    lastHit: -9,
+    /** The hit number that is still growing for this lawyer (visual only). @type {any} */
+    hitFx: null,
   };
+}
+
+/** Chance that an ordinary lawyer spawns as an elite at time t. */
+export function eliteChance(t) {
+  if (t < EL.from) return 0;
+  return Math.min(EL.chanceMax, EL.chanceStart + EL.chancePerMin * ((t - EL.from) / 60));
 }
 
 export function makePaper() {
@@ -90,8 +111,11 @@ export function inView(s, x, y, margin = 0) {
   return x > k.x - margin && x < k.x + VB + margin && y > k.y - margin && y < k.y + VH + margin;
 }
 
-/** Puts a lawyer out on the map. */
-export function spawnEnemy(s, type, x, y) {
+/**
+ * Puts a lawyer out on the map.
+ * @param {number} [elite] 0 = ordinary, otherwise an elite trait (see ELITE): much tougher, with a visible bar.
+ */
+export function spawnEnemy(s, type, x, y, elite = 0) {
   const k = F[type];
   const e = s.enemies.acquire();
   e.active = true;
@@ -120,6 +144,11 @@ export function spawnEnemy(s, type, x, y) {
   e.invuln = 0;
   e.jam = 0;
   e.phase2 = false;
+  e.elite = elite;
+  e.rushT = EL.traits.rush.every;
+  e.dashT = 0;
+  e.lastHit = -9;
+  e.hitFx = null;
   if (type === 'boss') {
     // The real values are set by spawnBoss() in bosses.js
     e.hp = k.frustration;
@@ -138,6 +167,13 @@ export function spawnEnemy(s, type, x, y) {
       s.spared -= u;
       e.hp *= 1 + SP.strengthPerSaved * u;
       e.damage *= 1 + SP.damagePerSaved * u;
+    }
+    if (elite) {
+      e.hp *= EL.frustration;
+      e.damage *= EL.damage;
+      e.speed *= EL.speed;
+      e.points = Math.round(e.points * EL.points);
+      e.r += EL.radiusAdd;
     }
   }
   e.maxHp = e.hp;
@@ -194,12 +230,12 @@ function doorSpot(s) {
 }
 
 /** Lets a lawyer in if there is room under the cap, otherwise it is saved up (and the next ones become stronger). */
-export function trySpawn(s, type, x, y) {
+export function trySpawn(s, type, x, y, elite = 0) {
   if (s.enemies.n >= SP.maxConcurrent) {
     s.spared = Math.min(200, s.spared + 1);
     return;
   }
-  spawnEnemy(s, type, x, y);
+  spawnEnemy(s, type, x, y, elite);
 }
 
 /**
@@ -231,8 +267,14 @@ export function updateDirector(s, dt) {
       const cap = Math.min(A.maxCount, Math.floor(Math.max(s.enemies.n, 20) * A.maxFraction));
       type = s.senderCount < cap ? 'sender' : 'junior';
     }
+    // Elites («Partnere»): rare and tough, never a sender (they keep their distance anyway)
+    let elite = 0;
+    if (type !== 'sender' && t >= EL.from && s.eliteCount < EL.maxConcurrent && rng.next() < eliteChance(t)) {
+      elite = 1 + rng.integer(3);
+      s.eliteCount++;
+    }
     const pl = findSpawnSpot(s);
-    trySpawn(s, type, pl.x, pl.y);
+    trySpawn(s, type, pl.x, pl.y, elite);
   }
 
   // Wave events: a flock from one direction, or a ring with an opening. Adapted to the walls.
@@ -327,9 +369,15 @@ export function updateEnemies(s, dt) {
   const f = s.enemies;
   const out = s.hitList;
   s.senderCount = 0;
+  s.eliteCount = 0;
+  s.elites.length = 0;
   for (let i = 0; i < f.n; i++) {
     const e = f.items[i];
     if (!e.active) continue;
+    if (e.elite) {
+      s.eliteCount++;
+      if (e.elite === ELITE.aura) s.elites.push(e);
+    }
     if (e.blink > 0) e.blink -= dt;
     if (e.mouseCd > 0) e.mouseCd -= dt;
     if (e.ctrlCd > 0) e.ctrlCd -= dt;
@@ -416,8 +464,30 @@ export function updateEnemies(s, dt) {
           if (inView(s, e.x, e.y, 40)) dropPaper(s, e.x, e.y);
         }
       }
-      e.x += dx * e.speed * dt;
-      e.y += dy * e.speed * dt;
+      if (e.elite === ELITE.rush) {
+        // «Har hastverk»: a warning («!»), then a short dash straight at where the player stood.
+        const R = EL.traits.rush;
+        if (e.dashT > 0) {
+          e.dashT -= dt;
+          e.x += e.vx * dt;
+          e.y += e.vy * dt;
+        } else {
+          e.rushT -= dt;
+          e.alert = e.rushT <= R.tell;
+          if (e.rushT <= 0) {
+            e.rushT = R.every;
+            e.alert = false;
+            e.dashT = R.duration;
+            e.vx = dx * e.speed * R.speed;
+            e.vy = dy * e.speed * R.speed;
+          }
+          e.x += dx * e.speed * dt;
+          e.y += dy * e.speed * dt;
+        }
+      } else {
+        e.x += dx * e.speed * dt;
+        e.y += dy * e.speed * dt;
+      }
       if (Math.abs(dx) > 0.15) e.direction = dx < 0 ? -1 : 1;
 
       // Soft pushing so the lawyers don't stand on top of each other (max 6 neighbors, so it never gets slow).
@@ -456,17 +526,61 @@ export function updateEnemies(s, dt) {
  */
 export function help(s, e, amount, source) {
   if (!e.active || e.leaving) return;
-  let m = amount * s.player.mod.help;
+  const mod = s.player.mod;
+  let m = amount * mod.help;
+  // Critical hit («Kaffemaskin»): own random stream, so it is the same for everyone on the same day.
+  let crit = false;
+  if (mod.crit > 0 && s.rng.crit.next() < mod.crit) {
+    m *= mod.critMult;
+    crit = true;
+  }
   if (e.type === 'boss') {
     // «Vi ringer deg tilbake» ("We'll call you back"): no help gets through. Paper jam: double help.
     m *= bossHelpFactor(e);
     if (m <= 0) return;
   }
-  s.stat.helpPerWeapon[source] = (s.stat.helpPerWeapon[source] || 0) + Math.min(e.hp, m);
+  // Partner aura: other lawyers near an aura partner take only part of the help.
+  const A = s.elites;
+  for (let i = 0; i < A.length; i++) {
+    const a = A[i];
+    if (a === e) continue;
+    const R = EL.traits.aura.radius;
+    if ((a.x - e.x) ** 2 + (a.y - e.y) ** 2 < R * R) {
+      m *= EL.traits.aura.helpFactor;
+      break;
+    }
+  }
+  const dealt = Math.min(e.hp, m);
+  s.stat.helpPerWeapon[source] = (s.stat.helpPerWeapon[source] || 0) + dealt;
   e.hp -= m;
   e.blink = 0.09;
+  e.lastHit = s.time;
+  hitNumber(s, e, dealt, crit, source);
   if (e.hp <= 0) becomesHappy(s, e);
   else if (e.type === 'boss') checkBossPhase(s, e);
+}
+
+/** Weapon id → small number, so the hit number can carry which icon to show without storing text. */
+const SOURCE_INDEX = new Map(Object.keys(CONFIG.weapons).map((id, i) => [id, i]));
+
+/**
+ * A floating hit number («47», gold when critical) over the lawyer. Visual only. Hits on the same lawyer
+ * within a short window are merged into one growing number, and there is a hard cap on how many exist.
+ */
+function hitNumber(s, e, amount, crit, source) {
+  let fx = e.hitFx;
+  if (fx && fx.type === 'hit' && fx.b === e.uid && fx.t < HIT_MERGE) {
+    fx.r += amount;
+    fx.x = e.x;
+    fx.y = e.y - e.r * 2 - 6;
+    if (crit) fx.c = 1;
+    return;
+  }
+  if (s.hitCount >= MAX_HITS) return;
+  fx = effect(s, 'hit', e.x, e.y - e.r * 2 - 6, 0.75, amount, SOURCE_INDEX.get(source) ?? -1, e.uid, false, '', crit ? 1 : 0);
+  if (!fx) return;
+  s.hitCount++;
+  e.hitFx = fx;
 }
 
 /**
@@ -485,6 +599,7 @@ export function becomesHappy(s, e) {
   effect(s, 'happy', e.x, e.y, boss ? 1.6 : shortened ? G.shortDuration : G.duration, boss ? 1.2 : shortened ? G.shortSmile : G.smile, TYPE_CODE[figureType(e)], e.variant, false, '', e.direction);
   s.helped++;
   s.stat.perType[e.type] = (s.stat.perType[e.type] || 0) + 1;
+  if (e.elite) s.stat.elitesHelped++;
   s.events.push('happy');
 
   if (e.type === 'urgent') {
@@ -501,6 +616,15 @@ export function becomesHappy(s, e) {
   } else {
     dropTicket(s, e.x, e.y, e.points);
     if (s.rng.drops.next() < CONFIG.newPc.dropChance) dropPickup(s, 'pc', e.x, e.y);
+    if (e.elite === ELITE.split) {
+      // «Delegerer»: the partner hands the problem to a few junior associates
+      const n = EL.traits.split.count;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * TAU + e.phase;
+        trySpawn(s, 'junior', e.x + Math.cos(a) * 14, e.y + Math.sin(a) * 14);
+      }
+      effect(s, 'poof', e.x, e.y, 0.4, 10);
+    }
   }
   registerHelped(s);
 }

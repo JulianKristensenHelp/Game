@@ -11,6 +11,8 @@ import { BitmapFont, textWidth, HEIGHT as FONT_H } from './pixelfont.js';
 import { weaponStats, spiralPos, angelPos } from './weapons.js';
 import { Rng, TAU, mmss } from './utils.js';
 import { makeCanvas, ctx2d } from './pixel.js';
+import { icon } from './icons.js';
+import { ELITE_TRAIT } from './enemies.js';
 
 const VB = CONFIG.view.width, VH = CONFIG.view.height;
 const KB = CONFIG.map.width, KH = CONFIG.map.height;
@@ -54,6 +56,19 @@ export class Renderer {
     this.margin = { top: 40, bottom: 50, left: 12, right: 12 };
     /** Number of happy lawyers being animated right now (shown in debug). */
     this.happyShown = 0;
+    /** Hit numbers: outlined digit sheets per color, 8 × 8 weapon icons, and reused digit buffer (no allocation per frame). */
+    /** @type {Map<string, HTMLCanvasElement>} */
+    this.digitSheets = new Map();
+    /** @type {HTMLCanvasElement[]} */
+    this.iconSmall = [];
+    this.digits = new Int32Array(8);
+    /** Frustration bars: positions collected in one pass, drawn in two (one fill color per pass). */
+    this.barX = new Float32Array(512);
+    this.barY = new Float32Array(512);
+    this.barW = new Float32Array(512);
+    this.barF = new Float32Array(512);
+    /** @type {Map<string, HTMLCanvasElement>} */
+    this.labelCache = new Map();
   }
 
   // ---------- The map (pre-rendered once) ----------
@@ -213,6 +228,14 @@ export class Renderer {
 
     this.drawEffectsUnder(s, now);
 
+    // Partner aura: a faint gold ring around the elites that shield their neighbours
+    for (let i = 0; i < s.elites.length; i++) {
+      const e = s.elites[i];
+      ctx.globalAlpha = fewerFlashes ? 0.5 : 0.4 + Math.sin(now * 3) * 0.15;
+      drawSprite(ctx, ring(CONFIG.elites.traits.aura.radius, '#f5cf3a', 1, 0.06, 4), e.x, e.y);
+    }
+    ctx.globalAlpha = 1;
+
     // Tickets (blink in the last seconds)
     const L = CONFIG.tickets;
     for (let i = 0; i < s.tickets.n; i++) {
@@ -273,16 +296,18 @@ export class Renderer {
       if (e.leaving) ctx.globalAlpha = 0.6;
       ctx.drawImage(sheet.canvas, frame * sheet.w, sheet.sy, sheet.w, sheet.h, Math.round(e.x - sheet.ax), Math.round(e.y - sheet.ay), sheet.w, sheet.h);
       ctx.globalAlpha = 1;
-      // Warning before an email: the laptop lights up and a «!» above the head
+      if (e.elite) drawSprite(ctx, item.crown, e.x, e.y - sheet.ay);
+      // Warning before an email (or a partner's dash): the laptop lights up and a «!» above the head
       if (e.alert) {
         if (e.type === 'sender') {
           ctx.globalAlpha = fewerFlashes ? 0.8 : 0.6 + Math.sin(now * 30) * 0.3;
           drawSprite(ctx, item.laptopGlow, e.x, e.y - 3);
           ctx.globalAlpha = 1;
         }
-        drawSprite(ctx, item.exclaim, e.x, e.y - sheet.ay - (e.type === 'boss' ? 34 : 2));
+        drawSprite(ctx, item.exclaim, e.x, e.y - sheet.ay - (e.type === 'boss' ? 34 : e.elite ? 30 : 2));
       }
     }
+    this.drawBars(s, n);
     this.drawBossClocks(s, n);
 
     // Emails and the bosses' projectiles (above the lawyers, with a red glow so they stand out from the player's own effects)
@@ -651,9 +676,123 @@ export class Renderer {
         ctx.fillStyle = '#c8ecff';
         ctx.fillRect(s.camera.x, s.camera.y, VB, VH);
         ctx.globalAlpha = 1;
+      } else if (e.type === 'hit' && this.quality < 2) {
+        this.drawHit(e, f);
       }
     }
+    ctx.globalAlpha = 1;
     void now;
+  }
+
+  /**
+   * Frustration bars over the lawyers: shown while a lawyer is damaged and was helped in the last moment,
+   * always on the elites (with their trait as a label). Collected in one pass and filled in two, so the
+   * fill color changes only twice no matter how many bars there are. Hidden at the lowest quality level
+   * (except on the elites).
+   */
+  drawBars(s, n) {
+    const ctx = this.ctx;
+    const sorted = this.sorted;
+    const t = s.time;
+    const showAll = this.quality < 2;
+    if (this.barX.length < n) {
+      this.barX = new Float32Array(n * 2);
+      this.barY = new Float32Array(n * 2);
+      this.barW = new Float32Array(n * 2);
+      this.barF = new Float32Array(n * 2);
+    }
+    let k = 0;
+    ctx.fillStyle = '#1d1626';
+    for (let i = 0; i < n; i++) {
+      const e = sorted[i];
+      if (e.type === 'boss' || e.hp <= 0) continue;
+      const elite = e.elite > 0;
+      if (!elite && !(showAll && e.hp < e.maxHp && t - e.lastHit < 1.5)) continue;
+      const sheet = this.fig.sheet(e.type, e.variant);
+      const w = elite ? 22 : 12;
+      const x = Math.round(e.x - w / 2), y = Math.round(e.y - sheet.ay - (elite ? 14 : 5));
+      this.barX[k] = x;
+      this.barY[k] = y;
+      this.barW[k] = w;
+      this.barF[k] = Math.max(0, Math.min(1, e.hp / e.maxHp));
+      k++;
+      ctx.fillRect(x - 1, y - 1, w + 2, elite ? 5 : 4);
+      if (elite) {
+        // gold frame and the trait as a small label
+        ctx.fillStyle = '#f5cf3a';
+        ctx.fillRect(x - 1, y - 1, w + 2, 1);
+        ctx.fillRect(x - 1, y + 3, w + 2, 1);
+        ctx.fillStyle = '#1d1626';
+        if (showAll) {
+          const c = this.labelCanvas(CONFIG.elites.traits[ELITE_TRAIT[e.elite]].name);
+          ctx.drawImage(c, Math.round(e.x - c.width / 2), y - c.height - 1);
+        }
+      }
+    }
+    ctx.fillStyle = '#5d1a22';
+    for (let i = 0; i < k; i++) ctx.fillRect(this.barX[i], this.barY[i], this.barW[i], 2);
+    ctx.fillStyle = '#e5484d';
+    for (let i = 0; i < k; i++) ctx.fillRect(this.barX[i], this.barY[i], Math.round(this.barW[i] * this.barF[i]), 2);
+  }
+
+  /** Small white label with an outline, cached per text (used for the elite traits). */
+  labelCanvas(text) {
+    let c = this.labelCache.get(text);
+    if (c) return c;
+    c = makeCanvas(textWidth(text) + 2, FONT_H + 2);
+    this.font.draw(ctx2d(c), text, 1, 1, '#ffffff', 1, '#1d1626');
+    this.labelCache.set(text, c);
+    return c;
+  }
+
+  /** Outlined digits 0–9 in one color, 8 pixels per cell (made once per color). */
+  digitSheet(color) {
+    let c = this.digitSheets.get(color);
+    if (c) return c;
+    c = makeCanvas(80, FONT_H + 2);
+    const ctx = ctx2d(c);
+    for (let d = 0; d < 10; d++) this.font.draw(ctx, String(d), d * 8 + 1, 1, color, 1, '#1d1626');
+    this.digitSheets.set(color, c);
+    return c;
+  }
+
+  /** 8 × 8 version of a weapon icon (for the hit numbers), made once per weapon. */
+  smallIcon(index) {
+    let c = this.iconSmall[index];
+    if (c) return c;
+    const id = Object.keys(CONFIG.weapons)[index];
+    c = makeCanvas(8, 8);
+    const ctx = ctx2d(c);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(icon(id), 0, 0, 16, 16, 0, 0, 8, 8);
+    this.iconSmall[index] = c;
+    return c;
+  }
+
+  /**
+   * A hit number: rises and fades, gold when critical, with a tiny icon of the weapon that gave the help
+   * (the icon only at full quality). Digits are copied from a prepared sheet – no text drawing, no strings.
+   */
+  drawHit(e, f) {
+    const ctx = this.ctx;
+    const sheet = this.digitSheet(e.c ? '#ffd740' : '#ffffff');
+    let v = Math.round(e.r);
+    if (v < 1) v = 1;
+    const dig = this.digits;
+    let n = 0;
+    while (v > 0 && n < 8) {
+      dig[n++] = v % 10;
+      v = (v / 10) | 0;
+    }
+    const w = n * 7 - 1;
+    let x = Math.round(e.x - w / 2);
+    const y = Math.round(e.y - f * 14);
+    ctx.globalAlpha = f < 0.55 ? 1 : (1 - f) / 0.45;
+    for (let i = n - 1; i >= 0; i--) {
+      ctx.drawImage(sheet, dig[i] * 8, 0, 8, FONT_H + 2, x, y, 8, FONT_H + 2);
+      x += 7;
+    }
+    if (this.quality === 0 && e.a >= 0) ctx.drawImage(this.smallIcon(e.a), Math.round(e.x - w / 2) - 10, y + 2);
   }
 
   /** Pre-rendered score text («+1000»), cached per text. */

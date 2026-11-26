@@ -4,7 +4,7 @@ import { CONFIG } from './config.js';
 import { mmss, formatNumber } from './utils.js';
 import { multText } from './score.js';
 import { weaponName } from './weapons.js';
-import { iconElement } from './icons.js';
+import { iconElement, weaponIconId } from './icons.js';
 
 /** @returns {HTMLElement} */
 export const el = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
@@ -53,13 +53,67 @@ export function showCards(s, choose) {
   el('newLevel').textContent = String(s.level);
   const holder = el('cards');
   holder.replaceChildren();
-  holder.className = s.cards.length === 1 ? 'one' : s.cards.length === 2 ? 'two' : '';
+  holder.className = s.cards.length === 1 ? 'one' : s.cards.length === 2 ? 'two' : s.cards.length === 4 ? 'four' : '';
   s.cards.forEach((k, i) => {
     const b = make('button', 'card' + (k.highlighted ? ' highlighted' : ''));
     b.append(make('kbd', 'keyHint', i + 1), iconElement(k.icon), make('span', 'name', k.name), make('span', 'level', k.levelText), make('span', 'text', k.text));
     b.addEventListener('click', () => choose(i));
     holder.append(b);
   });
+  drawStatSheet(s);
+}
+
+/** "+12 %" / "−8 %" */
+const pct = (v) => `${v < 0 ? '−' : '+'}${Math.round(Math.abs(v) * 100)} %`;
+const dec = (v, n = 2) => v.toFixed(n).replace('.', ',');
+
+/**
+ * The stat sheet under the cards: every number the passives and the character change, and the build so far.
+ * Everything a player needs to decide which card to take.
+ */
+export function drawStatSheet(s) {
+  const holder = el('levelStats');
+  holder.replaceChildren();
+  const p = s.player, m = p.mod;
+  const rows = [
+    ['Hjelp (skade)', pct(m.help - 1)],
+    ['Kritisk sjanse', `${Math.round(m.crit * 100)} %`],
+    ['Kritisk hjelp', `× ${dec(m.critMult)}`],
+    ['Tid mellom aktiveringer', pct(m.cd - 1)],
+    ['Område og rekkevidde', pct(m.area - 1)],
+    ['Prosjektilfart', pct(m.projSpeed - 1)],
+    ['Varighet', pct(m.duration - 1)],
+    ['Ekstra prosjektiler', `+${m.extraProj}`],
+    ['Dobbel aktivering', `${Math.round(m.dual * 100)} %`],
+    ['Maks energi', `${p.maxEnergy}`],
+    ['Regenerering', `${dec(m.regen)} /s`],
+    ['Skadereduksjon', `${Math.round(m.damageRed * 100)} %`],
+    ['Unnvikelse', `${Math.round(m.dodge * 100)} %`],
+    ['Bevegelse', pct(m.speed - 1)],
+    ['Plukkradius', pct(m.pick - 1)],
+    ['Erfaring', pct(m.xp - 1)],
+    ['Sjanse for fjerde kort', `${Math.round(m.luck * 100)} %`],
+  ];
+  const grid = make('div', 'statGrid');
+  for (const [name, value] of rows) {
+    const row = make('div', 'stat' + (value.startsWith('+0 %') || value === '0 %' || value === '+0' || value === '0,00 /s' ? ' zero' : ''));
+    row.append(make('span', 'statName', name), make('span', 'statValue', value));
+    grid.append(row);
+  }
+  const build = make('div', 'build');
+  const G = CONFIG.limits;
+  for (const w of p.weapons) {
+    const chip = make('span', 'chip' + (w.evo ? ' evo' : ''));
+    chip.append(iconElement(weaponIconId(w)), make('span', '', w.evo ? weaponName(w) : `${weaponName(w)} ${w.level}/${G.weaponLevel}`));
+    build.append(chip);
+  }
+  for (const pa of p.passives) {
+    const chip = make('span', 'chip');
+    chip.append(iconElement(pa.id), make('span', '', `${CONFIG.passives[pa.id].name} ${pa.level}/${G.passiveLevel}`));
+    build.append(chip);
+  }
+  build.append(make('span', 'muted small', `${p.weapons.length}/${G.weapons} våpen · ${p.passives.length}/${G.passives} passive`));
+  holder.append(make('h3', '', 'Dine tall'), grid, build);
 }
 
 // ---------- Leaderboard ----------
@@ -154,7 +208,7 @@ export function drawNoticeBoard() {
     if (found.includes(id)) {
       const li = make('li');
       const text = make('div');
-      text.append(make('span', '', k.name), make('small', '', `${v.name} (nivå 8) + ${CONFIG.passives[k.passive].name}`));
+      text.append(make('span', '', k.name), make('small', '', `${v.name} (nivå ${CONFIG.limits.weaponLevel}) + ${CONFIG.passives[k.passive].name}`));
       li.append(iconElement('evo:' + id), text);
       holder.append(li);
     } else {
@@ -182,6 +236,8 @@ export function drawStats(s) {
   const urgentSprite = st.perType.urgent || 0;
   if (urgentSprite > 0) line(`Du rakk ${urgentSprite} ${urgentSprite === 1 ? 'hastesak' : 'hastesaker'}`);
   if (st.blocked > 0) line(`Headsetet blokkerte ${st.blocked} treff`);
+  if (st.dodged > 0) line(`Brannmuren avviste ${st.dodged} treff`);
+  if (st.elitesHelped > 0) line(`${st.elitesHelped} ${st.elitesHelped === 1 ? 'partner' : 'partnere'} fikk omsider IT-hjelp`);
   if (st.drinks > 0) line(`Du fant ${st.drinks} ${st.drinks === 1 ? 'energidrikk' : 'energidrikker'} på kartet`);
   line(`Høyeste multiplikator: ${multText(CONFIG.multiplier.start + st.maxMultStep * CONFIG.multiplier.step)}`);
   let best = '', bestHelp = 0;
@@ -198,7 +254,7 @@ export function drawStats(s) {
   if (st.combinations.length > 0) {
     line(`Kombinasjoner låst opp: ${st.combinations.map((id) => CONFIG.weapons[id].combination.name).join(', ')}`);
   } else {
-    line('Ingen kombinasjoner denne vakta – våpen på nivå 8 + riktig passiv gir én');
+    line(`Ingen kombinasjoner denne vakta – våpen på nivå ${CONFIG.limits.weaponLevel} + riktig passiv gir én`);
   }
   const total = st.ticketsPicked + st.ticketsLost;
   if (total > 0) line(`Du rakk ${Math.round((st.ticketsPicked / total) * 100)} % av ticket-lappene (nivå ${s.level})`);

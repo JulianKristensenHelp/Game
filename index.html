@@ -42,7 +42,7 @@
         </section>
         <section>
           <h2>Oppslagstavle</h2>
-          <p class="muted small">Våpen på nivå 8 + riktig passiv gir en kombinasjon. De du har funnet, henger her.</p>
+          <p class="muted small">Våpen på maks nivå + riktig passiv gir en kombinasjon. De du har funnet, henger her.</p>
           <ul id="noticeBoard" class="boardList"></ul>
         </section>
       </div>
@@ -70,7 +70,8 @@
     <div class="panel wide transparent">
       <h2 class="levelTitle">Nivå <span id="newLevel">2</span>! Velg én oppgradering</h2>
       <div id="cards"></div>
-      <p class="light small">Klikk, eller trykk <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></p>
+      <p class="light small">Klikk, eller trykk <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> (<kbd>4</kbd> med Kontorlotteriet)</p>
+      <div id="levelStats" class="statSheet"></div>
     </div>
   </div>
 
@@ -183,6 +184,7 @@
       <button data-d="pc">Ny PC</button>
       <button data-d="drink">Drikk</button>
       <button data-d="swarm">+100 advokater</button>
+      <button data-d="elite">Partner</button>
       <button data-d="boss1">Boss 1: Nørdic</button>
       <button data-d="boss2">Boss 2: Printer</button>
       <button data-d="boss3">Boss 3: Fristen</button>

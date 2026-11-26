@@ -14,6 +14,8 @@ const date = process.argv[2] || '2026-11-25';
 const maxMin = Number(process.argv[3] || 25);
 // --utenbosser: no bosses at all (to see how much of the difficulty comes from them)
 if (process.argv.includes('--utenbosser')) for (const b of CONFIG.bosses.schedule) b.at = 1e7;
+// --utenpartnere: no elites (to see how much of the difficulty comes from them)
+if (process.argv.includes('--utenpartnere')) CONFIG.elites.from = 1e9;
 // --ikkejag: the bots ignore the bosses (and the bosses never fire anyone). --ingentreg: no slowdown from notes and ink.
 const NO_CHASE = process.argv.includes('--ikkejag');
 if (NO_CHASE) for (const t of ['nordic', 'printerBoss', 'deadline', 'johan']) /** @type {any} */ (CONFIG.bosses)[t].deadline = 1e7;
@@ -37,7 +39,8 @@ if (process.argv.includes('--ufarligebosser')) {
 function makeRobot(skill, smartBuild, seed, plan = ['powerCycle', 'mouse', 'toner', 'remote']) {
   const rng = new Rng('robot' + seed);
   let ix = 0, iy = 0, wait = 0;
-  const passivePlan = plan.map((id) => CONFIG.weapons[id].combination.passive).concat(['ergonomicChair', 'biggerCan', 'sneakers']);
+  // Combination passives first, then the damage and defence passives a human would pick (8 slots in total)
+  const passivePlan = plan.map((id) => CONFIG.weapons[id].combination.passive).concat(['overtime', 'coffeeMachine', 'ergonomicChair', 'standingDesk', 'biggerCan', 'sneakers', 'firewall', 'mechKeyboard']);
   return {
     steer(s) {
       if (--wait > 0) return [ix, iy];
@@ -196,7 +199,7 @@ function playRound(name, skill, smart, seed, log = false, plan = undefined, othe
   const bossesHelped = s.stat.bossLog.filter((b) => b.helped).map((b) => `${CONFIG.bosses[b.type].short} ${Math.round(b.helpedAt - b.time)}s`).join(' ');
   console.log(
     `${name.padEnd(24)} tid ${mmss(s.time)}${s.status === 'done' ? ' ' : '+'} | score ${String(s.score).padStart(8)} | nivå ${String(s.level).padStart(3)} | hjulpne ${String(s.helped).padStart(5)} | ` +
-    `maks x${(CONFIG.multiplier.start + s.stat.maxMultStep * CONFIG.multiplier.step).toFixed(1)} | treff ${s.stat.hits} | drikker ${s.stat.drinks} | bosser ${s.stat.bossesHelped}/${s.stat.bossesTotal} | første komb. ${firstEvo ? mmss(firstEvo) : '-'} | maks fiender ${maxEnemies} | ${Date.now() - start} ms`
+    `maks x${(CONFIG.multiplier.start + s.stat.maxMultStep * CONFIG.multiplier.step).toFixed(1)} | treff ${s.stat.hits} | drikker ${s.stat.drinks} | bosser ${s.stat.bossesHelped}/${s.stat.bossesTotal} | partnere ${s.stat.elitesHelped} | første komb. ${firstEvo ? mmss(firstEvo) : '-'} | maks fiender ${maxEnemies} | ${Date.now() - start} ms`
   );
   console.log(`   slutt: ${end} | bosser hjulpet: ${bossesHelped || '-'} | bygg: ${build}`);
   if (process.argv.includes('--skade')) console.log(`   energi tapt: under boss ${Math.round(lost.boss)} (herav ca. ${Math.round(lost.bossShots)} fra prosjektiler), ellers ${Math.round(lost.other)}`);

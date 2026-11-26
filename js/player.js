@@ -4,6 +4,7 @@ import { CONFIG } from './config.js';
 import { multHits } from './score.js';
 import { INSIDE } from './map.js';
 import { tryBlock } from './weapons.js';
+import { effect } from './effects.js';
 
 /** Makes the player as it is at the start of a shift (in the middle of the open-plan office). */
 export function makePlayer() {
@@ -27,8 +28,12 @@ export function makePlayer() {
     weapons: [],
     /** @type {{id:string, level:number}[]} */
     passives: [],
-    /** Total bonuses from passives – computed in upgrades.js. */
-    mod: { area: 1, help: 1, extraProj: 0, duration: 1, cd: 1, speed: 1, pick: 1, dual: 0, projSpeed: 1, damageRed: 0, xp: 1 },
+    /** Total bonuses from passives – computed in upgrades.js. All of them are shown on the stat sheet at level-up. */
+    mod: {
+      area: 1, help: 1, extraProj: 0, duration: 1, cd: 1, speed: 1, pick: 1, dual: 0, projSpeed: 1, damageRed: 0, xp: 1,
+      /** Version 5: critical chance and multiplier, energy regeneration per second, dodge chance, chance of a fourth card. */
+      crit: 0, critMult: CONFIG.critMult, regen: 0, dodge: 0, luck: 0,
+    },
   };
 }
 
@@ -54,6 +59,8 @@ export function updatePlayer(s, dt, ix, iy) {
   }
   if (p.invulnerable > 0) p.invulnerable -= dt;
   if (p.kick > 0) p.kick -= dt;
+  // «Hev-senk-pult»: energy regeneration
+  if (p.mod.regen > 0 && p.energy < p.maxEnergy) p.energy = Math.min(p.maxEnergy, p.energy + p.mod.regen * dt);
 
   // Piles of paper from printer enthusiasts slow the player down.
   const pk = CONFIG.enemies.printer;
@@ -96,6 +103,13 @@ export function damagePlayer(s, amount) {
   p.invulnerable = CONFIG.player.invulnerableTime;
   // Noise-cancelling headset: a blocked hit costs no energy and does not affect the multiplier.
   if (tryBlock(s)) return;
+  // «Brannmur»: the hit misses completely (own random stream, same for everyone on the same day).
+  if (p.mod.dodge > 0 && s.rng.luck.next() < p.mod.dodge) {
+    s.stat.dodged++;
+    effect(s, 'text', p.x, p.y - 26, 0.8, 0, 0, 0, false, 'Unngikk!');
+    s.events.push('dodge');
+    return;
+  }
   amount *= 1 - p.mod.damageRed;
   s.stat.hits++;
   multHits(s);

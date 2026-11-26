@@ -82,8 +82,16 @@ hvert innslag i topplisten (portrett ved navnet). Topplisten er felles for alle 
 
 ## Våpen, passive og kombinasjoner
 
-Det finnes 11 IT-løsninger (maks 4 samtidig) og 12 passive (maks 6 samtidig). Hvert våpen på nivå 8 pluss
-riktig passiv gir en kombinasjon. Disse er nye eller endret i versjon 3 og 4:
+Det finnes 11 IT-løsninger (maks 4 samtidig) og 18 passive (maks 8 samtidig). Hvert våpen har **12 nivåer**, og
+hvert nivå endrer våpenet synlig: Trådløse mus får en ny mus annethvert nivå, Toner-kast en ny kassett hvert
+tredje, Passord-reset ett hopp per nivå, og alle får mer hjelp og kortere intervall. Nivåene lages av `base`
+(nivå 1) og `growth` (vekstregler) i `CONFIG.weapons`, så du endrer et våpen ved å endre reglene, ikke tolv
+linjer. Kortteksten («+1 mus, større bane, +12 % hjelp») lages også automatisk.
+
+**Alle våpen sikter på nærmeste advokat** (puls og mus er områdevåpen og trenger ikke sikte). Toner-kast, HDMI-kabelen,
+Oppdateringsstrålen og Fjernstyring gikk tidligere etter gangretningen eller tilfeldige advokater.
+
+Et våpen på nivå 12 pluss riktig passiv gir en kombinasjon. Disse er nye eller endret i versjon 3 og 4:
 
 | Våpen | + Passiv | = Kombinasjon |
 | --- | --- | --- |
@@ -94,9 +102,54 @@ riktig passiv gir en kombinasjon. Disse er nye eller endret i versjon 3 og 4:
 | Støydempende headset (skjold som blokkerer ett treff) | Ergonomisk stol | Hjemmekontor |
 | Skytsengelen (kaster mini-printere) | Større boks | Himmelsk serviceavtale |
 
-Tallene står i CONFIG.weapons og CONFIG.newWeapons. «Dobbel skjerm» bruker en egen tilfeldighetsstrøm, så
-samme valg gir samme runde for alle. Skytsengelen har et fast tak på antall mini-printere samtidig (2, 4 eller 6,
-og 10 som kombinasjon), likt for alle.
+Tallene står i CONFIG.weapons. «Dobbel skjerm» bruker en egen tilfeldighetsstrøm, så samme valg gir samme runde
+for alle. Skytsengelen har et fast tak på antall mini-printere samtidig (2 til 5, og 10 som kombinasjon), likt for alle.
+
+### De seks nye passive (versjon 5)
+
+| Passiv | Per nivå (maks 5) |
+| --- | --- |
+| Kaffemaskin | +5 % kritisk sjanse. Et kritisk treff gir 1,5 × hjelp (gult tall) |
+| Mekanisk tastatur | +25 % hjelp fra kritiske treff |
+| Overtid | +15 % hjelp på alle våpen, men −4 % bevegelseshastighet |
+| Hev-senk-pult | +0,35 energi per sekund |
+| Brannmur | +6 % sjanse for å unngå et treff helt (maks 30 %), «Unngikk!» vises |
+| Kontorlotteriet | +20 % sjanse for et fjerde kort ved nivåopp |
+
+Kritiske treff og unnvikelse bruker egne tilfeldighetsstrømmer («Dagens vakt»), så de er like for alle.
+**Kortene ved nivåopp** vektes: våpen du allerede har, dukker opp 2,5 ganger så ofte som nye, og passive du har
+1,5 ganger så ofte, så du kan bygge målrettet.
+
+### Dine tall ved nivåopp
+
+Under kortene står alle tallene som passive og karakter påvirker: hjelp, kritisk sjanse og kritisk hjelp, tid
+mellom aktiveringer, område, prosjektilfart, varighet, ekstra prosjektiler, dobbel aktivering, maks energi,
+regenerering, skadereduksjon, unnvikelse, bevegelse, plukkradius, erfaring og sjansen for et fjerde kort, pluss
+alle våpen og passive med nivå. På små skjermer (under 640 piksler høye) skjules arket.
+
+### Frustrasjonsbar og trefftall
+
+- Hver advokat får en liten rød bar over hodet når den er skadet og nylig ble hjulpet (1,5 sekunder). Bossene har sin
+  egen bar som før.
+- Hvert treff viser et tall som stiger og blekner, med et lite ikon av våpenet som ga hjelpen. Kritiske treff er gule.
+  Treff på samme advokat innen et kvart sekund slås sammen til ett voksende tall, og det er maks 120 tall samtidig.
+- Alt dette er ren grafikk og påvirker aldri spillet. Automatisk kvalitet skrur av ikonene først (middels), og
+  tall og barer helt (lav). Partnerne beholder baren uansett.
+
+## Partnere (eliter)
+
+Fra minutt 5 kan en vanlig advokat komme inn som **partner**: gullkrone, bred frustrasjonsbar som alltid vises,
+6 × frustrasjon, 1,6 × skade, litt tregere og 12 × poeng på lappen. Sjansen starter på 1 % per advokat og øker
+med 0,6 prosentpoeng per minutt (maks 8 %), og det er maks 4 partnere samtidig. Hver har én egenskap (navnet står
+over baren):
+
+| Egenskap | Hva den gjør |
+| --- | --- |
+| Partner-aura | Andre advokater innen 70 piksler tar bare halv hjelp. En gul ring viser rekkevidden |
+| Delegerer | Når partneren er hjulpet, kommer tre juniorfullmektiger ut av den |
+| Har hastverk | Hvert 4. sekund: «!» i et halvt sekund, så et spurt mot der du står |
+
+Tallene står i `CONFIG.elites`. Knappen «Partner» i debug-panelet setter ut én.
 
 **«Haster!»-avsenderen** (fra 2:30) holder seg 150–200 piksler unna og sender e-poster mot der spilleren
 står. Laptopen lyser og et «!» vises 0,5 sekunder før hvert skudd. Maks 15 % av advokatene og maks 30 samtidig,
@@ -140,7 +193,9 @@ siden på nytt. De viktigste:
 | gjøre midtspillet lettere/vanskeligere | `scaling.frustrationGrowthPerMin`, `spawn.rate` |
 | flytte «veggen» for de beste (nå ca. 15 min) | `scaling.overtimeFromMin` (13), `overtimeGrowthPerMin`, `overtimeSpeedPerMin` |
 | gi raskere/tregere nivåopp | `level` (`base`, `perLevel`, `square`) |
-| endre et våpen | `weapons.<id>.levels` (én linje per nivå) og `combination.stats` |
+| endre et våpen | `weapons.<id>.base` (nivå 1), `weapons.<id>.growth` (vekst per nivå) og `combination.stats` |
+| endre partnerne (eliter) | `elites` (fra når, sjanse, maks samtidig, styrke, egenskaper) |
+| endre de nye passive | `statPassives` og `critMult` |
 | endre hastesaken | `enemies.urgent` |
 | endre bossene (navn, replikker, frustrasjon, angrep, nedtelling) | `bosses` |
 | endre energidrikken | `energyDrink` (first, interval, max, minDistance) |
@@ -154,19 +209,14 @@ og om runden endte med sparken. Den sjekker også at to like runder gir nøyakti
 «Dobbel skjerm»), og at utseendet på advokatene ikke påvirker spillet.
 
 `node tools/simulate.js x 25 --statistikk` kjører 10 dager × 4 karakterer for de gode robotene og skriver ut median,
-spredning og hvor mange som fikk sparken. Med tallene som ligger inne nå:
-
-| Robot | Median | 25–75 % | Lengst | Sparket |
-| --- | --- | --- | --- | --- |
-| God, bygger bevisst | 9,0 min | 6,4–12,1 min | 14,7 min | 2 av 40 |
-| Ekspert | 10,5 min | 6,0–13,6 min | 15,5 min | 3 av 40 |
-
-Uten bosser (`--utenbosser`) er tallene 9,6 og 12,4 minutter, så bossene gjør det bare litt vanskeligere. Robotene
-ser ikke varslene slik et menneske gjør, så de får mer skade fra bossene enn en oppmerksom spiller. Robotene
-svinger mye fra runde til runde og er ikke mennesker. Prøvespill gjerne med noen kolleger.
+spredning og hvor mange som fikk sparken. Med tallene som ligger inne nå (versjon 5, se ENDRINGSLOGG.md for tabellen):
+ekspertrobotene har median rundt 8 minutter mot 10 i versjon 4, og de beste rundene ryker fortsatt ved 14–15 minutter.
+`--utenpartnere` og `--utenbosser` viser hvor mye partnerne og bossene bidrar (omtrent ett minutt hver). Robotene
+ser ikke varslene slik et menneske gjør, så de får mer skade enn en oppmerksom spiller. Robotene svinger mye fra
+runde til runde og er ikke mennesker. Prøvespill gjerne med noen kolleger.
 
 **Sammenlign våpen og kombinasjoner:** `node tools/measure-weapons.js` måler hjelp per sekund for alle 11 våpen
-på nivå 8 og som kombinasjon under like forhold. I debug-modus viser overlegget det samme i spillet
+på nivå 12 og som kombinasjon under like forhold. I debug-modus viser overlegget det samme i spillet
 (hjelp per sekund per våpen, siste 10 sekunder).
 
 ## Slik endrer du kartet
@@ -208,7 +258,7 @@ Legg til `?debug` i adressen: <http://localhost:3000/?debug>. (`?debug=karaktere
 
 Knappene lar deg hoppe 1 eller 3 minutter frem, gå opp ett eller ti nivåer, få fire våpen på maks nivå
 («Maks bygg») og gjøre dem om til kombinasjoner, slå på udødelighet, og sette ut boss, hastesak, Ny PC,
-energidrikk eller 100 ekstra advokater.
+energidrikk, en partner eller 100 ekstra advokater.
 
 **Stresstest (5 min):** starter på minutt 15 med fire våpen som kombinasjoner (Allmøte på Teams, Ctrl+Alt+Del,
 Tvungen oppdatering og Kontorprinteren fra helvete), holder antall advokater på taket (400, med opptil 30 avsendere) og kjører i 5 minutter uten at du kan dø. Den logger FPS, tid per bilde og
@@ -237,5 +287,6 @@ Runder der debug-knappene er brukt, kan ikke sendes inn til topplisten.
 | `tools/simulate.js`, `tools/measure-weapons.js`, `tools/build-font.js`, `tools/node.ps1` | Balansetest, våpenmåling, font-generator og hjelpeskript |
 
 **Dagens vakt:** all tilfeldighet kommer fra en seedet generator (mulberry32) med dagens dato i norsk tid
-som seed, i separate strømmer: når advokater kommer, hvor de kommer inn, hastesak/boss, oppgraderingskort,
-Ny PC-drops, energidrikkens plassering, Fjernstyring, «Dobbel skjerm» og utseende. `Math.random()` brukes ikke.
+som seed, i separate strømmer: når advokater kommer (og om de er partnere), hvor de kommer inn, hastesak/boss,
+oppgraderingskort, Ny PC-drops, energidrikkens plassering, «Dobbel skjerm», kritiske treff, unnvikelse og utseende.
+`Math.random()` brukes ikke.

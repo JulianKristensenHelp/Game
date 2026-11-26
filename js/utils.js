@@ -158,4 +158,39 @@ export class Grid {
     }
     return n;
   }
+
+  /**
+   * The nearest active enemy (by centre) within radius R of (x, y). Walks the cells in rings outward from
+   * the point and stops as soon as the best hit is closer than the next ring can be, so a crowded map costs
+   * a handful of cells instead of a scan of every lawyer. Every weapon that targets uses this.
+   * @param {(e: any) => boolean} [accept] optional filter (return false to skip an enemy)
+   * @returns {any | null}
+   */
+  nearest(x, y, R, accept = null) {
+    const items = this.items;
+    const cx0 = Math.floor(x / CELL), cy0 = Math.floor(y / CELL);
+    const rings = Math.ceil(R / CELL) + 1;
+    let best = null, bestD = R * R;
+    for (let k = 0; k <= rings; k++) {
+      // Everything in ring k + 1 is at least k cells away from the point, so we can stop early.
+      if (best && bestD <= (k * CELL) * (k * CELL)) break;
+      for (let cx = cx0 - k; cx <= cx0 + k; cx++) {
+        const edge = cx === cx0 - k || cx === cx0 + k;
+        for (let cy = cy0 - k; cy <= cy0 + k; cy += edge ? 1 : 2 * k || 1) {
+          const h = ((cx * 73856093) ^ (cy * 19349663)) & (BUCKETS - 1);
+          for (let i = this.head[h]; i !== -1; i = this.next[i]) {
+            const e = items[i];
+            if (e.cx !== cx || e.cy !== cy || !e.active || e.leaving) continue;
+            const dx = e.x - x, dy = e.y - y, d = dx * dx + dy * dy;
+            if (d < bestD && (!accept || accept(e))) {
+              bestD = d;
+              best = e;
+            }
+          }
+          if (k === 0) break;
+        }
+      }
+    }
+    return best;
+  }
 }

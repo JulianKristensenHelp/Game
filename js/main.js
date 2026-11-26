@@ -312,6 +312,7 @@ function handleEvents() {
         sound.play('hit');
         renderer.shake = 0.2;
         break;
+      case 'dodge': sound.play('tell'); break;
       case 'multUp': sound.play('multUp'); hud.multEffect(1); break;
       case 'multDown': sound.play('multDown'); hud.multEffect(-1); break;
       case 'phase': hud.showBanner(game.phaseName); break;
@@ -520,7 +521,7 @@ window.addEventListener('keydown', (e) => {
     if (mode === 'game') pause();
     else if (mode === 'pause') resume();
     else if (mode === 'settings' && e.code === 'Escape') closeSettings();
-  } else if (mode === 'levelUp' && /^(Digit|Numpad)[1-3]$/.test(e.code)) {
+  } else if (mode === 'levelUp' && /^(Digit|Numpad)[1-4]$/.test(e.code)) {
     chooseCard(Number(e.code.slice(-1)) - 1);
   } else if (mode === 'characterSelect') {
     if (/^(Digit|Numpad)[1-4]$/.test(e.code)) selectCharacter(Number(e.code.slice(-1)) - 1, true);
