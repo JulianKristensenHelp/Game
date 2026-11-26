@@ -1,55 +1,365 @@
 # Endringslogg
 
-## Versjon 4.1 – 26. november 2026 (endringsprompt 4)
+## Versjon 7.0.1 – 26. november 2026
+- Boss 3 heter nå **Anonymous** i spillet («Anonymous og venninnene har ankommet!», «ANONYMOUS» på pila og
+  klokka). Utseende, replikker og angrep er uendret. I koden heter hun fortsatt `frida` (`CONFIG.bosses.frida`,
+  `js/frida.js`), så Fiske-Frida i versjon 7.0 under er samme boss.
+
+## Versjon 7.0 – 26. november 2026 (Kristensens endringsprompt 4, bygget på versjon 6.1)
+
+Bygget videre på versjon 6.1 (den andre utviklerens grein). Det han la til, er ikke endret, fjernet eller
+rebalansert, med unntakene som står under «Konflikter». Versjon 4.1 (stillestående mini-printere og
+oppdragsgivers karakterbilder, laget på `main` før 6.1 var kjent) er flettet inn og tilpasset systemet i versjon 6.
+
+### Konflikter med versjon 5–6.1, og hvordan de er løst
+1. **«Maks våpennivå 9» og «kombinasjoner krever nivå 9».** I versjon 6 har våpnene ikke nivåer: hvert kort gir én
+   oppgradering uten tak, og en kombinasjon krever 10 oppgraderinger + riktig passiv. Et nivåtak på 9 ville betydd å
+   skrive om hele oppgraderingssystemet. Det er derfor ikke innført. Kravet «litt senere kombinasjoner» er allerede
+   oppfylt (10 oppgraderinger ≈ «nivå 11»). Passord-reset (maks 24 hopp) og Skytsengelen (maks 6 per kast, 12
+   samtidig) har allerede høyere tak enn «nivå 9» (11 hopp, 3 per kast og 7 samtidig), så tallene er ikke endret.
+   Ping-pong og Livvakten har fått nivåtabellene fra endringsprompten som vekstregler, og The Matrix og Ping of Death
+   krever 10 oppgraderinger, som de andre kombinasjonene. Passive har fortsatt maks nivå 5.
+2. **Skytsengelen.** Mini-printerne i 6.1 tuslet mot advokatene og hjalp alle i en radius med papirsalver (regelen
+   `burst`). Seksjon 1 sier eksplisitt at de skal stå stille og skyte papirark, så det er endret: `burst` betyr nå tid
+   mellom arkene (0,3 s, med gulv 0,15 s), og `radius` (salveradius) er byttet med `range` (rekkevidde 60 piksler,
+   +9 per steg, maks 130). De andre reglene (antall per kast, maks samtidig, intervall, levetid) er uendret. Hjelpen er
+   justert så våpenet måler det samme som i 6.1 (+16: 1027 mot 1034, kombinasjon: 2108 mot 2150).
+3. **«Brannmur»** er allerede navnet på en passiv (unnvikelse). Livvaktens flammelinje heter også brannmur i
+   teksten, men våpenet heter Livvakten (`bodyguard`), så ingenting kolliderer.
+4. **Joggesko** var ikke brukt i noen kombinasjon, så Ping of Death bruker Joggesko som ønsket.
+5. **Klassepassivene** Kastekurs og Sommervikar lister våpnene i klassen sin. Teksten har fått Ping-pong og Livvakten
+   lagt til (effekten er uendret).
+6. **Bossenes frustrasjon** ble hevet i versjon 5. Fiske-Frida har samme tall som bossen hun erstatter (6 600).
 
 ### 1. Skytsengelens mini-printere står stille
-- **Ny oppførsel (som molotov):** mini-printeren kastes i en bue og lander der advokaten stod da kastet startet. Der står den helt stille og skyter et papirark mot nærmeste advokat innenfor 60 piksler hvert 0,3. sekund. Etter 4 sekunder forsvinner den i en liten papirsky.
-- **Visuelt:** et lite hopp og en støvsky når den lander. Når den skyter, mates et ark ut og lampa lyser grønt. En svak, stiplet sirkel på gulvet viser rekkevidden.
-- **Nivå 5:** printeren står og skyter 1 sekund lenger (5 sekunder), og rekkevidden øker med 15 % til 69 piksler.
-- **Himmelsk serviceavtale:** printerne står også stille her og avslutter med papirkonfetti. Taket på antall samtidig er uendret.
-- **Balanse:** hjelpen per ark er justert slik at våpenet er like sterkt som før (`tools/measure-weapons.js`):
+Fra versjon 4.1: printerne lander der advokaten stod, står helt stille, skyter et papirark mot nærmeste advokat
+innenfor 60 piksler hvert 0,3. sekund, og forsvinner etter ca. 4 sekunder i en papirsky. Landingshopp, støvsky,
+ark som mates ut og en svak rekkeviddesirkel. Himmelsk serviceavtale står også stille og avslutter med konfetti.
 
-  | | Før | Nå |
-  | --- | --- | --- |
-  | Nivå 8 | 582 hjelp/s | 582 hjelp/s |
-  | Himmelsk serviceavtale | 710 hjelp/s | 708 hjelp/s |
+### 2. Oppdragsgivers bilder av karakterene
+Fra versjon 4.1: de 8 PNG-filene ligger i `assets/karakterer/` og brukes piksel for piksel med heltallsskalering
+og nærmeste nabo. Gangsyklusen endrer bare beina og føttene (hopp på 1 piksel), venstre er speilet, og effekter
+legges oppå. Topplisten bruker 32 × 32-figuren. De gamle spritene og portrettene er fjernet. Johan er tegnet i
+samme stil. Forhåndsvisningen (`?debug=karakterer`) viser de fire, Johan og nå også Fiske-Frida med venninnene.
 
-### 2. Oppdragsgivers egne bilder av de fire karakterene
-- **Bildene:** de 8 PNG-filene ligger i `assets/karakterer/` og brukes piksel for piksel, uten å tegnes om eller fargejusteres. Dette er kontrollert i koden: stående figur og portrett er identiske med filene.
-- **Kobling etter utseende**, avtalt med oppdragsgiver fordi numrene ikke stemte med karakterene:
+### 3. Nivå 9
+Se «Konflikter», punkt 1.
 
-  | Fil | Karakter |
-  | --- | --- |
-  | person4 | Odyssefs |
-  | person3 | Johannes |
-  | person1 | Jin |
-  | person2 | Julian |
+### 4. Nytt våpen: Ping-pong
+Spretter mot skjermkantene og ytterveggene, blir 6 % raskere og gir 10 % mer hjelp per sprett (tak +60 %, høyere
+med oppgraderinger), går gjennom advokatene (samme ball maks hvert 0,5. sekund per advokat) og forsvinner etter et
+fast antall sprett. «PING»/«PONG» annethvert sprett (bare når det er få baller) og «pok» når lyden er på. Retningen
+kommer fra en ny strøm i «Dagens vakt» (`pingpong`). **Ping of Death** (+ Joggesko): ballen deler seg ved hvert
+sprett (maks 12) og etterlater et glødende spor. Ballene bruker objektpoolen.
 
-  Koblingen står i `CONFIG.characters` (`sprite` og `portrait`).
-- **Gangsyklus på 4 bilder:** bare beina og føttene endres. I bilde 2 og 4 dupper figuren én piksel og løfter én fot. Hode og overkropp er identiske med originalen.
-- **Venstre og høyre:** vises med speiling.
-- **Effekter oppå bildet:** blink ved treff legges oppå som en hvit silhuett, så selve bildet endres aldri. Spilleren har fått samme lille skygge under føttene som de andre figurene.
-- **Portrettene** vises i karaktervalget, på slutt-skjermen og ved energibaren. Topplisten bruker den lille 32 × 32-figuren.
-- **Skarpe bilder:**
-  - Alle bilder tegnes med nærmeste nabo og heltallsskalering, også i HTML-menyene.
-  - Størrelsen regnes ut i ekte skjermpiksler, så den alltid er et helt multiplum.
-  - Spillflaten skaleres nå alltid med et helt tall. Før kunne den bruke et ikke-heltall hvis det fylte skjermen bedre.
-- **Fjernet:** de gamle tegnede spritene og portrettene for de fire karakterene.
+### 5. Nytt våpen: Livvakten
+Følger spilleren og lager en brannmur av animerte flammer 30 piksler unna, på tvers av den tetteste flokken (eller
+de 2–3 tetteste). Hjelp hvert kvarte sekund og 30 % sinking (opptil 50 %), blokkerer ingenting og skader aldri
+spilleren. Hengelåser, enere og nuller stiger opp fra gløden. Maks 3 brannmurer samtidig, likt for alle.
 
-### 3. Johan i den nye stilen
-- **Stil:** Johan er tegnet på nytt fra fotoet i samme stil som de nye bildene:
-  - 1 piksel detalj (samme pikseltetthet).
-  - Fargede omriss, altså en mørk utgave av hvert materiale.
-  - Tre-tonet skyggelegging med lys fra venstre.
-  - Øyne med hvitt, iris og en mørk øyelokklinje.
-  - Samme hudfarger og samme proporsjoner (hodet er omtrent halve høyden).
-- **Størrelse:** som boss er figuren dobbelt så stor (64 × 64). Portrettet er 64 × 64 med samme oppbygning som de fire.
-- **Fil:** ny `js/johan.js`. Fotoet ligger fortsatt ikke i prosjektet.
-- **Forhåndsvisning:** `?debug=karakterer` viser de fire og Johan stående, i gangsyklus og som portrett.
+### 6. Shopkeeperen
+Sertifisering heter nå Shopkeeperen, med nytt ikon (svart genser med hvit «A») og en liten figur som følger
+spilleren. Effekten er uendret. Tvungen oppdatering krever Oppdateringsstrålen + Shopkeeperen.
+
+### 7. The Matrix
+Tilbys som eget kort med grønn kode-ramme når Skytsengelen (10 oppgraderinger eller kombinert), Livvakten (10
+oppgraderinger) og Shopkeeperen er samlet. Slår sammen engelen og livvakten (frigjør én våpenplass), spiller en
+animasjon på 2,5 sekunder mens spillet står på pause (kan hoppes over, følger reduserte blinkeffekter, påvirker
+ikke tiden eller «Dagens vakt»), og gir grønne mini-printere og brannmurer, kode-regn hvert 12. sekund (litt hjelp
+til alle på skjermen) og bullet time (advokater, bosser og fiendeprosjektiler 50 % saktere i 3 sekunder; bossens
+nedtelling går som normalt). Egen grønn ramme på oppslagstavla, og nevnt på slutt-skjermen. Bruker spillets egen
+pikselfont – ingen logo, skrifttype eller figurer fra filmen.
+
+### 8. Ny boss 3: Fiske-Frida og venninnene
+Erstatter «Fristen er om 2 minutter!» (fjernet, nedtellingsklokka er beholdt for alle bossene). Fire angrep: «Klikk
+på lenken!» (stiplet linje, kroken drar deg mot henne), silderegn (skygger, sild etter 1 sekund), videresendt
+svindel-e-post (venninnene løfter mobilen, fisk i bølgete linje) og lokkemat (falsk drikk eller PC med fiskekrok,
+kan avsløres på farge, krok og blink, aldri på minikartet, maks 3, borte når Frida er hjulpet). Venninnene har 15 %
+av Fridas frustrasjon hver og gir ekstra poeng om de hjelpes for seg. Johans «Videresendt fra tidligere bosser» er
+uendret (Nørdic og printeren).
+
+### 9. Helsekjeks
+Ca. 1 av 100 vanlige glade advokater legger igjen en kjeks (drop-strømmen): 5 energi, ingen sukkerkick, ligger i 10
+sekunder og blinker de siste 3, maks 6 på kartet, samme plukkradius som lappene, svak varm glød, ikke på minikartet.
+Partnerne (som allerede gir lapper og pakker), bossene, venninnene og hastesaken dropper ikke kjeks.
+
+### Målinger
+`tools/measure-weapons.js 16`:
+
+| Våpen | +16 | Kombinasjon | Hjelp/s | I forhold til snittet |
+| --- | --- | --- | --- | --- |
+| Skytsengelen | 1027 | Himmelsk serviceavtale | 2108 | 95 % |
+| Ping-pong | 855 | Ping of Death | 2312 | 104 % |
+| Livvakten | 776 | The Matrix (med Skytsengelen og Shopkeeperen) | 2664 | 120 % |
+
+De andre våpnene er uendret fra 6.1. The Matrix er med vilje litt sterkere enn en vanlig kombinasjon, siden den er
+mye vanskeligere å få.
+
+`tools/simulate.js x 25 --statistikk` (10 dager × 4 karakterer):
+
+| Robot | Median | 25–75 % | Lengst | Sparket |
+| --- | --- | --- | --- | --- |
+| God, bygger bevisst | 10,0 min | 7,0–14,1 min | 15,5 min | 0 av 40 |
+| Ekspert | 10,8 min | 7,1–14,7 min | 16,7 min | 1 av 40 |
+| Ekspert, `--utennye` (uten Ping-pong og Livvakten i kortene) | 14,0 min | 8,2–15,0 min | 16,4 min | 1 av 40 |
+
+De beste rundene ryker fortsatt rundt 15–17 minutter (veggen i overtid). Medianen er lavere enn i 6.1 fordi
+robotene, som bygger etter en fast plan, får sjeldnere tilbud om sine planlagte våpen når det er to flere våpen i
+bunken. Med de nye våpnene holdt utenfor er medianen 14,0 (6.1: 13,2). Fiske-Frida ble hjulpet på 12–24 sekunder
+av robotene i prøverundene. Determinismen holder: to like runder gir samme resultat, også med Dobbel skjerm og annet
+utseende.
+
+**Stresstest** (`?debug&utenGPU`, minutt 15, 400 advokater, Tofaktor + Kontorprinteren + Ping of Death + The
+Matrix, Fiske-Frida ute hele tiden, kjørt bilde for bilde i nettleseren): snitt 5,1 ms per bilde (oppdatering 0,3 ms,
+tegning 4,8 ms), median 2,7 ms, p99 11,9 ms – godt under 16,7 ms for 60 FPS. 12 baller, 3 brannmurer og kode-regn
+samtidig. Kode-regnet koster ikke målbart (3,08 mot 3,04 ms tegning med og uten). Minnet er flatt (5,6 → 5,3 MB).
+Stresstesten bør likevel kjøres på en ekte kontor-PC før publisering.
+
+## Versjon 6.1 – 26. november 2026 (endringsprompt 6: finpuss og gjenstander)
+
+### 1. Ikoner som manglet
+- Kaffemaskin, Mekanisk tastatur, Overtid, Hev-senk-pult og Brannmur (fra versjon 5) hadde aldri fått ikon, så
+  kortene, ikonraden og «Dine tall» viste tomt. Alle 57 ikoner (våpen, kombinasjoner, passive, knapper) tegnes nå
+  uten feil i en test med stubbet lerret, og sprite-settet (inkludert pakken og de røde kopiene) lages uten feil.
+
+### 2. Seks nye gjenstander (28 passive)
+- Sikkerhetskopi (overlever dødelige treff, maks 3), Takknemlige advokater (energi per hjulpet), Post-it-blokk
+  (lappene ligger lenger), Bonusordning (+10 % poeng), Termos (bedre energidrikk) og Vaktmester (mindre treghet).
+
+### 3. Tre nye effekter og flere regler
+- Purring (10 % mer hjelp fra alt i 3 sekunder), Eskalering (+15 % mot partnere og bosser) og Innkalling (drar
+  advokaten mot deg, bare våpen med rekkevidde). Ni effekter i alt.
+- Nye regler: dytt (Full omstart), hoppetid (Passord-reset), bue (HDMI-kabelen), rekkevidde (Fjernstyring, som
+  før var fast 330 px), pause per advokat (mus og Ctrl+Alt+Del), takt (strålen), styring (Teams) og papirsalver
+  (Skytsengelen).
+- Hjelp-kort vektes 2,5 ganger og antall-kort 1,5 ganger innenfor et våpen, ellers ble byggen utvannet av småregler
+  (ekspertrobotenes median falt fra 12 til 8 minutter før vektingen, og er 13 etter).
+
+### 3b. Trefftallet viser hele treffet
+- Før viste tallet bare det advokaten trengte (overskytende hjelp ble kuttet), så et stort våpen så lite ut mot
+  juniorfullmektiger. Nå vises hele treffet. Statistikken og måleverktøyet teller fortsatt bare det som trengtes.
+
+### 4. Fem småting (egne forslag)
+1. Nivåkø i overskriften ved nivåopp.
+2. Banner 10 sekunder før hver boss.
+3. Lappemagnet ved nivåopp og pakke.
+4. Bygget på slutt-skjermen, og «Dine tall» i pausemenyen.
+5. Innstillinger for trefftall og frustrasjonsbarer.
+
+`tools/measure-weapons.js 16` (fordelt som kortene kommer: hjelp og antall oftest):
+
+| Våpen | +16 | Kombinasjon | Hjelp/s | I forhold til snittet |
+| --- | --- | --- | --- | --- |
+| Skru av og på | 861 | Full omstart | 2681 | 121 % |
+| Toner-kast | 1156 | Kontorprinteren fra helvete | 2888 | 131 % |
+| Passord-reset | 767 | Tofaktor | 2927 | 132 % |
+| HDMI-kabelen | 961 | Kabelkaos | 2100 | 95 % |
+| Fjernstyring | 345 | Domene-admin | 2310 | 104 % |
+| Trådløse mus | 971 | Musematta | 2442 | 110 % |
+| Ctrl+Z | 1039 | Ctrl+Alt+Del | 1997 | 90 % |
+| Oppdateringsstrålen | 556 | Tvungen oppdatering | 1295 | 59 % |
+| Teams-varsel | 409 | Allmøte på Teams | 1331 | 60 % |
+| Skytsengelen | 1034 | Himmelsk serviceavtale | 2150 | 97 % |
+| Støydempende headset | 0 | Hjemmekontor | 0 | (forsvar – blokkerer treff) |
+
+`tools/simulate.js x 25 --statistikk`: ekspert median 13,2 min (25–75 %: 5,8–14,4, lengst 17,3, 1 av 40 sparket).
+Bygget til robotene er enda litt bedre enn før (gjenstandene hjelper), så veggen i overtid tar dem litt senere.
+
+## Versjon 6.0 – 26. november 2026 (endringsprompt 5: oppgraderinger uten tak)
+
+Våpnene har ikke lenger nivåer. Hvert kort gir én bestemt oppgradering, kortene har sjeldenhet, flaksen avgjør hvor
+langt du kommer, og vanskeligheten stiger lineært med hendelser som gir variasjon.
+
+### 1. Oppgraderinger uten tak
+- **Ett kort = ett steg.** «Trådløse mus: +1 mus (3 → 4)», «Toner-kast: +4,5 hjelp per treff (15 → 19,5)», «Passord-reset:
+  Kortere tid mellom aktiveringer (1,05 s → 0,94 s)». Kortet viser alltid tallet før og etter. Et våpen kan ta
+  så mange oppgraderinger du rekker. Hjelpen vokser lineært (`pct` av grunntallet per steg), intervallene har
+  gulv, og alle antall (mus, kassetter, hopp, treff) har et tak av hensyn til kontor-PC-ene.
+- **Reglene** står i `growth` på hvert våpen i `CONFIG.weapons`, som før, men uten nivålister. `weaponStats()` i
+  js/weapons.js regner ut tallene fra grunntall + oppgraderingene (`w.up`) når noe endrer seg, aldri per bilde.
+- **Kombinasjonen** krever 10 oppgraderinger pluss riktig passiv, og er et nytt utgangspunkt som er tydelig
+  sterkere (1,5–3 × målt). Oppgraderingene etterpå vokser videre fra den. Kombinasjonenes tall er justert ned
+  fra versjon 5, siden de ikke lenger er et sluttpunkt.
+- **Effekter** (sjeldne kort): Gjennomtrengende, Sprut, Venter på IT, Saken ligger i køen, Avvist og Ekstra
+  kaffe. Hvert våpen har en liste over hvilke det kan få. De er koblet inn ett sted (`help()` i js/enemies.js
+  og prosjektilenes `through`), aldri i tegnekoden.
+
+### 2. Kortnivåer og flaks
+- **Fire nivåer:** grå = vanlig (1 steg), grønn = uvanlig (2), blå = sjelden (3, og effektene), oransje =
+  legendarisk (5, eller to effektnivåer). Sjansene er 68/23/7/2 %. Kortene har farget stripe og ramme.
+- **Hesteskoen** erstatter Kontorlotteriet: +25 % flaks per nivå (alt over vanlig ganges med 1 + flaks) og +12 %
+  sjanse for et fjerde kort.
+- **Nytt utvalg (R)** og **Fjern kortet (✕, eller B + tallet)**: ett av hvert fra start, ett til per hjulpet boss.
+  Fjernede kort kommer aldri igjen den vakta.
+- **Kortene vektes** slik at oppgraderinger til våpen du har kommer oftest, og nye våpen 2,5 ganger så ofte mens
+  du har færre enn to.
+
+### 3. Pakke fra leverandøren og partnernes lapper
+- Hver hjulpet boss legger igjen en pakke (3 våpenoppgraderinger, minst uvanlige; Johan 5). En hjulpet partner
+  gjør det i 2,5 % av tilfellene (1 oppgradering). Pakken åpnes med en egen skjerm som viser hva den inneholdt.
+  Gull pil mot pakken når den er utenfor skjermen.
+- Partnerne legger igjen 1–5 ticket-lapper (halv verdi hver) i stedet for én.
+
+### 4. Klassepassive
+- Hvert våpen har en klasse: prosjektil, kjede, område eller hjelper. Fire nye passive gir +15 % hjelp per nivå
+  for én klasse: Kastekurs, Nettverkssertifisering, Åpent landskap og Sommervikar. 22 passive i alt.
+
+### 5. Lineær vanskelighet med hendelser
+- **Kurven er en rett linje:** frustrasjon 1 + 0,15 × (minutter − 3), skade +6 % per minutt, fart +3 % per minutt.
+  Overtid fra 12:30 med × 1,8 per minutt og +22 % fart per minutt – det er veggen.
+- **Faste hendelser** på hver vakt: Lunsjrush (2:30, 7:30, 12:30), Printerkø (4:30, 9:30, 14:30) og Partnermøte
+  (7:30, 13:30). **Sjeldne hendelser** trekkes én gang i minuttet fra sin egen strøm: Kaffepause, Gratis lunsj
+  og Serverkrasj. Alle vises som banner med forklaring. Minst 25 sekunder mellom to hendelser, og de faste venter
+  mens en boss er ute.
+- Trådløse mus starter med tre mus (var to), så musekarakteren ikke ryker i det første rushet.
+
+### 6. Synlighet
+- **Fiendtlige prosjektiler blinker rødt** (annethvert tidels sekund tegnes en rødtonet kopi). Med reduserte
+  blinkeffekter er de rødtonet hele tiden i stedet.
+- **Dine tall** viser nå også hjelp per klasse, flaks, fjerde kort, nytt utvalg og fjerninger igjen, og hvert våpen
+  med alle tallene sine, antall oppgraderinger, hvor langt det er til kombinasjonen og effektene.
+- Ikonraden nederst viser antall oppgraderinger per våpen. Slutt-skjermen teller pakker, oppgraderinger og hendelser.
+
+### 7. Ytelse og determinisme
+- Ingen nye objekter per bilde: de røde kopiene lages én gang, effektene er tall på våpenet, prosjektilene peker
+  på våpenets effektobjekt. Sprut bruker en egen liste og hjelper maks 6 naboer, uten rekursjon.
+- To nye strømmer i «Dagens vakt»: `pakke` og `hendelser`. Simulatoren bekrefter at to like runder gir samme
+  resultat, også med Dobbel skjerm og annet utseende.
+
+`tools/measure-weapons.js 16` (hjelp per sekund, 150 advokater 40–300 px rundt spilleren, 16 oppgraderinger jevnt fordelt):
+
+| Våpen | +16 | Kombinasjon | Hjelp/s | I forhold til snittet |
+| --- | --- | --- | --- | --- |
+| Skru av og på | 945 | Full omstart | 2306 | 133 % |
+| Toner-kast | 1082 | Kontorprinteren fra helvete | 2378 | 137 % |
+| Passord-reset | 731 | Tofaktor | 2781 | 160 % |
+| HDMI-kabelen | 1189 | Kabelkaos | 1635 | 94 % |
+| Fjernstyring | 512 | Domene-admin | 1841 | 106 % |
+| Trådløse mus | 687 | Musematta | 1537 | 88 % |
+| Ctrl+Z | 898 | Ctrl+Alt+Del | 1537 | 88 % |
+| Oppdateringsstrålen | 482 | Tvungen oppdatering | 820 | 47 % |
+| Teams-varsel | 407 | Allmøte på Teams | 1186 | 68 % |
+| Skytsengelen | 993 | Himmelsk serviceavtale | 1361 | 78 % |
+| Støydempende headset | 0 | Hjemmekontor | 0 | (forsvar – blokkerer treff) |
+
+`tools/simulate.js x 25 --statistikk` (10 dager × 4 karakterer):
+
+| Robot | Median | 25–75 % | Lengst | Sparket |
+| --- | --- | --- | --- | --- |
+| God, bygger bevisst | 10,0 min | 5,8–14,7 min | 17,5 min | 1 av 40 |
+| Ekspert | 12,1 min | 6,4–15,0 min | 18,1 min | 1 av 40 |
+
+Medianen for ekspertene ligger altså ved Johan (12:00), som ønsket: om du kommer dit og videre, avgjøres av byggen
+og flaksen med kortene. Veggen i overtid tar nesten alle mellom 15 og 18 minutter. Robotene bygger dårligere enn
+et menneske og unngår skade dårligere, så forvent at folk ligger rundt det samme.
 
 ### Antakelser
-- **Kobling:** filene er koblet til karakterene etter utseende, ikke etter nummer, slik oppdragsgiver bekreftet.
-- **Små skjermer:** er skjermen mindre enn 640 × 360 ekte piksler, må spillflaten fortsatt skaleres ned med et ikke-heltall. Det gjelder bare svært små vinduer.
+- «Hver runde skal føles litt annerledes» er løst med hendelsene, men innenfor «Dagens vakt»: samme dag og samme
+  valg gir fortsatt samme runde (topplisten må være rettferdig). Forskjellen mellom dager er større enn før.
+- Kombinasjonene nullstiller oppgraderingene (de er bakt inn i kombinasjonens tall). Alternativet – å legge dem
+  oppå – ga 6–10 × hopp og ble forkastet.
+- Pakker fra partnere er sjeldne (2,5 %) med vilje: med 8 % snøballet alle gode runder til 20 minutter.
+- Stresstesten (`?debug&utenGPU`) er ikke kjørt i denne omgangen (ingen nettleser i arbeidsmiljøet).
+
+## Versjon 5.0 – 26. november 2026 (endringsprompt 4: Brotato-retning)
+
+Spillet er fortsatt én sammenhengende vakt som blir vanskeligere og vanskeligere (ingen butikk, ingen runder), men
+oppgraderingene er dypere, alt er synlig, og alle våpen sikter selv.
+
+### 1. Alle våpen sikter på nærmeste advokat
+- **Toner-kast, HDMI-kabelen og Oppdateringsstrålen** siktet før dit du gikk. Nå sikter de på nærmeste advokat
+  (strålen følger den mens den varer). **Fjernstyring** tok tilfeldige advokater på skjermen, nå de nærmeste.
+  Passord-reset, Ctrl+Z, Teams-varsel og Skytsengelen siktet på nærmeste fra før. Puls og mus er områdevåpen.
+- **Nytt oppslag i rutenettet:** `Grid.nearest()` i js/utils.js går ut i ringer fra punktet og stopper så snart
+  det beste treffet er nærmere enn neste ring kan være. Det koster noen få celler også med 400 advokater, og
+  lager ingen objekter. Alle våpen bruker samme funksjon (`closest()` i js/weapons.js).
+
+### 2. Tolv nivåer per våpen, laget av vekstregler
+- **Nivåtaket er 12** (var 8). Kombinasjonen krever nivå 12 pluss riktig passiv, som før.
+- **Hvert våpen har `base` (nivå 1) og `growth`** i `CONFIG.weapons`, og `buildLevels()` nederst i js/config.js
+  lager de tolv nivåene og kortteksten. Eksempler: Trådløse mus får +1 mus annethvert nivå (2 → 8, 12 som
+  kombinasjon), større bane og raskere rotasjon hvert nivå. Toner-kast får +1 kassett hvert tredje nivå (2 → 6).
+  Passord-reset +1 hopp per nivå (3 → 14). Teams-varsel +1 varsel annethvert nivå (1 → 7). Fjernstyring +1 treff
+  annethvert nivå (1 → 7). Skytsengelen flere mini-printere (2 → 5 samtidig). Headsetet får 2 ladninger fra nivå 7.
+- Kortteksten lages av det som faktisk endret seg: «+1 mus, større bane, raskere rotasjon, +12 % hjelp.»
+- `CONFIG.newWeapons` er tom (beholdt for verktøy); alle våpen står i `CONFIG.weapons`.
+
+### 3. Frustrasjonsbarer og trefftall
+- **Bar over hodet** på hver advokat som er skadet og ble hjulpet i løpet av de siste 1,5 sekundene (2 piksler høy,
+  12 brede). Posisjonene samles i ett pass og fylles i to, så fyllfargen byttes to ganger uansett antall barer.
+- **Trefftall** stiger og blekner over advokaten, med et 8 × 8-ikon av våpenet. Kritiske treff er gule. Treff på samme
+  advokat innen 0,25 sekunder slås sammen til ett voksende tall (ingen tallsky fra kjeder og mus). Maks 120 tall
+  samtidig. Sifrene kopieres fra et ferdiglaget ark – ingen tekstbehandling eller strenger per bilde.
+- **Automatisk kvalitet:** middels skrur av ikonene, lav skrur av tall og barer (partnerne beholder baren).
+
+### 4. Seks nye passive og «Dine tall» ved nivåopp
+- **18 passive, maks 8 samtidig** (var 12 og 6). Nye: Kaffemaskin (+5 % kritisk sjanse, kritisk = 1,5 × hjelp),
+  Mekanisk tastatur (+25 % kritisk hjelp), Overtid (+15 % hjelp, −4 % fart), Hev-senk-pult (+0,35 energi/s),
+  Brannmur (+6 % unnvikelse, maks 30 %, «Unngikk!»), Kontorlotteriet (+20 % sjanse for et fjerde kort).
+- Kritiske treff og unnvikelse har egne tilfeldighetsstrømmer i «Dagens vakt».
+- **Kortene vektes:** våpen du har, kommer 2,5 ganger så ofte som nye, passive du har 1,5 ganger. Da kan du bygge.
+- **«Dine tall»** under kortene: 17 tall (hjelp, kritisk, intervall, område, fart, varighet, prosjektiler, dobbel
+  aktivering, energi, regenerering, skadereduksjon, unnvikelse, bevegelse, plukkradius, erfaring, fjerde kort) og
+  alle våpen og passive med nivå. Tast 4 velger det fjerde kortet.
+
+### 5. Partnere (eliter)
+- Fra minutt 5: 1 % sjanse per advokat, +0,6 prosentpoeng per minutt, maks 8 %, maks 4 samtidig. Aldri avsendere.
+- 6 × frustrasjon, 1,6 × skade, 0,85 × fart, 12 × poeng, litt større. Gullkrone, bred bar som alltid vises, og
+  egenskapen som tekst over baren.
+- **Partner-aura:** andre advokater innen 70 piksler tar halv hjelp (gul ring). **Delegerer:** tre juniorer når den
+  er hjulpet. **Har hastverk:** «!» i 0,5 sekunder, så 0,6 sekunders spurt (3,2 × fart) mot der du stod.
+- Slutt-skjermen teller partnerne. Debug-knapp «Partner».
+
+### 6. Vanskelighet
+- **Ingen advokat dør av ett treff i starten:** juniorfullmektig 18 frustrasjon (var 10), seniorpartner 140 (80),
+  printerentusiast 60 (35), «Haster!»-avsender 50 (30), hastesak 220 (150). Startvåpnene gir 11–18 hjelp, så det
+  er to treff på en junior.
+- **Kurven:** +9 % frustrasjon per minutt etter minutt 3 (var +8 %), +7 % skade per minutt (6 %), +3 % fart (2,5 %).
+  Overtid fra 13:00 er uendret – runden går «mot uendelig», men ingen overlever den.
+- **Bossene** har 1,5 × frustrasjon (1 300 / 3 400 / 6 600 / 9 800), siden våpnene vokser lenger.
+- **Raskere levling** (10 + 1,2 per nivå i stedet for 13 + 1,5), fordi det er 88 oppgraderinger å kjøpe mot 62.
+- Topplistens tak på poeng per sekund er hevet til 9 000 (partnerne gir store lapper).
+
+`tools/measure-weapons.js` (hjelp per sekund, 150 advokater 40–300 px rundt spilleren):
+
+| Våpen | Nivå 12 | Kombinasjon | Hjelp/s | I forhold til snittet |
+| --- | --- | --- | --- | --- |
+| Skru av og på | 1129 | Full omstart | 1269 | 102 % |
+| Toner-kast | 1444 | Kontorprinteren fra helvete | 1271 | 102 % |
+| Passord-reset | 672 | Tofaktor | 1268 | 101 % |
+| HDMI-kabelen | 1037 | Kabelkaos | 1255 | 100 % |
+| Fjernstyring | 523 | Domene-admin | 1238 | 99 % |
+| Trådløse mus | 903 | Musematta | 1269 | 101 % |
+| Ctrl+Z | 1118 | Ctrl+Alt+Del | 1241 | 99 % |
+| Oppdateringsstrålen | 481 | Tvungen oppdatering | 1249 | 100 % |
+| Teams-varsel | 472 | Allmøte på Teams | 1254 | 100 % |
+| Skytsengelen | 833 | Himmelsk serviceavtale | 1183 | 95 % |
+| Støydempende headset | 0 | Hjemmekontor | 0 | (forsvar – blokkerer treff) |
+
+`tools/simulate.js --statistikk` (10 dager × 4 karakterer):
+
+| Robot | Median | 25–75 % | Lengst | Sparket |
+| --- | --- | --- | --- | --- |
+| God, bygger bevisst | 7,0 min | 5,8–11,0 min | 14,3 min | 1 av 40 |
+| Ekspert | 7,8 min | 5,6–11,1 min | 14,4 min | 0 av 40 |
+
+I versjon 4 var medianene 9,4 og 10,1 minutter, så vakta er omtrent to minutter hardere for robotene. Uten partnere
+(`--utenpartnere`) og uten bosser (`--utenbosser`) er medianen rundt ett minutt lenger hver. Robotene bygger
+dårligere enn et menneske med 12 nivåer og 18 passive, så forvent at folk holder lenger.
+
+### 7. Ytelse
+- Ingen nye objekter per bilde eller per treff: barposisjoner i typed arrays, sifre fra ett ark, ikoner laget én gang,
+  trefftall i den eksisterende effektpoolen med eget tak.
+- Nærmeste-søket er billigere enn før (ringer i rutenettet i stedet for alle advokater innen rekkevidde).
+- Partnerauraen koster maks 4 avstandssjekker per treff.
+- Stresstesten (`?debug&utenGPU`, knappen «Stresstest») bør kjøres på en kontor-PC før publisering; den er ikke
+  kjørt i denne omgangen (ingen nettleser i arbeidsmiljøet).
+
+### Antakelser
+- «Litt mer Brotato» er tolket som: statistikk-passive, synlige tall, kritiske treff, eliter og vektede kort – ikke
+  butikk, runder eller materialer. Vakta er fortsatt én sammenhengende runde.
+- Puls og mus er bevisst holdt som områdevåpen («sikter» ikke), siden de omgir spilleren.
+- Partnerne kommer fra minutt 5 så den rolige starten beholdes. Flytt `elites.from` for å endre det.
 
 ## Versjon 4.0 – 25. november 2026 (endringsprompt 3)
 

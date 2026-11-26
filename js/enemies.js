@@ -1,25 +1,36 @@
 // @ts-check
 // The lawyers: who shows up when and where, how they move, and what happens when they become happy.
-import { CONFIG } from './config.js';
+import { CONFIG, WEAPON_TAG } from './config.js';
 import { TAU } from './utils.js';
 import { effect } from './effects.js';
 import { givePoints, registerHelped } from './score.js';
 import { damagePlayer } from './player.js';
 import { dropTicket, dropPickup } from './tickets.js';
 import { INSIDE, DOORS } from './map.js';
-import { updateBoss, updateBossSchedule, bossContactDamage, bossHelpFactor, checkBossPhase, bossHelped, shoot } from './bosses.js';
+import { updateBoss, updateBossSchedule, bossContactDamage, bossHelpFactor, checkBossPhase, bossHelped, shoot, updateFriend } from './bosses.js';
 
 const F = CONFIG.enemies;
 const SP = CONFIG.spawn;
+const EL = CONFIG.elites;
+const FX = CONFIG.upgrades.effects;
+const EV = CONFIG.events;
 const VB = CONFIG.view.width, VH = CONFIG.view.height;
 
-/** Type codes used by the happy animation (effects store numbers, not text). */
-export const TYPE_CODE = { junior: 0, printer: 1, senior: 2, urgent: 3, boss: 4, sender: 5, nordic: 6, printerBoss: 7, johan: 8 };
-export const TYPE_NAMES = ['junior', 'printer', 'senior', 'urgent', 'boss', 'sender', 'nordic', 'printerBoss', 'johan'];
+/** Elite trait codes stored on the enemy (numbers, never text, so effects and the grid stay allocation-free). */
+export const ELITE = { none: 0, aura: 1, split: 2, rush: 3 };
+export const ELITE_TRAIT = ['', 'aura', 'split', 'rush'];
+/** Max hit numbers on screen at once (performance). */
+export const MAX_HITS = 120;
+/** Hits on the same lawyer within this many seconds are merged into one growing number. */
+const HIT_MERGE = 0.25;
 
-/** The figure type used to draw an enemy (the bosses have their own figures; «deadline» is the classic lawyer boss). */
+/** Type codes used by the happy animation (effects store numbers, not text). */
+export const TYPE_CODE = { junior: 0, printer: 1, senior: 2, urgent: 3, boss: 4, sender: 5, nordic: 6, printerBoss: 7, johan: 8, frida: 9, friend: 10 };
+export const TYPE_NAMES = ['junior', 'printer', 'senior', 'urgent', 'boss', 'sender', 'nordic', 'printerBoss', 'johan', 'frida', 'friend'];
+
+/** The figure type used to draw an enemy (the bosses have their own figures). */
 export function figureType(e) {
-  return e.type === 'boss' && e.bossType !== 'deadline' ? e.bossType : e.type;
+  return e.type === 'boss' ? e.bossType : e.type;
 }
 
 /** Empty enemy object for the pool. */
@@ -41,7 +52,25 @@ export function makeEnemy() {
     /** Bosses (see bosses.js): which boss, the current attack, warning, pose and cooldowns. */
     bossType: '', attack: '', tell: false, attackT: 0, pose: -1, cds: [0, 0, 0, 0, 0], fightT: 0, deadline: 0,
     invuln: 0, jam: 0, jamCd: 0, phase2: false, alt: 0, aimX: 0, aimY: 0, vx: 0, vy: 0, streamT: 0, streamA: 0, returnNo: 0,
+    /** Elite («Partner»): which trait (see ELITE), the rush timer and the dash time left. */
+    elite: 0, rushT: 0, dashT: 0,
+    /** When the lawyer was last helped (game time) – the frustration bar is shown for a moment after. */
+    lastHit: -9,
+    /** The hit number that is still growing for this lawyer (visual only). @type {any} */
+    hitFx: null,
+    /** Effect modifiers (version 6): seconds left of «Venter på IT» and how much slower; help still «in the queue». */
+    slowT: 0, slowBy: 0, lingerT: 0, linger: 0, lingerSrc: '',
+    /** «Purring»: seconds left of taking more help, and how much more. */
+    markT: 0, markBy: 0,
+    /** Fiske-Frida's friends: the uid of the boss they follow, and which side they walk on (0 or 1). */
+    bossUid: 0, slot: 0,
   };
+}
+
+/** Chance that an ordinary lawyer spawns as an elite at time t. */
+export function eliteChance(t) {
+  if (t < EL.from) return 0;
+  return Math.min(EL.chanceMax, EL.chanceStart + EL.chancePerMin * ((t - EL.from) / 60));
 }
 
 export function makePaper() {
@@ -52,11 +81,11 @@ function overtime(min) {
   const sk = CONFIG.scaling;
   return min > sk.overtimeFromMin ? Math.pow(sk.overtimeGrowthPerMin, min - sk.overtimeFromMin) : 1;
 }
-/** Frustration: grows by a fixed percentage per minute after the calm start. */
+/** Frustration: grows linearly per minute after the calm start (version 6), then steeply in overtime. */
 export function frustrationFactor(t) {
   const sk = CONFIG.scaling;
   const min = t / 60;
-  return Math.pow(sk.frustrationGrowthPerMin, Math.max(0, min - sk.startAfterMin)) * overtime(min);
+  return (1 + sk.frustrationPerMin * Math.max(0, min - sk.startAfterMin)) * overtime(min);
 }
 /** Damage: increases steadily per minute. */
 export function damageFactor(t) {
@@ -90,8 +119,11 @@ export function inView(s, x, y, margin = 0) {
   return x > k.x - margin && x < k.x + VB + margin && y > k.y - margin && y < k.y + VH + margin;
 }
 
-/** Puts a lawyer out on the map. */
-export function spawnEnemy(s, type, x, y) {
+/**
+ * Puts a lawyer out on the map.
+ * @param {number} [elite] 0 = ordinary, otherwise an elite trait (see ELITE): much tougher, with a visible bar.
+ */
+export function spawnEnemy(s, type, x, y, elite = 0) {
   const k = F[type];
   const e = s.enemies.acquire();
   e.active = true;
@@ -120,6 +152,19 @@ export function spawnEnemy(s, type, x, y) {
   e.invuln = 0;
   e.jam = 0;
   e.phase2 = false;
+  e.elite = elite;
+  e.rushT = EL.traits.rush.every;
+  e.dashT = 0;
+  e.lastHit = -9;
+  e.hitFx = null;
+  e.slowT = 0;
+  e.slowBy = 0;
+  e.lingerT = 0;
+  e.linger = 0;
+  e.markT = 0;
+  e.markBy = 0;
+  e.bossUid = 0;
+  e.slot = 0;
   if (type === 'boss') {
     // The real values are set by spawnBoss() in bosses.js
     e.hp = k.frustration;
@@ -133,11 +178,18 @@ export function spawnEnemy(s, type, x, y) {
     if (type === 'urgent') e.timer = k.lifetime;
     if (type === 'printer') e.timer = k.paperInterval;
     // The cap on the number of lawyers is reached: the next ones become stronger instead of more numerous.
-    if (s.spared > 0 && type !== 'urgent') {
+    if (s.spared > 0 && type !== 'urgent' && type !== 'friend') {
       const u = Math.min(s.spared, SP.maxSaved);
       s.spared -= u;
       e.hp *= 1 + SP.strengthPerSaved * u;
       e.damage *= 1 + SP.damagePerSaved * u;
+    }
+    if (elite) {
+      e.hp *= EL.frustration;
+      e.damage *= EL.damage;
+      e.speed *= EL.speed;
+      e.points = Math.round(e.points * EL.points);
+      e.r += EL.radiusAdd;
     }
   }
   e.maxHp = e.hp;
@@ -194,12 +246,12 @@ function doorSpot(s) {
 }
 
 /** Lets a lawyer in if there is room under the cap, otherwise it is saved up (and the next ones become stronger). */
-export function trySpawn(s, type, x, y) {
+export function trySpawn(s, type, x, y, elite = 0) {
   if (s.enemies.n >= SP.maxConcurrent) {
     s.spared = Math.min(200, s.spared + 1);
     return;
   }
-  spawnEnemy(s, type, x, y);
+  spawnEnemy(s, type, x, y, elite);
 }
 
 /**
@@ -231,8 +283,14 @@ export function updateDirector(s, dt) {
       const cap = Math.min(A.maxCount, Math.floor(Math.max(s.enemies.n, 20) * A.maxFraction));
       type = s.senderCount < cap ? 'sender' : 'junior';
     }
+    // Elites («Partnere»): rare and tough, never a sender (they keep their distance anyway)
+    let elite = 0;
+    if (type !== 'sender' && t >= EL.from && s.eliteCount < EL.maxConcurrent && rng.next() < eliteChance(t)) {
+      elite = 1 + rng.integer(3);
+      s.eliteCount++;
+    }
     const pl = findSpawnSpot(s);
-    trySpawn(s, type, pl.x, pl.y);
+    trySpawn(s, type, pl.x, pl.y, elite);
   }
 
   // Wave events: a flock from one direction, or a ring with an opening. Adapted to the walls.
@@ -255,29 +313,10 @@ export function updateDirector(s, dt) {
       }
       s.events.push('ring');
     } else {
-      const n = Math.min(B.flockMax, Math.round(B.flockStart + B.flockPerMin * min));
-      const d = (SP.minDistance + SP.maxDistance) / 2;
-      let mx = 0, my = 0, found = false;
-      for (const a of [angle, angle + Math.PI, angle + Math.PI / 2, angle - Math.PI / 2]) {
-        mx = Math.min(INSIDE.x1 - 40, Math.max(INSIDE.x0 + 40, p.x + Math.cos(a) * d));
-        my = Math.min(INSIDE.y1 - 40, Math.max(INSIDE.y0 + 40, p.y + Math.sin(a) * d));
-        if (!inView(s, mx, my, 20) && (mx - p.x) ** 2 + (my - p.y) ** 2 >= SP.absoluteMin ** 2) {
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        const pl = doorSpot(s);
-        mx = pl.x;
-        my = pl.y;
-      }
-      for (let i = 0; i < n; i++) {
-        // Tight spiral around the center point.
-        const rr = 10 * Math.sqrt(i), aa = i * 2.4;
-        trySpawn(s, 'junior', mx + Math.cos(aa) * rr, my + Math.sin(aa) * rr);
-      }
+      spawnFlock(s, 'junior', Math.min(B.flockMax, Math.round(B.flockStart + B.flockPerMin * min)), angle);
     }
   }
+  updateEvents(s);
 
   // Urgent case and boss use a separate stream.
   const rs = s.rng.special;
@@ -298,6 +337,97 @@ export function updateDirector(s, dt) {
   }
   // The bosses come in a fixed order (see bosses.js)
   updateBossSchedule(s);
+}
+
+/** A flock of lawyers of one type from one direction (outside the view), in a tight spiral around a centre point. */
+function spawnFlock(s, type, n, angle, elite = 0) {
+  const p = s.player;
+  const d = (SP.minDistance + SP.maxDistance) / 2;
+  let mx = 0, my = 0, found = false;
+  for (const a of [angle, angle + Math.PI, angle + Math.PI / 2, angle - Math.PI / 2]) {
+    mx = Math.min(INSIDE.x1 - 40, Math.max(INSIDE.x0 + 40, p.x + Math.cos(a) * d));
+    my = Math.min(INSIDE.y1 - 40, Math.max(INSIDE.y0 + 40, p.y + Math.sin(a) * d));
+    if (!inView(s, mx, my, 20) && (mx - p.x) ** 2 + (my - p.y) ** 2 >= SP.absoluteMin ** 2) {
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    const pl = doorSpot(s);
+    mx = pl.x;
+    my = pl.y;
+  }
+  for (let i = 0; i < n; i++) {
+    // Tight spiral around the center point.
+    const rr = 10 * Math.sqrt(i), aa = i * 2.4;
+    trySpawn(s, type, mx + Math.cos(aa) * rr, my + Math.sin(aa) * rr, elite);
+  }
+}
+
+/**
+ * EVENTS (version 6): the scheduled ones fire at fixed times on every shift, the rare ones are rolled once a minute
+ * from the events stream. Each event is a flock, a few partners, a mood (speed/damage factor for a while) or tickets.
+ */
+function updateEvents(s) {
+  const t = s.time;
+  // A timed mood («Kaffepause», «Serverkrasj») ends
+  if (s.mood.until > 0 && t >= s.mood.until) {
+    s.mood.speed = 1;
+    s.mood.damage = 1;
+    s.mood.until = 0;
+  }
+  const bossOut = !!(s.boss && s.boss.active);
+  const gapOk = t - s.lastEvent >= EV.minGap;
+  for (let i = 0; i < EV.scheduled.length; i++) {
+    const sc = EV.scheduled[i];
+    if (t < s.eventTimes[i]) continue;
+    if (!gapOk || (EV.waitForBoss && bossOut)) {
+      s.eventTimes[i] = t + 5;
+      continue;
+    }
+    s.eventTimes[i] = sc.repeat > 0 ? s.eventTimes[i] + sc.repeat : 1e9;
+    fireEvent(s, sc.id);
+    return;
+  }
+  if (t >= s.nextRareCheck) {
+    s.nextRareCheck += 60;
+    const rng = s.rng.events;
+    // The same number of rolls every minute, so the stream stays in step no matter what happens
+    let chosen = '';
+    for (const r of EV.rare) if (rng.next() < r.chance && t >= r.from && !chosen) chosen = r.id;
+    if (chosen && gapOk && !(EV.waitForBoss && bossOut && chosen === 'partnerMeeting')) fireEvent(s, chosen);
+  }
+}
+
+/** Carries out one event. The direction comes from the events stream. */
+export function fireEvent(s, id) {
+  const k = EV.defs[id];
+  const rng = s.rng.events;
+  const p = s.player;
+  const min = s.time / 60;
+  s.lastEvent = s.time;
+  if (id === 'lunchRush' || id === 'printerQueue') {
+    spawnFlock(s, k.type, Math.min(k.max, Math.round(k.count + k.perMin * min)), rng.next() * TAU);
+  } else if (id === 'partnerMeeting') {
+    const n = Math.min(k.count, EL.maxConcurrent - s.eliteCount);
+    const angle = rng.next() * TAU;
+    for (let i = 0; i < n; i++) {
+      const trait = 1 + rng.integer(3);
+      spawnFlock(s, 'senior', 1, angle + i * 0.3, trait);
+      s.eliteCount++;
+    }
+  } else if (id === 'coffeeBreak' || id === 'serverCrash') {
+    s.mood.speed = k.speed;
+    s.mood.damage = k.damage;
+    s.mood.until = s.time + k.duration;
+  } else if (id === 'freeLunch') {
+    for (let i = 0; i < k.tickets; i++) {
+      const a = rng.next() * TAU, d = 30 + rng.next() * k.radius;
+      dropTicket(s, Math.min(INSIDE.x1 - 10, Math.max(INSIDE.x0 + 10, p.x + Math.cos(a) * d)), Math.min(INSIDE.y1 - 10, Math.max(INSIDE.y0 + 10, p.y + Math.sin(a) * d)), k.value);
+    }
+  }
+  s.stat.events++;
+  s.events.push('event:' + id);
 }
 
 /** Drops a paper pile. If there are too many, the oldest is removed. */
@@ -326,13 +456,22 @@ export function updateEnemies(s, dt) {
   const p = s.player;
   const f = s.enemies;
   const out = s.hitList;
+  // «Bullet time» from The Matrix's code rain: everything hostile moves slower (1 = normal)
+  const ts = s.timeScale;
   s.senderCount = 0;
+  s.eliteCount = 0;
+  s.elites.length = 0;
   for (let i = 0; i < f.n; i++) {
     const e = f.items[i];
     if (!e.active) continue;
+    if (e.elite) {
+      s.eliteCount++;
+      if (e.elite === ELITE.aura) s.elites.push(e);
+    }
     if (e.blink > 0) e.blink -= dt;
     if (e.mouseCd > 0) e.mouseCd -= dt;
     if (e.ctrlCd > 0) e.ctrlCd -= dt;
+    if (e.markT > 0) e.markT -= dt;
     let dx = p.x - e.x, dy = p.y - e.y;
     const d = Math.hypot(dx, dy) || 1;
     dx /= d;
@@ -346,7 +485,7 @@ export function updateEnemies(s, dt) {
         effect(s, 'poof', e.x, e.y, 0.4, e.r);
         continue;
       }
-      const speed = e.speed * (d > F.urgent.slowDistance ? F.urgent.slowFactor : 1);
+      const speed = e.speed * ts * (d > F.urgent.slowDistance ? F.urgent.slowFactor : 1);
       e.phase += dt * 3;
       const swing = Math.sin(e.phase) * 0.6;
       let vx = -dx - dy * swing, vy = -dy + dx * swing;
@@ -374,8 +513,8 @@ export function updateEnemies(s, dt) {
         vx = -dy * side * 0.5;
         vy = dx * side * 0.5;
       }
-      e.x += vx * e.speed * dt;
-      e.y += vy * e.speed * dt;
+      e.x += vx * e.speed * ts * dt;
+      e.y += vy * e.speed * ts * dt;
       e.direction = dx < 0 ? -1 : 1;
       s.senderCount++;
       // Email: only when the sender is on screen, so the alert can always be seen.
@@ -408,6 +547,9 @@ export function updateEnemies(s, dt) {
       // The bosses move and attack on their own (bosses.js)
       updateBoss(s, e, dt, dx, dy);
       if (s.status !== 'running') return;
+    } else if (e.type === 'friend') {
+      // Fiske-Frida's friends walk close behind her, one on each side (bosses.js decides when they send emails)
+      updateFriend(s, e, dt, dx, dy);
     } else {
       if (e.type === 'printer') {
         e.timer -= dt;
@@ -416,8 +558,46 @@ export function updateEnemies(s, dt) {
           if (inView(s, e.x, e.y, 40)) dropPaper(s, e.x, e.y);
         }
       }
-      e.x += dx * e.speed * dt;
-      e.y += dy * e.speed * dt;
+      // «Venter på IT» (slowed by an effect modifier), «Kaffepause» / «Serverkrasj» (the mood of the office), bullet time
+      let speed = e.speed * s.mood.speed * ts;
+      if (e.slowT > 0) {
+        e.slowT -= dt;
+        speed *= 1 - e.slowBy;
+      }
+      // «Saken ligger i køen»: part of the help comes once more a moment later
+      if (e.lingerT > 0) {
+        e.lingerT -= dt;
+        if (e.lingerT <= 0 && e.linger > 0) {
+          const amount = e.linger;
+          e.linger = 0;
+          help(s, e, amount, e.lingerSrc, null, true);
+          if (!e.active) continue;
+        }
+      }
+      if (e.elite === ELITE.rush) {
+        // «Har hastverk»: a warning («!»), then a short dash straight at where the player stood.
+        const R = EL.traits.rush;
+        if (e.dashT > 0) {
+          e.dashT -= dt;
+          e.x += e.vx * ts * dt;
+          e.y += e.vy * ts * dt;
+        } else {
+          e.rushT -= dt;
+          e.alert = e.rushT <= R.tell;
+          if (e.rushT <= 0) {
+            e.rushT = R.every;
+            e.alert = false;
+            e.dashT = R.duration;
+            e.vx = dx * speed * R.speed;
+            e.vy = dy * speed * R.speed;
+          }
+          e.x += dx * speed * dt;
+          e.y += dy * speed * dt;
+        }
+      } else {
+        e.x += dx * speed * dt;
+        e.y += dy * speed * dt;
+      }
       if (Math.abs(dx) > 0.15) e.direction = dx < 0 ? -1 : 1;
 
       // Soft pushing so the lawyers don't stand on top of each other (max 6 neighbors, so it never gets slow).
@@ -445,28 +625,135 @@ export function updateEnemies(s, dt) {
     // Contact with the player.
     if (e.active && !e.leaving && e.damage > 0) {
       const bx = p.x - e.x, by = p.y - e.y, rr = e.r + p.r - 2;
-      if (bx * bx + by * by < rr * rr) damagePlayer(s, e.type === 'boss' ? bossContactDamage(e) : e.damage);
+      if (bx * bx + by * by < rr * rr) damagePlayer(s, e.type === 'boss' ? bossContactDamage(e) : e.damage * s.mood.damage);
     }
   }
 }
 
+/** Reused list for the «Sprut» effect, and a guard so splash never splashes again. */
+const SPLASH_LIST = /** @type {number[]} */ ([]);
+let splashing = false;
+
 /**
  * Gives a lawyer help (lowers the frustration). When it reaches zero, the lawyer becomes happy.
- * @param {string} source which weapon the help came from (for the statistics)
+ * @param {string} source which weapon the help came from (for the statistics and the tag passives)
+ * @param {any} [fx] the weapon's effect modifiers (levels per effect), or null
+ * @param {boolean} [plain] true for help that must not trigger effects again (linger, splash)
  */
-export function help(s, e, amount, source) {
+export function help(s, e, amount, source, fx = null, plain = false) {
   if (!e.active || e.leaving) return;
-  let m = amount * s.player.mod.help;
+  const mod = s.player.mod;
+  let m = amount * mod.help;
+  // The tag passives («Kastekurs» …): +help for every weapon of that class
+  const tag = WEAPON_TAG[source];
+  if (tag) m *= mod.tag[tag];
+  // Critical hit («Kaffemaskin», «Ekstra kaffe»): own random stream, so it is the same for everyone on the same day.
+  let crit = false;
+  const critChance = mod.crit + (fx && fx.crit ? FX.crit.value * fx.crit : 0);
+  if (critChance > 0 && s.rng.crit.next() < critChance) {
+    m *= mod.critMult;
+    crit = true;
+  }
   if (e.type === 'boss') {
     // «Vi ringer deg tilbake» ("We'll call you back"): no help gets through. Paper jam: double help.
     m *= bossHelpFactor(e);
     if (m <= 0) return;
   }
-  s.stat.helpPerWeapon[source] = (s.stat.helpPerWeapon[source] || 0) + Math.min(e.hp, m);
+  // «Purring»: the lawyer takes more help from everything for a while. «Eskalering»: more help to partners and bosses.
+  if (e.markT > 0) m *= 1 + e.markBy;
+  if (fx && fx.escalation && (e.elite || e.type === 'boss')) m *= 1 + FX.escalation.value * fx.escalation;
+  // Partner aura: other lawyers near an aura partner take only part of the help.
+  const A = s.elites;
+  for (let i = 0; i < A.length; i++) {
+    const a = A[i];
+    if (a === e) continue;
+    const R = EL.traits.aura.radius;
+    if ((a.x - e.x) ** 2 + (a.y - e.y) ** 2 < R * R) {
+      m *= EL.traits.aura.helpFactor;
+      break;
+    }
+  }
+  // «dealt» is what the lawyer actually needed (statistics, linger, splash); the hit number shows the full hit,
+  // overkill included, so a big weapon looks big even on a junior associate.
+  const dealt = Math.min(e.hp, m);
+  s.stat.helpPerWeapon[source] = (s.stat.helpPerWeapon[source] || 0) + dealt;
   e.hp -= m;
   e.blink = 0.09;
+  e.lastHit = s.time;
+  hitNumber(s, e, m, crit, source);
+  if (fx && !plain) applyEffects(s, e, dealt, source, fx);
   if (e.hp <= 0) becomesHappy(s, e);
   else if (e.type === 'boss') checkBossPhase(s, e);
+}
+
+/**
+ * The effect modifiers of a weapon, after a hit: slow, knockback, linger and splash. Bosses are only slowed and
+ * pushed by nothing. Splash helps a few neighbours with plain help (no effects, no recursion).
+ */
+function applyEffects(s, e, dealt, source, fx) {
+  const boss = e.type === 'boss';
+  if (fx.slow && !boss) {
+    e.slowT = FX.slow.time;
+    e.slowBy = Math.min(FX.slow.maxSlow, FX.slow.value * fx.slow);
+  }
+  if (fx.knockback && !boss && e.type !== 'urgent') {
+    const p = s.player;
+    const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1;
+    const push = FX.knockback.px * fx.knockback;
+    e.x += (dx / d) * push;
+    e.y += (dy / d) * push;
+  }
+  if (fx.pull && !boss && e.type !== 'urgent') {
+    const p = s.player;
+    const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
+    const pull = Math.min(Math.max(0, d - p.r - e.r), FX.pull.px * fx.pull);
+    e.x += (dx / d) * pull;
+    e.y += (dy / d) * pull;
+  }
+  if (fx.mark && e.hp > 0) {
+    if (e.markT <= 0) e.markBy = 0;
+    e.markT = FX.mark.time;
+    e.markBy = Math.max(e.markBy, FX.mark.value * fx.mark);
+  }
+  if (fx.linger && e.hp > 0) {
+    e.linger += dealt * FX.linger.fraction * fx.linger;
+    e.lingerT = FX.linger.delay;
+    e.lingerSrc = source;
+  }
+  if (fx.splash && !splashing) {
+    splashing = true;
+    const R = FX.splash.radius + 4 * fx.splash;
+    const n = s.grid.find(e.x, e.y, R, SPLASH_LIST, FX.splash.maxNeighbors);
+    const amount = dealt * FX.splash.fraction;
+    for (let i = 0; i < n; i++) {
+      const o = s.enemies.items[SPLASH_LIST[i]];
+      if (o !== e) help(s, o, amount, source, null, true);
+    }
+    splashing = false;
+  }
+}
+
+/** Weapon id → small number, so the hit number can carry which icon to show without storing text. */
+const SOURCE_INDEX = new Map(Object.keys(CONFIG.weapons).map((id, i) => [id, i]));
+
+/**
+ * A floating hit number («47», gold when critical) over the lawyer. Visual only. Hits on the same lawyer
+ * within a short window are merged into one growing number, and there is a hard cap on how many exist.
+ */
+function hitNumber(s, e, amount, crit, source) {
+  let fx = e.hitFx;
+  if (fx && fx.type === 'hit' && fx.b === e.uid && fx.t < HIT_MERGE) {
+    fx.r += amount;
+    fx.x = e.x;
+    fx.y = e.y - e.r * 2 - 6;
+    if (crit) fx.c = 1;
+    return;
+  }
+  if (s.hitCount >= MAX_HITS) return;
+  fx = effect(s, 'hit', e.x, e.y - e.r * 2 - 6, 0.75, amount, SOURCE_INDEX.get(source) ?? -1, e.uid, false, '', crit ? 1 : 0);
+  if (!fx) return;
+  s.hitCount++;
+  e.hitFx = fx;
 }
 
 /**
@@ -484,7 +771,11 @@ export function becomesHappy(s, e) {
   const boss = e.type === 'boss';
   effect(s, 'happy', e.x, e.y, boss ? 1.6 : shortened ? G.shortDuration : G.duration, boss ? 1.2 : shortened ? G.shortSmile : G.smile, TYPE_CODE[figureType(e)], e.variant, false, '', e.direction);
   s.helped++;
+  // «Takknemlige advokater»: a little energy for every lawyer helped
+  const sp = s.player;
+  if (sp.mod.lifesteal > 0 && sp.energy < sp.maxEnergy) sp.energy = Math.min(sp.maxEnergy, sp.energy + sp.mod.lifesteal);
   s.stat.perType[e.type] = (s.stat.perType[e.type] || 0) + 1;
+  if (e.elite) s.stat.elitesHelped++;
   s.events.push('happy');
 
   if (e.type === 'urgent') {
@@ -495,14 +786,51 @@ export function becomesHappy(s, e) {
     const points = givePoints(s, e.points);
     effect(s, 'text', e.x, e.y - 40, 1.6, 0, 0, 0, false, '+' + points);
     s.stat.bossesHelped++;
-    // The boss gives a points bonus and a guaranteed «Ny PC» ("New PC"; not an energy drink).
-    dropPickup(s, 'pc', e.x, e.y + 10);
+    // The boss gives a points bonus, a guaranteed «Ny PC» ("New PC"; not an energy drink) and a supplier package.
+    dropPickup(s, 'pc', e.x - 14, e.y + 10);
+    dropPickup(s, 'package', e.x + 16, e.y + 12, e.bossType === 'johan' ? CONFIG.package.johanCount : CONFIG.package.bossCount);
     bossHelped(s, e);
+  } else if (e.type === 'friend') {
+    // One of Fiske-Frida's friends: extra points if she is helped on her own (none when Frida is helped first)
+    if (e.points > 0) {
+      const points = givePoints(s, e.points);
+      effect(s, 'text', e.x, e.y - 26, 1.2, 0, 0, 0, false, '+' + points);
+    }
+    s.events.push('friendHappy');
+  } else if (e.elite) {
+    // A partner drops 1–5 tickets (drops stream) and now and then a supplier package
+    const D = CONFIG.eliteDrops;
+    const n = D.ticketsMin + s.rng.drops.integer(D.ticketsMax - D.ticketsMin + 1);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU + e.phase;
+      dropTicket(s, e.x + (n > 1 ? Math.cos(a) * 10 : 0), e.y + (n > 1 ? Math.sin(a) * 8 : 0), Math.max(1, Math.round(e.points * D.ticketFraction)));
+    }
+    if (s.rng.drops.next() < CONFIG.package.eliteChance) dropPickup(s, 'package', e.x, e.y + 6, CONFIG.package.eliteCount);
+    if (e.elite === ELITE.split) splitPartner(s, e);
   } else {
     dropTicket(s, e.x, e.y, e.points);
     if (s.rng.drops.next() < CONFIG.newPc.dropChance) dropPickup(s, 'pc', e.x, e.y);
+    // «Helsekjeks»: now and then a small cookie with a little energy (drops stream, capped on the map)
+    if (s.rng.drops.next() < CONFIG.cookie.chance && countPickups(s, 'cookie') < CONFIG.cookie.max) dropPickup(s, 'cookie', e.x + 5, e.y + 4);
   }
   registerHelped(s);
+}
+
+/** How many pickups of one type are on the map. */
+export function countPickups(s, type) {
+  let n = 0;
+  for (let i = 0; i < s.pickups.n; i++) if (s.pickups.items[i].type === type) n++;
+  return n;
+}
+
+/** «Delegerer»: the partner hands the problem to a few junior associates. */
+function splitPartner(s, e) {
+  const n = EL.traits.split.count;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * TAU + e.phase;
+    trySpawn(s, 'junior', e.x + Math.cos(a) * 14, e.y + Math.sin(a) * 14);
+  }
+  effect(s, 'poof', e.x, e.y, 0.4, 10);
 }
 
 /** «Ny PC» ("New PC"): all ordinary lawyers on screen become happy. Bosses and urgent cases get a lot of help. */
@@ -512,7 +840,7 @@ export function newPc(s) {
   for (let i = 0; i < n; i++) {
     const e = f.items[i];
     if (!e.active || e.leaving || !inView(s, e.x, e.y, 0)) continue;
-    if (e.type === 'boss' || e.type === 'urgent') help(s, e, CONFIG.newPc.helpToSpecial, 'newPcFx');
+    if (e.type === 'boss' || e.type === 'urgent' || e.type === 'friend') help(s, e, CONFIG.newPc.helpToSpecial, 'newPcFx');
     else becomesHappy(s, e);
   }
   const p = s.player;

@@ -11,10 +11,14 @@ import { BitmapFont, textWidth, HEIGHT as FONT_H } from './pixelfont.js';
 import { weaponStats, spiralPos, angelPos } from './weapons.js';
 import { Rng, TAU, mmss } from './utils.js';
 import { makeCanvas, ctx2d } from './pixel.js';
+import { icon } from './icons.js';
+import { ELITE_TRAIT } from './enemies.js';
 
 const VB = CONFIG.view.width, VH = CONFIG.view.height;
 const KB = CONFIG.map.width, KH = CONFIG.map.height;
-const SHADOW = { junior: 'small', printer: 'medium', senior: 'large', urgent: 'large', boss: 'boss', sender: 'small' };
+const SHADOW = { junior: 'small', printer: 'medium', senior: 'large', urgent: 'large', boss: 'boss', sender: 'small', friend: 'medium' };
+/** Characters for the code rain (drawn with the game's own pixel font – digits and capitals). */
+const CODE_CHARS = '0123456789ABCDEFHKMNPRTXZ';
 
 /** Sort function (created once, so sorting produces no garbage). */
 const afterY = (a, b) => a.y - b.y;
@@ -22,7 +26,7 @@ const afterY = (a, b) => a.y - b.y;
 export class Renderer {
   /**
    * @param {HTMLCanvasElement} canvas the game canvas (640 × 360)
-   * @param {{shake: boolean, fewerFlashes: boolean}} settings
+   * @param {{shake: boolean, fewerFlashes: boolean, hitNumbers: boolean, bars: boolean}} settings
    */
   constructor(canvas, settings) {
     this.canvas = canvas;
@@ -54,6 +58,39 @@ export class Renderer {
     this.margin = { top: 40, bottom: 50, left: 12, right: 12 };
     /** Number of happy lawyers being animated right now (shown in debug). */
     this.happyShown = 0;
+    /** Hit numbers: outlined digit sheets per color, 8 × 8 weapon icons, and reused digit buffer (no allocation per frame). */
+    /** @type {Map<string, HTMLCanvasElement>} */
+    this.digitSheets = new Map();
+    /** @type {HTMLCanvasElement[]} */
+    this.iconSmall = [];
+    this.digits = new Int32Array(8);
+    /** Frustration bars: positions collected in one pass, drawn in two (one fill color per pass). */
+    this.barX = new Float32Array(512);
+    this.barY = new Float32Array(512);
+    this.barW = new Float32Array(512);
+    this.barF = new Float32Array(512);
+    /** @type {Map<string, HTMLCanvasElement>} */
+    this.labelCache = new Map();
+    /** Shopkeeperen's position (looks only: he follows the player with a little delay). */
+    this.shopX = 0;
+    this.shopY = 0;
+    /** The code rain columns (looks only): x, y and speed per column, and one sheet of green glyphs. */
+    this.rainCols = Array.from({ length: 40 }, (_, i) => ({ x: i * 16 + 4, y: -this.rng.next() * VH, v: 70 + this.rng.next() * 90, c: this.rng.integer(CODE_CHARS.length) }));
+    /** @type {HTMLCanvasElement | null} */
+    this.codeSheet = null;
+  }
+
+  /** One sheet with every code-rain glyph in two greens (bright head, dimmer trail), 6 px per cell. Made once. */
+  codeGlyphs() {
+    if (this.codeSheet) return this.codeSheet;
+    const c = makeCanvas(CODE_CHARS.length * 6, (FONT_H + 1) * 2);
+    const ctx = ctx2d(c);
+    for (let i = 0; i < CODE_CHARS.length; i++) {
+      this.font.draw(ctx, CODE_CHARS[i], i * 6, 0, '#c8ffd4');
+      this.font.draw(ctx, CODE_CHARS[i], i * 6, FONT_H + 1, '#2fd06a');
+    }
+    this.codeSheet = c;
+    return c;
   }
 
   // ---------- The map (pre-rendered once) ----------
@@ -213,6 +250,14 @@ export class Renderer {
 
     this.drawEffectsUnder(s, now);
 
+    // Partner aura: a faint gold ring around the elites that shield their neighbours
+    for (let i = 0; i < s.elites.length; i++) {
+      const e = s.elites[i];
+      ctx.globalAlpha = fewerFlashes ? 0.5 : 0.4 + Math.sin(now * 3) * 0.15;
+      drawSprite(ctx, ring(CONFIG.elites.traits.aura.radius, '#f5cf3a', 1, 0.06, 4), e.x, e.y);
+    }
+    ctx.globalAlpha = 1;
+
     // Tickets (blink in the last seconds)
     const L = CONFIG.tickets;
     for (let i = 0; i < s.tickets.n; i++) {
@@ -226,15 +271,41 @@ export class Renderer {
       ctx.globalAlpha = 1;
     }
 
-    // Energy drink and Ny PC (glow and a small bounce)
+    // Energy drink, Ny PC and the supplier package (glow and a small bounce)
     for (let i = 0; i < s.pickups.n; i++) {
       const pk = s.pickups.items[i];
       if (pk.x < x0 || pk.x > x1 || pk.y < y0 || pk.y > y1) continue;
+      if (pk.type === 'cookie') {
+        // «Helsekjeks»: a soft warm glow (unlike the tickets), blinking the last seconds like them
+        const CK = CONFIG.cookie;
+        if (pk.age > CK.lifetime - CK.blinkTime) {
+          if (fewerFlashes) ctx.globalAlpha = 0.5;
+          else if (Math.floor(pk.age * 7) % 2 === 0) continue;
+        }
+        const a = ctx.globalAlpha;
+        ctx.globalAlpha = a * (fewerFlashes ? 0.6 : 0.5 + Math.sin(now * 3 + i) * 0.15);
+        drawSprite(ctx, item.cookieGlow, pk.x, pk.y);
+        ctx.globalAlpha = a;
+        drawSprite(ctx, item.cookie, pk.x, pk.y);
+        ctx.globalAlpha = 1;
+        continue;
+      }
+      if (pk.type === 'fakeDrink' || pk.type === 'fakePc') {
+        // Fiske-Frida's bait: almost the real thing – a slightly wrong colour, a visible hook, a different, uneven
+        // glint (a quick double blink instead of the real ones' slow pulse) and a stiffer bounce
+        const bounce = fewerFlashes ? 0 : Math.floor(now * 2 + i) % 2 ? -2 : 0;
+        ctx.globalAlpha = fewerFlashes ? 0.6 : Math.floor(now * 6 + i) % 5 < 2 ? 0.75 : 0.35;
+        drawSprite(ctx, item.fakeGlow, pk.x, pk.y);
+        ctx.globalAlpha = 1;
+        drawSprite(ctx, pk.type === 'fakeDrink' ? item.fakeDrink : item.fakePc, pk.x, pk.y + bounce);
+        if (!fewerFlashes && this.quality < 2 && Math.floor(now * 6 + i) % 5 === 0) drawSprite(ctx, item.glitter[2], pk.x + 8, pk.y + 2 + bounce);
+        continue;
+      }
       const bounce = fewerFlashes ? 0 : Math.round(Math.abs(Math.sin(now * 3 + i)) * -3);
       ctx.globalAlpha = fewerFlashes ? 0.7 : 0.55 + Math.sin(now * 4 + i) * 0.25;
-      drawSprite(ctx, pk.type === 'drink' ? item.drinkGlow : item.pcGlow, pk.x, pk.y);
+      drawSprite(ctx, pk.type === 'drink' ? item.drinkGlow : pk.type === 'package' ? item.packageGlow : item.pcGlow, pk.x, pk.y);
       ctx.globalAlpha = 1;
-      drawSprite(ctx, pk.type === 'drink' ? item.drink : item.pc, pk.x, pk.y + bounce);
+      drawSprite(ctx, pk.type === 'drink' ? item.drink : pk.type === 'package' ? item.package : item.pc, pk.x, pk.y + bounce);
       if (!fewerFlashes && this.quality < 2 && Math.floor(now * 2 + i) % 3 === 0) {
         drawSprite(ctx, item.glitter[1], pk.x + 7, pk.y - 9 + bounce);
       }
@@ -269,29 +340,72 @@ export class Renderer {
       }
       const sk = shadows[SHADOW[e.type]];
       drawSprite(ctx, sk, e.x, e.y + sheet.h - sheet.ay - 3);
-      const frame = (Math.floor(now * 8 + e.uid * 0.37) & 3) + (e.blink > 0 ? TILE.blink : 0) + (e.direction < 0 ? TILE.left : 0);
       if (e.leaving) ctx.globalAlpha = 0.6;
-      ctx.drawImage(sheet.canvas, frame * sheet.w, sheet.sy, sheet.w, sheet.h, Math.round(e.x - sheet.ax), Math.round(e.y - sheet.ay), sheet.w, sheet.h);
+      if (e.type === 'friend' && e.pose >= 0) {
+        // Frida's friends raise their phones before they forward the scam emails
+        const ps = this.fig.poses('friend', e.variant);
+        const pf = e.pose + (e.direction < 0 ? POSE.count : 0);
+        ctx.drawImage(ps.canvas, pf * ps.w, e.blink > 0 ? ps.h : 0, ps.w, ps.h, Math.round(e.x - ps.ax), Math.round(e.y - ps.ay), ps.w, ps.h);
+      } else {
+        const frame = (Math.floor(now * 8 + e.uid * 0.37) & 3) + (e.blink > 0 ? TILE.blink : 0) + (e.direction < 0 ? TILE.left : 0);
+        ctx.drawImage(sheet.canvas, frame * sheet.w, sheet.sy, sheet.w, sheet.h, Math.round(e.x - sheet.ax), Math.round(e.y - sheet.ay), sheet.w, sheet.h);
+      }
       ctx.globalAlpha = 1;
-      // Warning before an email: the laptop lights up and a «!» above the head
+      if (e.elite) drawSprite(ctx, item.crown, e.x, e.y - sheet.ay);
+      // Warning before an email (or a partner's dash): the laptop lights up and a «!» above the head
       if (e.alert) {
         if (e.type === 'sender') {
           ctx.globalAlpha = fewerFlashes ? 0.8 : 0.6 + Math.sin(now * 30) * 0.3;
           drawSprite(ctx, item.laptopGlow, e.x, e.y - 3);
           ctx.globalAlpha = 1;
         }
-        drawSprite(ctx, item.exclaim, e.x, e.y - sheet.ay - (e.type === 'boss' ? 34 : 2));
+        drawSprite(ctx, item.exclaim, e.x, e.y - sheet.ay - (e.type === 'boss' ? 34 : e.elite ? 30 : 2));
       }
     }
+    this.drawBars(s, n);
     this.drawBossClocks(s, n);
 
-    // Emails and the bosses' projectiles (above the lawyers, with a red glow so they stand out from the player's own effects)
+    // Emails and the bosses' projectiles (above the lawyers). Everything that can hurt blinks red-tinted every
+    // other tenth of a second so it stands out from the player's own effects. With reduced flashing it is
+    // tinted all the time instead of blinking.
+    const red = fewerFlashes || Math.floor(now * 10) % 2 === 0;
+    const RT = item.red;
     for (let i = 0; i < s.enemyShots.n; i++) {
       const q = s.enemyShots.items[i];
       const wobble = fewerFlashes ? 0 : Math.round(Math.sin(now * 10 + i));
       if (q.kind === 'note') {
         // hold music: harmless, so no red glow
         drawSprite(ctx, item.note, q.x, q.y + wobble);
+        continue;
+      }
+      if (q.kind === 'herring') {
+        // «Silderegn»: a shadow on the floor that grows, and the herring falling onto it at the end
+        const f = 1 - Math.max(0, q.life) / Math.max(0.01, q.flight);
+        ctx.globalAlpha = 0.25 + f * 0.35;
+        ctx.fillStyle = '#1d1626';
+        const rw = Math.round(q.r * (0.4 + 0.6 * f)), rh = Math.max(1, Math.round(rw * 0.45));
+        ctx.fillRect(Math.round(q.x - rw), Math.round(q.y - rh / 2), rw * 2, rh);
+        ctx.fillRect(Math.round(q.x - rw + 1), Math.round(q.y - rh / 2 - 1), rw * 2 - 2, rh + 2);
+        ctx.globalAlpha = 1;
+        if (f > 0.55) drawSprite(ctx, red ? RT.herring : item.herring, q.x, q.y - Math.round((1 - f) * 90));
+        continue;
+      }
+      if (q.kind === 'hook') {
+        // the fishing line from Frida's rod to the hook
+        const b = s.boss;
+        if (b && b.active) {
+          ctx.fillStyle = '#e8eef4';
+          const sx = b.x + b.direction * 14, sy = b.y - 30, d = Math.hypot(q.x - sx, q.y - sy);
+          for (let t = 0; t < d; t += 3) ctx.fillRect(Math.round(sx + ((q.x - sx) * t) / d), Math.round(sy + ((q.y - sy) * t) / d), 1, 1);
+        }
+        drawSprite(ctx, red ? RT.fishHook : item.fishHook, q.x, q.y);
+        continue;
+      }
+      if (q.kind === 'fishMail') {
+        ctx.globalAlpha = 0.45;
+        drawSprite(ctx, item.emailGlow, q.x, q.y);
+        ctx.globalAlpha = 1;
+        drawSprite(ctx, red ? RT.fishMail : item.fishMail, q.x, q.y);
         continue;
       }
       if (q.kind === 'cartridge') {
@@ -302,19 +416,22 @@ export class Renderer {
         drawSprite(ctx, ring(7, ['#19b5c9', '#e0409a', '#f5cf3a', '#2b2f38'][q.color], 1), lx, ly);
         ctx.globalAlpha = 1;
         if (left < 0.4 && !fewerFlashes && Math.floor(now * 16) % 2 === 0) continue;
-        drawSprite(ctx, item.cartridge[q.color], q.x, q.y - Math.round(Math.sin((q.t / q.flight) * Math.PI) * 14));
+        drawSprite(ctx, (red ? RT.cartridge : item.cartridge)[q.color], q.x, q.y - Math.round(Math.sin((q.t / q.flight) * Math.PI) * 14));
         continue;
       }
       ctx.globalAlpha = 0.45;
       drawSprite(ctx, item.emailGlow, q.x, q.y);
       ctx.globalAlpha = 1;
-      const spr = q.kind === 'ticket' ? item.ticketShot : q.kind === 'ticketSmall' ? item.ticketSmall : q.kind === 'paper' ? item.sheet : q.kind === 'calendar' ? item.calendar : item.email;
+      const set = red ? RT : item;
+      const spr = q.kind === 'ticket' ? (red ? RT.ticket : item.ticketShot) : q.kind === 'ticketSmall' ? set.ticketSmall : q.kind === 'paper' ? (red ? RT.paper : item.sheet) : q.kind === 'calendar' ? set.calendar : set.email;
       drawSprite(ctx, spr, q.x, q.y + wobble);
     }
 
     this.drawWeapons(s, now);
+    this.drawHelpers(s, now);
     this.drawPlayer(s, now);
     this.drawEffectsOver(s, now);
+    if (s.rain > 0) this.drawCodeRain(s, dt, kx, ky);
     if (this.quality < 2) this.drawBubbles(s, dt, n);
     else this.bubbles.length = 0;
 
@@ -448,7 +565,7 @@ export class Renderer {
   /** The HDMI cable: drawn as a pixel cable along an arc. type 0 = front, 1 = front and back, 2 = full circle. */
   drawCable(cx, cy, R, angle, type, f) {
     const ctx = this.ctx;
-    const arc = type === 2 ? TAU : CONFIG.weapons.hdmi.levels[0].arc;
+    const arc = type === 2 ? TAU : CONFIG.weapons.hdmi.base.arc;
     const drawArc = (mid) => {
       const from = type === 2 ? mid : mid - arc / 2;
       const sweep = arc * Math.min(1, f * 1.8);
@@ -538,16 +655,33 @@ export class Renderer {
         drawSprite(ctx, item.teams, pr.x, pr.y);
         continue;
       }
+      if (pr.type === 'ball') {
+        // Ping-pong ball; Ping of Death leaves a short glowing trail (drawn from the velocity, no stored history)
+        if (pr.evo && this.quality < 2) {
+          const sp = Math.hypot(pr.vx, pr.vy) || 1;
+          for (let k = 1; k <= 4; k++) {
+            ctx.globalAlpha = 0.5 - k * 0.1;
+            drawSprite(ctx, item.ballGlow, pr.x - (pr.vx / sp) * k * 5, pr.y - (pr.vy / sp) * k * 5);
+          }
+          ctx.globalAlpha = 1;
+        }
+        drawSprite(ctx, (pr.evo ? item.ballEvo : item.ball)[Math.floor(pr.angle) & 3], pr.x, pr.y);
+        continue;
+      }
+      if (pr.type === 'wall') {
+        this.drawWall(pr, now);
+        continue;
+      }
       if (pr.type === 'mini') {
         // Mini printer: in the air in an arc, then standing still where it landed and feeding out sheets
-        const set = pr.evo ? item.miniEvo : item.mini;
+        const set = pr.evo === 2 ? item.miniMatrix : pr.evo ? item.miniEvo : item.mini;
         if (!pr.goBack) {
           drawSprite(ctx, set[0], pr.x, pr.y);
           continue;
         }
         // a discreet circle on the floor shows the range (below the lawyers' feet, faint)
         ctx.globalAlpha = 0.16;
-        drawSprite(ctx, ring(pr.radius, pr.evo ? '#f5cf3a' : '#ffffff', 1, 0, 3), pr.x, pr.y + 2);
+        drawSprite(ctx, ring(pr.radius, pr.evo === 2 ? '#2fd06a' : pr.evo ? '#f5cf3a' : '#ffffff', 1, 0, 3), pr.x, pr.y + 2);
         ctx.globalAlpha = 1;
         drawSprite(ctx, item.shadows.small, pr.x, pr.y + 4);
         // a little hop right after landing
@@ -555,11 +689,11 @@ export class Renderer {
         // just fired: a sheet sticks out of the output tray
         const feeding = pr.every - pr.burst < 0.12 ? 1 : 0;
         drawSprite(ctx, set[feeding], pr.x, pr.y - hop);
-        if (feeding) drawSprite(ctx, item.sheetSmall, pr.x + (pr.angle < 0 ? -4 : 4), pr.y - 10 - hop);
+        if (feeding) drawSprite(ctx, pr.evo === 2 ? item.sheetMatrix : item.sheetSmall, pr.x + (pr.angle < 0 ? -4 : 4), pr.y - 10 - hop);
         continue;
       }
       if (pr.type === 'sheet') {
-        drawSprite(ctx, item.sheetSmall, pr.x, pr.y);
+        drawSprite(ctx, pr.evo === 2 ? item.sheetMatrix : item.sheetSmall, pr.x, pr.y);
         continue;
       }
       if (pr.type === 'toner') {
@@ -583,19 +717,119 @@ export class Renderer {
         if (this.quality < 2 && Math.floor(now * 12 + i) % 3 === 0) drawSprite(ctx, item.glitter[2], pr.x + 4, pr.y - 4);
       }
     }
-    // Skytsengelen (the guardian angel) hovers around the player
+    // Skytsengelen (the guardian angel) hovers around the player (in a black coat and sunglasses in The Matrix)
     for (let i = 0; i < p.weapons.length; i++) {
       const w = p.weapons[i];
-      if (w.id !== 'angel') continue;
+      if (w.id !== 'angel' && w.id !== 'matrix') continue;
       const [ax, ay] = angelPos(w, p);
-      if (w.evo) {
+      if (w.evo || w.id === 'matrix') {
         ctx.globalAlpha = this.settings.fewerFlashes ? 0.6 : 0.5 + Math.sin(now * 3) * 0.2;
-        drawSprite(ctx, item.angelGlow, ax, ay - 2);
+        drawSprite(ctx, w.id === 'matrix' ? item.matrixGlow : item.angelGlow, ax, ay - 2);
         ctx.globalAlpha = 1;
       }
-      const set = w.evo ? item.angelEvo : item.angel;
+      const set = w.id === 'matrix' ? item.angelMatrix : w.evo ? item.angelEvo : item.angel;
       drawSprite(ctx, set[Math.floor(now * 5) & 3], ax, ay);
     }
+  }
+
+  /**
+   * A firewall: animated pixel flames along a line across pr.angle, with small padlocks, ones and zeros drifting up
+   * from the glow (green «code» flames in The Matrix). It fades in and out.
+   */
+  drawWall(pr, now) {
+    const ctx = this.ctx, item = this.spr.item;
+    const green = pr.evo === 2;
+    const set = green ? item.flameGreen : item.flame;
+    const cos = Math.cos(pr.angle), sin = Math.sin(pr.angle);
+    const L = pr.range;
+    const fade = Math.min(1, pr.t / 0.25, pr.life / 0.4);
+    const n = Math.max(2, Math.round((L * 2) / 7));
+    const calm = this.settings.fewerFlashes;
+    // a faint band on the floor
+    ctx.globalAlpha = 0.25 * fade;
+    ctx.fillStyle = green ? '#2fd06a' : '#ff9f43';
+    for (let k = 0; k <= n; k++) {
+      const u = -L + (2 * L * k) / n;
+      ctx.fillRect(Math.round(pr.x - sin * u) - 3, Math.round(pr.y + cos * u) - 1, 7, 3);
+    }
+    ctx.globalAlpha = fade;
+    for (let k = 0; k <= n; k++) {
+      const u = -L + (2 * L * k) / n;
+      const f = calm ? k % 3 : (Math.floor(now * 9) + k * 2) % 3;
+      drawSprite(ctx, set[f], pr.x - sin * u, pr.y + cos * u + 2);
+    }
+    // the IT touch: padlocks, ones and zeros rising in the glow (full quality only)
+    if (this.quality === 0) {
+      for (let k = 0; k < 3; k++) {
+        const ph = (now * 0.9 + k * 0.33 + pr.x * 0.01) % 1;
+        const u = (((k * 37 + Math.floor(now * 0.9 + k * 0.33)) * 13) % 100) / 100 * 2 * L - L;
+        const g = k === 0 ? item.lockSmall : (k + Math.floor(now)) % 2 ? (green ? item.oneGreen : item.one) : green ? item.zeroGreen : item.zero;
+        ctx.globalAlpha = fade * (1 - ph) * 0.9;
+        drawSprite(ctx, g, pr.x - sin * u, pr.y + cos * u - 8 - ph * 10);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /**
+   * The helpers that walk with the player: Livvakten (beside the player; he stands still facing the firewall for a
+   * moment when he lays one) and Shopkeeperen (a little behind, looks only). In The Matrix all three wear black coats
+   * and sunglasses.
+   */
+  drawHelpers(s, now) {
+    const ctx = this.ctx, item = this.spr.item, p = s.player;
+    const walking = p.moving ? Math.floor(now * 6) & 1 : 0;
+    let matrix = false;
+    for (let i = 0; i < p.weapons.length; i++) {
+      const w = p.weapons[i];
+      if (w.id !== 'bodyguard' && w.id !== 'matrix') continue;
+      if (w.id === 'matrix') matrix = true;
+      const set = w.id === 'matrix' ? item.guardMatrix : item.guard;
+      drawSprite(ctx, item.shadows.medium, w.gx, w.gy + 6);
+      drawSprite(ctx, set[w.pose > 0 ? 0 : walking], w.gx, w.gy);
+    }
+    // Shopkeeperen: only when the player has the passive. He follows with a little delay (renderer state only).
+    if (!p.passives.some((pa) => pa.id === 'certification')) return;
+    const side = p.dirX < 0 ? -1 : 1;
+    const tx = p.x - side * 16, ty = p.y + 12;
+    if (Math.hypot(this.shopX - tx, this.shopY - ty) > 120) {
+      this.shopX = tx;
+      this.shopY = ty;
+    }
+    this.shopX += (tx - this.shopX) * 0.08;
+    this.shopY += (ty - this.shopY) * 0.08;
+    drawSprite(ctx, item.shadows.small, this.shopX, this.shopY + 6);
+    drawSprite(ctx, (matrix ? item.shopMatrix : item.shop)[walking], this.shopX, this.shopY);
+  }
+
+  /**
+   * The Matrix's code rain: columns of green glyphs falling over the screen while it lasts. Looks only.
+   * With reduced flashing the glyphs do not change while they fall and the rain is fainter.
+   */
+  drawCodeRain(s, dt, kx, ky) {
+    const ctx = this.ctx;
+    const sheet = this.codeGlyphs();
+    const calm = this.settings.fewerFlashes;
+    const cols = this.quality === 2 ? 14 : this.quality === 1 ? 24 : this.rainCols.length;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const fade = Math.min(1, s.rain / 0.5);
+    for (let i = 0; i < cols; i++) {
+      const c = this.rainCols[i];
+      c.y += c.v * dt;
+      if (c.y > VH + 60) {
+        c.y = -20 - this.rng.next() * 80;
+        c.c = this.rng.integer(CODE_CHARS.length);
+      }
+      for (let k = 0; k < 6; k++) {
+        const y = Math.round(c.y - k * (FONT_H + 1));
+        if (y < -FONT_H || y > VH) continue;
+        const g = (c.c * 7 + k * 13 + (calm ? 0 : Math.floor(c.y / 24) * 5)) % CODE_CHARS.length;
+        ctx.globalAlpha = fade * (calm ? 0.35 : 0.75) * (1 - k / 6);
+        ctx.drawImage(sheet, g * 6, k === 0 ? 0 : FONT_H + 1, 6, FONT_H + 1, c.x, y, 6, FONT_H + 1);
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.setTransform(1, 0, 0, 1, -kx, -ky);
   }
 
   /** The player – always drawn above the lawyers, with its own outline. */
@@ -682,9 +916,139 @@ export class Renderer {
         ctx.fillStyle = '#c8ecff';
         ctx.fillRect(s.camera.x, s.camera.y, VB, VH);
         ctx.globalAlpha = 1;
+      } else if (e.type === 'hit' && this.quality < 2 && this.settings.hitNumbers) {
+        this.drawHit(e, f);
+      } else if (e.type === 'ping') {
+        // Ping-pong: a small «PING» or «PONG» that fades quickly
+        ctx.globalAlpha = 1 - f;
+        const c = this.labelCanvas(e.b ? 'PONG' : 'PING');
+        ctx.drawImage(c, Math.round(e.x - c.width / 2), Math.round(e.y - f * 6));
+        ctx.globalAlpha = 1;
+      } else if (e.type === 'fishSplash') {
+        // a herring landed: a few drops of water
+        ctx.globalAlpha = 1 - f;
+        ctx.fillStyle = '#8fd3ff';
+        for (let j = 0; j < 6; j++) {
+          const a = j * 1.047;
+          ctx.fillRect(Math.round(e.x + Math.cos(a) * (3 + f * e.r)), Math.round(e.y + Math.sin(a) * (2 + f * e.r * 0.5) - f * 4), 2, 2);
+        }
+        ctx.globalAlpha = 1;
       }
     }
+    ctx.globalAlpha = 1;
     void now;
+  }
+
+  /**
+   * Frustration bars over the lawyers: shown while a lawyer is damaged and was helped in the last moment,
+   * always on the elites (with their trait as a label). Collected in one pass and filled in two, so the
+   * fill color changes only twice no matter how many bars there are. Hidden at the lowest quality level
+   * (except on the elites).
+   */
+  drawBars(s, n) {
+    const ctx = this.ctx;
+    const sorted = this.sorted;
+    const t = s.time;
+    const showAll = this.quality < 2 && this.settings.bars;
+    if (this.barX.length < n) {
+      this.barX = new Float32Array(n * 2);
+      this.barY = new Float32Array(n * 2);
+      this.barW = new Float32Array(n * 2);
+      this.barF = new Float32Array(n * 2);
+    }
+    let k = 0;
+    ctx.fillStyle = '#1d1626';
+    for (let i = 0; i < n; i++) {
+      const e = sorted[i];
+      if (e.type === 'boss' || e.hp <= 0) continue;
+      // the elites and Frida's friends always show a wide bar
+      const elite = e.elite > 0 || e.type === 'friend';
+      if (!elite && !(showAll && e.hp < e.maxHp && t - e.lastHit < 1.5)) continue;
+      const sheet = this.fig.sheet(e.type, e.variant);
+      const w = elite ? 22 : 12;
+      const x = Math.round(e.x - w / 2), y = Math.round(e.y - sheet.ay - (elite ? 14 : 5));
+      this.barX[k] = x;
+      this.barY[k] = y;
+      this.barW[k] = w;
+      this.barF[k] = Math.max(0, Math.min(1, e.hp / e.maxHp));
+      k++;
+      ctx.fillRect(x - 1, y - 1, w + 2, elite ? 5 : 4);
+      if (elite) {
+        // gold frame and the trait as a small label
+        ctx.fillStyle = '#f5cf3a';
+        ctx.fillRect(x - 1, y - 1, w + 2, 1);
+        ctx.fillRect(x - 1, y + 3, w + 2, 1);
+        ctx.fillStyle = '#1d1626';
+        if (showAll && e.elite > 0) {
+          const c = this.labelCanvas(CONFIG.elites.traits[ELITE_TRAIT[e.elite]].name);
+          ctx.drawImage(c, Math.round(e.x - c.width / 2), y - c.height - 1);
+        }
+      }
+    }
+    ctx.fillStyle = '#5d1a22';
+    for (let i = 0; i < k; i++) ctx.fillRect(this.barX[i], this.barY[i], this.barW[i], 2);
+    ctx.fillStyle = '#e5484d';
+    for (let i = 0; i < k; i++) ctx.fillRect(this.barX[i], this.barY[i], Math.round(this.barW[i] * this.barF[i]), 2);
+  }
+
+  /** Small white label with an outline, cached per text (used for the elite traits). */
+  labelCanvas(text) {
+    let c = this.labelCache.get(text);
+    if (c) return c;
+    c = makeCanvas(textWidth(text) + 2, FONT_H + 2);
+    this.font.draw(ctx2d(c), text, 1, 1, '#ffffff', 1, '#1d1626');
+    this.labelCache.set(text, c);
+    return c;
+  }
+
+  /** Outlined digits 0–9 in one color, 8 pixels per cell (made once per color). */
+  digitSheet(color) {
+    let c = this.digitSheets.get(color);
+    if (c) return c;
+    c = makeCanvas(80, FONT_H + 2);
+    const ctx = ctx2d(c);
+    for (let d = 0; d < 10; d++) this.font.draw(ctx, String(d), d * 8 + 1, 1, color, 1, '#1d1626');
+    this.digitSheets.set(color, c);
+    return c;
+  }
+
+  /** 8 × 8 version of a weapon icon (for the hit numbers), made once per weapon. */
+  smallIcon(index) {
+    let c = this.iconSmall[index];
+    if (c) return c;
+    const id = Object.keys(CONFIG.weapons)[index];
+    c = makeCanvas(8, 8);
+    const ctx = ctx2d(c);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(icon(id), 0, 0, 16, 16, 0, 0, 8, 8);
+    this.iconSmall[index] = c;
+    return c;
+  }
+
+  /**
+   * A hit number: rises and fades, gold when critical, with a tiny icon of the weapon that gave the help
+   * (the icon only at full quality). Digits are copied from a prepared sheet – no text drawing, no strings.
+   */
+  drawHit(e, f) {
+    const ctx = this.ctx;
+    const sheet = this.digitSheet(e.c ? '#ffd740' : '#ffffff');
+    let v = Math.round(e.r);
+    if (v < 1) v = 1;
+    const dig = this.digits;
+    let n = 0;
+    while (v > 0 && n < 8) {
+      dig[n++] = v % 10;
+      v = (v / 10) | 0;
+    }
+    const w = n * 7 - 1;
+    let x = Math.round(e.x - w / 2);
+    const y = Math.round(e.y - f * 14);
+    ctx.globalAlpha = f < 0.55 ? 1 : (1 - f) / 0.45;
+    for (let i = n - 1; i >= 0; i--) {
+      ctx.drawImage(sheet, dig[i] * 8, 0, 8, FONT_H + 2, x, y, 8, FONT_H + 2);
+      x += 7;
+    }
+    if (this.quality === 0 && e.a >= 0) ctx.drawImage(this.smallIcon(e.a), Math.round(e.x - w / 2) - 10, y + 2);
   }
 
   /** Pre-rendered score text («+1000»), cached per text. */
@@ -716,6 +1080,19 @@ export class Renderer {
       ctx.fillStyle = '#e5484d';
       const dx = e.aimX - e.x, dy = e.aimY - e.y, d = Math.hypot(dx, dy) || 1;
       for (let t = 12; t < Math.min(d + 20, 300); t += 6) ctx.fillRect(Math.round(e.x + (dx / d) * t) - 1, Math.round(e.y + (dy / d) * t) - 1, 3, 3);
+      ctx.globalAlpha = 1;
+    }
+    // Frida's «Klikk på lenken!»: a dashed line shows where the hook will fly
+    if (e.tell && e.attack === 'hook') {
+      ctx.globalAlpha = fewerFlashes ? 0.7 : 0.45 + Math.abs(Math.sin(now * 12)) * 0.4;
+      const dx = e.aimX - e.x, dy = e.aimY - (e.y - 26), d = Math.hypot(dx, dy) || 1;
+      const len = Math.min(CONFIG.bosses.frida.hook.range, 300);
+      for (let t = 14; t < len; t += 8) {
+        ctx.fillStyle = '#1d1626';
+        ctx.fillRect(Math.round(e.x + (dx / d) * t) - 2, Math.round(e.y - 26 + (dy / d) * t) - 2, 5, 5);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(Math.round(e.x + (dx / d) * t) - 1, Math.round(e.y - 26 + (dy / d) * t) - 1, 3, 3);
+      }
       ctx.globalAlpha = 1;
     }
     let x = Math.round(e.x - sheet.ax), y = Math.round(e.y - sheet.ay);
@@ -830,17 +1207,21 @@ export class Renderer {
       const label = e.type === 'boss' ? CONFIG.bosses[e.bossType]?.short ?? 'BOSS' : 'HASTESAK';
       this.arrow(e.x - kx, e.y - ky, e.type === 'boss' ? this.spr.arrows.boss : this.spr.arrows.urgentSprite, label, now, null);
     }
-    let best = null, bestD = 1e12;
+    let best = null, bestD = 1e12, pkg = null, pkgD = 1e12;
     for (let i = 0; i < s.pickups.n; i++) {
       const pk = s.pickups.items[i];
-      if (pk.type !== 'drink') continue;
       const d = (pk.x - s.player.x) ** 2 + (pk.y - s.player.y) ** 2;
-      if (d < bestD) {
+      if (pk.type === 'drink' && d < bestD) {
         bestD = d;
         best = pk;
+      } else if (pk.type === 'package' && d < pkgD) {
+        pkgD = d;
+        pkg = pk;
       }
     }
     if (best) this.arrow(best.x - kx, best.y - ky, this.spr.arrows.drink, '', now, this.spr.item.drink);
+    // The nearest supplier package too (gold arrow with the box)
+    if (pkg) this.arrow(pkg.x - kx, pkg.y - ky, this.spr.arrows.urgentSprite, '', now, this.spr.item.package);
   }
 
   arrow(sx, sy, set, text, now, iconSprite) {

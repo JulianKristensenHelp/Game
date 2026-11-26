@@ -13,6 +13,7 @@ import { multiplier } from './score.js';
 import { spawnEnemy, spawnRate, frustrationFactor } from './enemies.js';
 import { icon, iconElement } from './icons.js';
 import { xpNeeded } from './score.js';
+import { MatrixIntro } from './matrixfx.js';
 import * as ui from './ui.js';
 
 const { el } = ui;
@@ -36,11 +37,20 @@ const hudCanvas = /** @type {HTMLCanvasElement} */ (el('hud'));
 const renderer = new Renderer(gameCanvas, settings);
 const hud = new Hud(hudCanvas);
 const input = new Input(window);
+/** The Matrix's introduction (shown over the game while it is paused). */
+const matrixCanvas = /** @type {HTMLCanvasElement} */ (el('matrixFx'));
+const matrixIntro = new MatrixIntro(matrixCanvas, renderer.spr, renderer.font);
+/** Set when The Matrix card was chosen: the animation plays before the game continues. */
+let pendingMatrix = false;
+/** The «Kode-regn» banner is only shown the first time in a shift. */
+let rainShown = false;
 
 /** @type {Game | null} */
 let game = null;
-/** 'start' | 'game' | 'pause' | 'levelUp' | 'settings' | 'ending' | 'gameOver' */
+/** 'start' | 'game' | 'pause' | 'levelUp' | 'package' | 'settings' | 'ending' | 'gameOver' */
 let mode = 'start';
+/** Level-up: «B» was pressed, so the next number banishes a card instead of choosing it. */
+let banishMode = false;
 /** Where the settings were opened from (for «Tilbake» ("Back")). */
 let settingsFrom = 'start';
 let date = dateOslo();
@@ -96,6 +106,11 @@ function fit() {
   gameCanvas.style.height = h + 'px';
   gameCanvas.style.left = x + 'px';
   gameCanvas.style.top = y + 'px';
+  // The Matrix's animation lies exactly over the game, with the same crisp scaling
+  matrixCanvas.style.width = w + 'px';
+  matrixCanvas.style.height = h + 'px';
+  matrixCanvas.style.left = x + 'px';
+  matrixCanvas.style.top = y + 'px';
 
   // UI size
   const v = settings.v.ui;
@@ -153,6 +168,9 @@ function startShift() {  // Today's date in Norwegian time is the seed: everyone
   hud.showFired('');
   hud.intro = null;
   lastTick = -1;
+  rainShown = false;
+  pendingMatrix = false;
+  matrixCanvas.hidden = true;
   acc = 0;
   sent = false;
   stress = null;
@@ -169,6 +187,7 @@ function pause() {
   if (mode !== 'game' || stress) return;
   mode = 'pause';
   input.active = false;
+  if (game) ui.drawStatSheet(game, 'pauseStats');
   ui.showScreen('pause');
 }
 
@@ -198,20 +217,98 @@ function openLevelUp() {
   if (!game) return;
   mode = 'levelUp';
   input.active = false;
+  banishMode = false;
   cardsReady = performance.now() + 350; // prevents picking a card by accident
-  ui.showCards(game, chooseCard);
+  ui.showCards(game, chooseCard, { reroll, banish });
   ui.showScreen('levelUp');
   sound.play('level');
 }
 
 function chooseCard(i) {
   if (!game || mode !== 'levelUp' || performance.now() < cardsReady) return;
+  if (banishMode) {
+    banish(i);
+    return;
+  }
   game.chooseCard(i);
   handleEvents();
+  if (pendingMatrix) {
+    startMatrixIntro();
+    return;
+  }
   if (game.status === 'levelUp') {
     openLevelUp(); // several levels at once
     return;
   }
+  backToGame();
+}
+
+/** The Matrix was chosen: the short animation plays while the game stays paused (the shift's clock does not run). */
+function startMatrixIntro() {
+  pendingMatrix = false;
+  mode = 'matrixIntro';
+  input.active = false;
+  ui.showScreen('');
+  matrixIntro.start(settings.fewerFlashes);
+  matrixCanvas.hidden = false;
+  sound.play('matrix');
+}
+
+/** The animation is over (or skipped with a click or a key): the game continues where it left off. */
+function endMatrixIntro() {
+  if (mode !== 'matrixIntro' || !game) return;
+  matrixCanvas.hidden = true;
+  if (game.status === 'levelUp') {
+    openLevelUp();
+    return;
+  }
+  backToGame();
+}
+
+/** «Nytt utvalg»: new cards (if there are rerolls left). */
+function reroll() {
+  if (!game || mode !== 'levelUp' || performance.now() < cardsReady) return;
+  if (!game.reroll()) return;
+  handleEvents();
+  banishMode = false;
+  ui.showCards(game, chooseCard, { reroll, banish });
+}
+
+/** «Fjern kortet»: card no. i is never offered again this shift. */
+function banish(i) {
+  if (!game || mode !== 'levelUp' || performance.now() < cardsReady) return;
+  banishMode = false;
+  if (!game.banish(i)) {
+    ui.setBanishMode(false);
+    return;
+  }
+  handleEvents();
+  ui.showCards(game, chooseCard, { reroll, banish });
+}
+
+/** The supplier package: shows what was in it until the player continues. */
+function openPackage() {
+  if (!game || !game.packageCards) return;
+  mode = 'package';
+  input.active = false;
+  cardsReady = performance.now() + 300;
+  ui.showPackage(game, closePackage);
+  ui.showScreen('package');
+  sound.play('bonus');
+}
+
+function closePackage() {
+  if (!game || mode !== 'package' || performance.now() < cardsReady) return;
+  game.closePackage();
+  handleEvents();
+  if (game.status === 'levelUp') {
+    openLevelUp();
+    return;
+  }
+  backToGame();
+}
+
+function backToGame() {
   mode = 'game';
   acc = 0;
   input.reset();
@@ -314,6 +411,7 @@ function handleEvents() {
         sound.play('hit');
         renderer.shake = 0.2;
         break;
+      case 'dodge': sound.play('tell'); break;
       case 'multUp': sound.play('multUp'); hud.multEffect(1); break;
       case 'multDown': sound.play('multDown'); hud.multEffect(-1); break;
       case 'phase': hud.showBanner(game.phaseName); break;
@@ -331,15 +429,35 @@ function handleEvents() {
       case 'drinkSpawned': if (game.stat.drinks === 0 && game.time < 60) hud.showBanner('Energidrikk på kartet – følg den grønne pilen!', 'gold', 3500); break;
       case 'newPcFx': sound.play('newPcFx'); hud.showBanner('Ny PC! Alle på skjermen er fornøyde', 'gold'); break;
       case 'upgraded': hud.iconsChanged(); break;
+      case 'reroll': case 'banish': sound.play('click'); break;
+      case 'revive': sound.play('bonus'); hud.showBanner('Sikkerhetskopi gjenopprettet!', 'gold', 2600); break;
+      case 'packageDropped': hud.showBanner('Pakke fra leverandøren! Hent den', 'gold', 3000); break;
+      // Endringsprompt 4
+      case 'pok': sound.play('pok'); break;
+      case 'cookie': sound.play('cookie'); break;
+      case 'friendHappy': sound.play('bonus'); break;
+      case 'baited': sound.play('hit'); hud.showBanner('Lokkemat! Det var svindel', 'boss', 1800); break;
+      case 'hooked': hud.showBanner('Du klikket på lenken!', 'boss', 1400); break;
+      case 'codeRain':
+        if (!rainShown) {
+          rainShown = true;
+          hud.showBanner('Kode-regn: bullet time!', 'gold', 2200);
+        }
+        break;
+      case 'matrix': pendingMatrix = true; break;
       case 'done': sound.play('done'); break;
       default:
         if (name.startsWith('boss:')) {
           // Each boss gets its own introduction (Johan a bigger one, with the portrait and a darker screen)
           const type = name.slice(5);
           const k = CONFIG.bosses[type];
-          sound.play(/** @type {any} */ (type === 'deadline' ? 'boss' : type));
+          sound.play(/** @type {any} */ (type));
           if (type === 'johan') hud.showIntro(renderer.fig.johanPortrait(), k.title, k.line);
           else hud.showBanner(k.intro, 'boss', 4200, k.line);
+        } else if (name.startsWith('bossSoon:')) {
+          const k = CONFIG.bosses[name.slice(9)];
+          sound.play('tell');
+          hud.showBanner(`${k.name} kommer om ${CONFIG.bosses.warnBefore} sekunder`, 'boss', 3000);
         } else if (name.startsWith('bossHappy:')) {
           const type = name.slice(10);
           sound.play('bonus');
@@ -348,6 +466,12 @@ function handleEvents() {
           const id = name.slice(12);
           sound.play('bonus');
           hud.showBanner(`Kombinasjon: ${CONFIG.weapons[id].combination.name}!`, 'gold', 3500);
+        } else if (name.startsWith('event:')) {
+          // Lunch rush, partner meeting, coffee break … (see CONFIG.events)
+          const id = name.slice(6);
+          const k = CONFIG.events.defs[id];
+          sound.play(id === 'serverCrash' || id === 'partnerMeeting' ? 'boss' : 'tell');
+          hud.showBanner(k.name, id === 'serverCrash' || id === 'partnerMeeting' ? 'boss' : id === 'coffeeBreak' || id === 'freeLunch' ? 'gold' : '', 3200, k.text);
         }
     }
   }
@@ -392,6 +516,9 @@ function onFrame(ms) {
     if (game.status === 'levelUp') {
       if (stress) game.chooseCard(0);
       else openLevelUp();
+    } else if (game.status === 'package') {
+      if (stress) game.closePackage();
+      else openPackage();
     } else if (game.status === 'done') {
       // Fired: the game freezes for a moment with «DU HAR FÅTT SPARKEN!» before the end screen
       mode = 'ending';
@@ -409,6 +536,9 @@ function onFrame(ms) {
     }
   } else if (mode === 'start') {
     animTime += dt;
+  } else if (mode === 'matrixIntro') {
+    matrixIntro.draw(dt);
+    if (matrixIntro.done) endMatrixIntro();
   }
   const t1 = performance.now();
 
@@ -516,14 +646,35 @@ settings.onChange((v, changed) => {
   if (changed === '*' || changed === 'gameSize' || changed === 'ui' || changed === 'minimap') fit();
 });
 
+matrixCanvas.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  endMatrixIntro();
+});
+
 window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement && e.target.type === 'text') return;
+  if (mode === 'matrixIntro') {
+    // any key skips The Matrix's animation
+    e.preventDefault();
+    endMatrixIntro();
+    return;
+  }
   if (e.code === 'Escape' || e.code === 'KeyP') {
     if (mode === 'game') pause();
     else if (mode === 'pause') resume();
     else if (mode === 'settings' && e.code === 'Escape') closeSettings();
-  } else if (mode === 'levelUp' && /^(Digit|Numpad)[1-3]$/.test(e.code)) {
+  } else if (mode === 'levelUp' && /^(Digit|Numpad)[1-4]$/.test(e.code)) {
     chooseCard(Number(e.code.slice(-1)) - 1);
+  } else if (mode === 'levelUp' && e.code === 'KeyR') {
+    reroll();
+  } else if (mode === 'levelUp' && e.code === 'KeyB') {
+    if (game && game.banishes > 0) {
+      banishMode = !banishMode;
+      ui.setBanishMode(banishMode);
+    }
+  } else if (mode === 'package' && (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape')) {
+    e.preventDefault();
+    closePackage();
   } else if (mode === 'characterSelect') {
     if (/^(Digit|Numpad)[1-4]$/.test(e.code)) selectCharacter(Number(e.code.slice(-1)) - 1, true);
     else if (e.code === 'ArrowRight' || e.code === 'ArrowDown' || e.code === 'KeyD' || e.code === 'KeyS') { e.preventDefault(); selectCharacter(selectedCharacter + 1, false); /** @type {HTMLElement | null} */ (document.querySelectorAll('.character')[selectedCharacter])?.focus(); }
@@ -559,15 +710,21 @@ function startStressTest() {
   if (!game) return;
   const s = game;
   s.debugSkip(15 * 60 - 1);
-  // The weapons that are heaviest on performance: many projectiles, chains and beams (all as combinations)
-  // The weapons that are heaviest on performance: chains, homing alerts, mini printers and many projectiles (all as combinations)
-  s.debugMaxBuild(['password', 'angel', 'teams', 'toner'], true);
+  // The weapons that are heaviest on performance (all as combinations): chains, many projectiles, the bouncing
+  // balls of Ping of Death (12 at once), and The Matrix (mini printers, firewalls and the code rain with bullet time)
+  s.debugMaxBuild(['password', 'toner', 'pingpong'], true);
+  s.debugMatrixBuild();
   s.debug.immortal = true;
-  // Johan is out during the whole test (with immortality the countdown starts over instead of firing the player)
-  s.debugSpawn('boss');
+  // Fiske-Frida, her friends, the herring rain and the bait are out during the whole test (with immortality the
+  // countdown starts over instead of firing the player)
+  s.debugSpawn('frida');
+  // she must stay out for the whole test (at minute 15 the build would otherwise help her in seconds)
+  if (s.boss) s.boss.hp = s.boss.maxHp = 1e12;
   hud.iconsChanged();
+  handleEvents();
+  pendingMatrix = false;
   stress = { time: 0, frames: 0, minFps: 999, sumFps: 0, measurements: 0, heapStart: heap(), heapMax: heap(), heapEnd: 0, log: [] };
-  console.log('[stresstest] start: minutt 15, 4 våpen med kombinasjoner, maks advokater, 5 minutter');
+  console.log('[stresstest] start: minutt 15, 4 våpen med kombinasjoner (Tofaktor, Kontorprinteren, Ping of Death, The Matrix), Anonymous og venninnene, maks advokater, 5 minutter');
 }
 
 /** The weapons each character builds toward in the boss test (starting weapon first). */
@@ -579,7 +736,7 @@ function startBossTest(n) {
   if (!game) return;
   game.debugBossTest(n, TEST_PLANS[game.character]);
   hud.iconsChanged();
-  console.log(`[bosstest] boss ${n}: ${game.player.weapons.map((w) => w.id + (w.evo ? '*' : ' ' + w.level)).join(', ')}`);
+  console.log(`[bosstest] boss ${n}: ${game.player.weapons.map((w) => w.id + (w.evo ? '*' : '') + ' +' + w.picks).join(', ')}`);
 }
 
 function stressInput() {
@@ -684,6 +841,11 @@ if (DEBUG) {
       for (let n = game.level, i = 0; i < 10; i++) game.xp += xpNeeded(n + i);
       game.checkLevel();
     } else if (d === 'max') game.debugMaxBuild();
+    else if (d === 'matrixBuild') game.debugMatrixBuild();
+    else if (d === 'pingBuild') {
+      game.debugMaxBuild(['pingpong', 'bodyguard'], false, CONFIG.upgrades.combinationAfter);
+      for (let i = 0; i < CONFIG.limits.passiveLevel; i++) game.debugGivePassive('sneakers');
+    }
     else if (d === 'combo') game.debugMaxBuild(game.player.weapons.map((w) => w.id).concat(['powerCycle', 'mouse', 'toner', 'remote']).filter((v, i, a) => a.indexOf(v) === i), true);
     else if (d === 'immortal') {
       game.debug.used = true;
@@ -698,7 +860,9 @@ if (DEBUG) {
     } else game.debugSpawn(d);
     hud.iconsChanged();
     handleEvents();
+    if (pendingMatrix && mode === 'game') startMatrixIntro();
     if (game.status === 'levelUp' && mode === 'game') openLevelUp();
+    if (game.status === 'package' && mode === 'game') openPackage();
   });
   // Make the game available in the console for testing.
   Object.defineProperty(window, 'hds', { get: () => ({ game, CONFIG, mode, renderer, hud, input, settings, perf, startStressTest }) });

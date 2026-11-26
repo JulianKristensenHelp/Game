@@ -14,6 +14,8 @@
   <canvas id="game" aria-label="Spillområde"></canvas>
   <!-- HUD in full screen resolution on top of the game -->
   <canvas id="hud" aria-hidden="true"></canvas>
+  <!-- The Matrix: the short animation when the combination is chosen (the game is paused; click or a key skips it) -->
+  <canvas id="matrixFx" width="640" height="360" aria-label="The Matrix – klikk eller trykk en tast for å hoppe over" hidden></canvas>
 
   <div id="hudButtons" hidden>
     <button id="soundButton" class="round" aria-label="Lyd av/på"></button>
@@ -42,7 +44,7 @@
         </section>
         <section>
           <h2>Oppslagstavle</h2>
-          <p class="muted small">Våpen på nivå 8 + riktig passiv gir en kombinasjon. De du har funnet, henger her.</p>
+          <p class="muted small">Ti oppgraderinger på et våpen + riktig passiv gir en kombinasjon. De du har funnet, henger her.</p>
           <ul id="noticeBoard" class="boardList"></ul>
         </section>
       </div>
@@ -68,20 +70,36 @@
   <!-- Level-up -->
   <div id="levelUp" class="screen" hidden>
     <div class="panel wide transparent">
-      <h2 class="levelTitle">Nivå <span id="newLevel">2</span>! Velg én oppgradering</h2>
+      <h2 class="levelTitle">Nivå <span id="newLevel">2</span>! Velg én oppgradering<span id="levelQueue" class="levelQueue"></span></h2>
       <div id="cards"></div>
-      <p class="light small">Klikk, eller trykk <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></p>
+      <div class="levelActions">
+        <button id="rerollButton" type="button">Nytt utvalg (R)</button>
+        <span id="banishHint" class="light small"></span>
+      </div>
+      <p class="light small">Klikk, eller trykk <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> (<kbd>4</kbd> med Hesteskoen). Grå = vanlig, grønn = uvanlig, blå = sjelden, oransje = legendarisk.</p>
+      <div id="levelStats" class="statSheet"></div>
+    </div>
+  </div>
+
+  <!-- The supplier package -->
+  <div id="package" class="screen" hidden>
+    <div class="panel wide transparent">
+      <h2 class="levelTitle">Pakke fra leverandøren!</h2>
+      <p id="packageText" class="light"></p>
+      <div id="packageCards"></div>
+      <button id="packageContinue" class="large primary" type="button">Fortsett (Enter)</button>
     </div>
   </div>
 
   <!-- Pause -->
   <div id="pause" class="screen" hidden>
-    <div class="panel narrow">
+    <div class="panel wide">
       <h2>Pause</h2>
       <button id="resumeButton" class="large primary">Fortsett</button>
       <button id="pauseSound" class="large">Lyd er av</button>
       <button id="pauseSettings" class="large">Innstillinger</button>
       <button id="quitButton" class="large danger">Avslutt runden</button>
+      <div id="pauseStats" class="statSheet"></div>
     </div>
   </div>
 
@@ -128,6 +146,8 @@
         </fieldset>
         <label class="row"><span>Skjermristing</span><input type="checkbox" id="i-shake" class="toggle"></label>
         <label class="row"><span>Reduserte blinkeffekter</span><input type="checkbox" id="i-blink" class="toggle"></label>
+        <label class="row"><span>Trefftall over advokatene</span><input type="checkbox" id="i-hitNumbers" class="toggle"></label>
+        <label class="row"><span>Frustrasjonsbarer</span><input type="checkbox" id="i-bars" class="toggle"></label>
         <p class="muted small">Alle ser like stort område av kartet, uansett skjerm og spillstørrelse.</p>
       </section>
       <div class="buttonRow">
@@ -151,6 +171,8 @@
         <section>
           <h2>Slik gikk vakta</h2>
           <ul id="stats" class="stats"></ul>
+          <h3>Bygget ditt</h3>
+          <div id="endBuild"></div>
         </section>
         <section>
           <h2>Dagens toppliste</h2>
@@ -183,9 +205,14 @@
       <button data-d="pc">Ny PC</button>
       <button data-d="drink">Drikk</button>
       <button data-d="swarm">+100 advokater</button>
+      <button data-d="elite">Partner</button>
+      <button data-d="package">Pakke</button>
+      <button data-d="cookie">Kjeks</button>
+      <button data-d="matrixBuild">The Matrix-bygg</button>
+      <button data-d="pingBuild">Ping-pong + Livvakt</button>
       <button data-d="boss1">Boss 1: Nørdic</button>
       <button data-d="boss2">Boss 2: Printer</button>
-      <button data-d="boss3">Boss 3: Fristen</button>
+      <button data-d="boss3">Boss 3: Anonymous</button>
       <button data-d="boss4">Boss 4: Johan</button>
       <button data-d="stress" class="important">Stresstest (5 min)</button>
     </div>

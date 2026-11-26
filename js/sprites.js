@@ -90,6 +90,17 @@ function glow(radius, color, strength = 0.75) {
   return { canvas: c, w: s, h: s, ax: radius, ay: radius };
 }
 
+/** A copy of a sprite with every opaque pixel tinted (the red blink on enemy projectiles). Made once, never per frame. */
+function tinted(sp, color) {
+  const c = makeCanvas(sp.w, sp.h);
+  const ctx = ctx2d(c);
+  ctx.drawImage(sp.canvas, 0, 0);
+  ctx.globalCompositeOperation = 'source-atop';
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, sp.w, sp.h);
+  return { canvas: c, w: sp.w, h: sp.h, ax: sp.ax, ay: sp.ay };
+}
+
 /** Semi-transparent ellipse shadow under figures. */
 function shadow(w, h) {
   const c = makeCanvas(w, h);
@@ -257,7 +268,7 @@ function makeObjects() {
     r.rect(6, 8, 2, 2, C.RED);
   });
   /** Skytsengelen: a small, old, bald man with glasses, a cardigan, white wings and a halo. 4 wing frames (+ evo). */
-  const angelDraw = (flap, evo) => (r) => {
+  const angelDraw = (flap, evo, matrix = false) => (r) => {
     const wy = [0, -1, -2, -1][flap];
     // wings (bigger as a combination)
     const ws = evo ? 7 : 5;
@@ -287,9 +298,20 @@ function makeObjects() {
     r.px(11, 7, C.LIGHT_BLUE);
     r.px(10, 7, C.DARKER);
     r.rect(9, 10, 3, 1, C.WOOD);
+    if (matrix) {
+      // The Matrix: a black coat and black sunglasses, and a green halo
+      r.ellipse(10, 2.5, 4, 1.3, C.GREEN);
+      r.ellipse(10, 2.5, 2.4, 0.5, 0);
+      r.rect(7, 11, 7, 8, C.NEAR_BLACK);
+      r.rect(10, 11, 1, 3, C.DARKER);
+      r.rect(8, 7, 5, 2, C.NEAR_BLACK);
+      r.px(8, 7, C.GREEN);
+      r.px(11, 7, C.GREEN);
+    }
   };
   const angel = [0, 1, 2, 3].map((f) => make(22, 21, 11, 11, angelDraw(f, false)));
   const angelEvo = [0, 1, 2, 3].map((f) => make(22, 21, 11, 11, angelDraw(f, true)));
+  const angelMatrix = [0, 1, 2, 3].map((f) => make(22, 21, 11, 11, angelDraw(f, false, true)));
   /** Mini printer on small legs, standing still. Frame 1: printing (the lamp is green and the paper tray is pushed up). */
   const miniDraw = (feed, evo) => (r) => {
     r.rect(2, 3, 11, 7, evo ? C.GOLD_L : C.NEAR_WHITE);
@@ -309,10 +331,215 @@ function makeObjects() {
     r.rect(2, 5, 2, 1, C.LIGHT_GRAY2);
   });
 
-  return {
+  // ----- Endringsprompt 4 -----
+  /** The Matrix's mini printer: black with green lamps and a green paper tray. */
+  const miniMatrix = [0, 1].map((feed) => make(15, 14, 7, 9, (r) => {
+    r.rect(2, 3, 11, 7, C.NEAR_BLACK);
+    r.rect(11, 3, 2, 7, C.DARKER);
+    r.rect(4, feed ? 0 : 1, 7, feed ? 4 : 3, C.LIGHT_GREEN);
+    r.rect(4, 5, 5, 2, C.GREEN);
+    r.px(10, 5, C.LIGHT_GREEN);
+    r.rect(3, 8, 9, 1, C.DARK_GREEN);
+    r.rect(4, 10, 2, 3, C.DARK_GRAY);
+    r.rect(9, 10, 2, 3, C.DARK_GRAY);
+  }));
+  const sheetMatrix = make(7, 8, 3, 4, (r) => {
+    r.rect(1, 1, 5, 6, C.LIGHT_GREEN);
+    r.rect(2, 2, 1, 1, C.DARK_GREEN);
+    r.rect(4, 3, 1, 2, C.DARK_GREEN);
+    r.rect(2, 5, 1, 1, C.DARK_GREEN);
+  });
+  /** Ping-pong ball: white with an orange stripe, 4 spin frames; Ping of Death: red-hot. */
+  const ballDraw = (spin, evo) => (r) => {
+    r.ball(4, 4, 3.5, 3.5, evo ? C.RED : C.NEAR_WHITE, evo ? C.DARK_RED : C.LIGHT_GRAY2, evo ? C.ORANGE : C.WHITE);
+    const sx = [2, 3, 4, 5][spin];
+    r.rect(sx, 2, 1, 4, evo ? C.YELLOW : C.ORANGE);
+  };
+  const ball = [0, 1, 2, 3].map((f) => make(9, 9, 4, 4, ballDraw(f, false)));
+  const ballEvo = [0, 1, 2, 3].map((f) => make(9, 9, 4, 4, ballDraw(f, true)));
+  /** Firewall flames: 3 frames, orange (Livvakten) and green (The Matrix). No outline – they glow. */
+  const flameDraw = (f, green) => (r) => {
+    const h = [8, 10, 9][f], o = [0, 1, -1][f];
+    const outer = green ? C.GREEN : C.ORANGE, mid = green ? C.LIGHT_GREEN : C.YELLOW, core = green ? C.WHITE : C.GOLD_L;
+    for (let y = 0; y < h; y++) {
+      const w = Math.max(1, Math.round(3.2 * Math.sin(((y + 1) / (h + 1)) * Math.PI * 0.9)));
+      const x0 = 4 - w + (y < h / 2 ? o : 0);
+      r.rect(x0, 11 - y, w * 2, 1, outer);
+      if (w > 1 && y > 0) r.rect(x0 + 1, 11 - y, w * 2 - 2, 1, mid);
+      if (w > 2 && y > 1 && y < h - 2) r.rect(x0 + 2, 11 - y, w * 2 - 4, 1, core);
+    }
+  };
+  const flame = [0, 1, 2].map((f) => make(9, 12, 4, 11, flameDraw(f, false), false));
+  const flameGreen = [0, 1, 2].map((f) => make(9, 12, 4, 11, flameDraw(f, true), false));
+  /** Small glyphs that drift up from the firewall: a padlock, a one and a zero. */
+  const lockSmall = make(5, 6, 2, 3, (r) => r.stamp('.###. .#.#. ##### ##.## #####', 0, 1, { '#': C.GOLD_L }), false);
+  const one = make(3, 5, 1, 2, (r) => r.stamp('.#. ##. .#. .#. ###', 0, 0, { '#': C.GOLD_L }), false);
+  const zero = make(3, 5, 1, 2, (r) => r.stamp('### #.# #.# #.# ###', 0, 0, { '#': C.GOLD_L }), false);
+  const oneGreen = make(3, 5, 1, 2, (r) => r.stamp('.#. ##. .#. .#. ###', 0, 0, { '#': C.LIGHT_GREEN }), false);
+  const zeroGreen = make(3, 5, 1, 2, (r) => r.stamp('### #.# #.# #.# ###', 0, 0, { '#': C.LIGHT_GREEN }), false);
+
+  /**
+   * Livvakten: a big, calm bodyguard (about 24 × 28) in a black suit, white shirt, sunglasses and an earpiece with a
+   * spiral cord. Kind face (a small smile). frame: 0/1 = walk bob, matrix = a long black coat instead of the jacket.
+   */
+  const guardDraw = (bob, matrix) => (r) => {
+    const y = bob;
+    // legs and shoes
+    r.rect(8, 22 + y, 3, 4 - y, C.NEAR_BLACK);
+    r.rect(13, 22 + y, 3, 4 - y, C.NEAR_BLACK);
+    r.rect(7, 26, 4, 2, C.DARKER);
+    r.rect(13, 26, 4, 2, C.DARKER);
+    // body: broad shoulders, black suit (or the long coat), white shirt, black tie
+    r.rect(5, 12 + y, 14, 11, C.NEAR_BLACK);
+    r.rect(4, 13 + y, 16, 9, C.NEAR_BLACK);
+    r.rect(5, 12 + y, 1, 10, C.DARKER);
+    if (matrix) {
+      r.rect(4, 21 + y, 16, 5 - y, C.NEAR_BLACK);
+      r.rect(11, 21 + y, 2, 5 - y, C.DARKER);
+    }
+    r.rect(10, 12 + y, 4, 6, C.WHITE);
+    r.rect(11, 13 + y, 2, 5, C.NEAR_BLACK);
+    // hands
+    r.rect(3, 20 + y, 2, 2, C.POT_M);
+    r.rect(19, 20 + y, 2, 2, C.POT_M);
+    // head: short dark hair, sunglasses, a calm small smile
+    r.ellipse(12, 7 + y, 5, 5.2, C.POT_M);
+    r.rect(7, 2 + y, 10, 3, C.NEAR_BLACK);
+    r.rect(7, 4 + y, 1, 2, C.NEAR_BLACK);
+    r.rect(16, 4 + y, 1, 2, C.NEAR_BLACK);
+    r.rect(8, 6 + y, 8, 2, C.NEAR_BLACK);
+    r.rect(8, 6 + y, 3, 1, matrix ? C.GREEN : C.DARK_GRAY);
+    r.rect(13, 6 + y, 3, 1, matrix ? C.GREEN : C.DARK_GRAY);
+    r.rect(10, 10 + y, 4, 1, C.POT);
+    // earpiece and the spiral cord down to the collar
+    r.px(16, 8 + y, C.LIGHT_GRAY);
+    for (let k = 0; k < 4; k++) r.px(17 - (k & 1), 9 + y + k, C.LIGHT_GRAY);
+  };
+  const guard = [0, 1].map((f) => make(24, 30, 12, 22, guardDraw(f, false)));
+  const guardMatrix = [0, 1].map((f) => make(24, 30, 12, 22, guardDraw(f, true)));
+
+  /**
+   * Shopkeeperen: a friendly shop assistant (about 20 × 24) in a black sweater with a big white «A» on the chest.
+   * matrix = a black coat and sunglasses.
+   */
+  const shopDraw = (bob, matrix) => (r) => {
+    const y = bob;
+    r.rect(6, 19 + y, 3, 3 - y, C.DARK_SLATE);
+    r.rect(11, 19 + y, 3, 3 - y, C.DARK_SLATE);
+    r.rect(5, 22, 4, 1, C.DARKER);
+    r.rect(11, 22, 4, 1, C.DARKER);
+    // the black sweater (a coat in The Matrix) with the big white «A»
+    r.rect(4, 11 + y, 12, 9, C.NEAR_BLACK);
+    r.rect(3, 12 + y, 14, 6, C.NEAR_BLACK);
+    if (matrix) r.rect(3, 18 + y, 14, 4 - y, C.NEAR_BLACK);
+    r.stamp('.##. #..# #..# #### #..#', 8, 12 + y, { '#': C.WHITE });
+    r.rect(2, 16 + y, 2, 2, C.WOOD_L);
+    r.rect(16, 16 + y, 2, 2, C.WOOD_L);
+    // head: curly auburn hair, a big smile
+    r.ellipse(10, 6 + y, 4.6, 4.8, C.WOOD_L);
+    r.ellipse(10, 2.5 + y, 5, 2.6, C.POT);
+    r.px(5, 5 + y, C.POT);
+    r.px(15, 5 + y, C.POT);
+    if (matrix) {
+      r.rect(6, 5 + y, 8, 2, C.NEAR_BLACK);
+      r.rect(7, 5 + y, 2, 1, C.GREEN);
+      r.rect(11, 5 + y, 2, 1, C.GREEN);
+    } else {
+      r.px(8, 6 + y, C.NEAR_BLACK);
+      r.px(12, 6 + y, C.NEAR_BLACK);
+    }
+    r.rect(8, 9 + y, 5, 1, C.DARK_RED);
+    r.px(7, 8 + y, C.DARK_RED);
+    r.px(13, 8 + y, C.DARK_RED);
+  };
+  const shop = [0, 1].map((f) => make(20, 24, 10, 17, shopDraw(f, false)));
+  const shopMatrix = [0, 1].map((f) => make(20, 24, 10, 17, shopDraw(f, true)));
+
+  /** Helsekjeks: a small round cookie (10 × 10) with chocolate chips. */
+  const cookie = make(12, 12, 6, 6, (r) => {
+    r.ball(6, 6, 4.6, 4.6, C.WOOD, C.WOOD_M, C.WOOD_L);
+    for (const [x, y] of [[4, 4], [7, 3], [8, 7], [4, 8], [6, 6]]) r.px(x, y, C.BROWN);
+    r.px(5, 4, C.BROWN);
+  });
+
+  /** A tiny fish hook (part of Frida's bait and her cast). */
+  const hookDraw = (r, x, y, c) => {
+    r.rect(x + 2, y, 1, 4, c);
+    r.px(x + 1, y + 4, c);
+    r.px(x, y + 3, c);
+    r.px(x, y + 2, c);
+  };
+  /** Frida's bait: the energy drink in a slightly wrong (yellower) green, with a fish hook hanging off it. */
+  const fakeDrink = make(14, 18, 6, 10, (r) => {
+    r.rect(3, 1, 6, 1, C.GRAY);
+    r.rect(2, 2, 8, 2, C.LIGHT_GRAY);
+    r.rect(2, 4, 8, 11, C.LEAF_L);
+    r.rect(8, 4, 2, 11, C.LEAF);
+    r.rect(2, 4, 1, 11, C.LIGHT_GREEN);
+    r.rect(2, 15, 8, 2, C.LIGHT_GRAY);
+    r.stamp('..#. .##. ##.. .### ..#. .#..', 4, 6, { '#': C.GOLD_L });
+    hookDraw(r, 10, 9, C.GRAY);
+  });
+  /** Frida's bait: a «Ny PC» with a slightly wrong (purple-tinted) screen and a fish hook. */
+  const fakePc = make(20, 16, 9, 9, (r) => {
+    r.rect(1, 1, 16, 11, C.DARKER);
+    r.rect(2, 2, 14, 9, C.ICE_BLUE);
+    r.rect(2, 2, 14, 2, C.PINK);
+    r.rect(12, 6, 4, 5, C.PURPLE);
+    r.stamp('..#.. .###. ##### .###. ..#..', 4, 4, { '#': C.WHITE });
+    r.rect(7, 12, 4, 2, C.DARK_GRAY);
+    r.rect(4, 14, 10, 1, C.DARKER);
+    hookDraw(r, 16, 8, C.GRAY);
+  });
+
+  // Fiske-Frida's projectiles
+  /** The fish hook she casts (the line is drawn by the renderer). */
+  const fishHook = make(8, 9, 4, 4, (r) => {
+    r.rect(4, 0, 1, 6, C.LIGHT_GRAY);
+    r.rect(1, 6, 4, 1, C.LIGHT_GRAY);
+    r.rect(1, 4, 1, 2, C.LIGHT_GRAY);
+    r.px(2, 3, C.LIGHT_GRAY);
+    r.rect(4, 0, 2, 1, C.RED);
+  });
+  /** A herring (silver with a blue back), falling head first. */
+  const herring = make(7, 14, 3, 7, (r) => {
+    r.ellipse(3.5, 7, 2.2, 5.2, C.LIGHT_GRAY);
+    r.rect(2, 3, 1, 8, C.SLATE);
+    r.px(3, 10, C.NEAR_BLACK);
+    r.stamp('#.# .#.', 2, 0, { '#': C.SLATE });
+  });
+  /** A fish-shaped email: an envelope body with a tail and an eye, swimming. */
+  const fishMail = make(16, 10, 8, 5, (r) => {
+    r.ellipse(7, 5, 5.5, 3.5, C.WHITE);
+    r.stamp('#.. ##. ### ##. #..', 12, 3, { '#': C.LIGHT_BLUE });
+    for (let i = 0; i < 4; i++) r.px(3 + i, 3 + Math.floor(i * 0.6), C.LIGHT_GRAY2);
+    r.px(3, 4, C.NEAR_BLACK);
+    r.rect(6, 5, 3, 2, C.RED);
+  });
+
+  /** «Pakke fra leverandøren»: a cardboard box with tape, a label and a gold sticker. */
+  const pkg = make(16, 14, 8, 8, (r) => {
+    r.rect(1, 3, 14, 10, C.WOOD);
+    r.rect(1, 3, 14, 3, C.WOOD_L);
+    r.rect(1, 12, 14, 1, C.WOOD_M);
+    r.rect(7, 3, 2, 10, C.BEIGE);
+    r.rect(2, 8, 4, 3, C.WHITE);
+    r.rect(3, 9, 2, 1, C.GRAY);
+    r.stamp('.#. ### .#.', 10, 8, { '#': C.GOLD });
+  });
+  const items = {
+    package: pkg,
+    packageGlow: glow(18, '#ff9f43', 0.75),
     note, ticketShot: ticketShot(11, 8), ticketSmall: ticketShot(7, 5), cartridge, puddle, sheet, calendar,
     angel, angelEvo, mini, miniEvo, sheetSmall,
     angelGlow: glow(14, '#fff2a8', 0.55),
+    // Endringsprompt 4
+    angelMatrix, miniMatrix, sheetMatrix, ball, ballEvo, flame, flameGreen, lockSmall, one, zero, oneGreen, zeroGreen,
+    guard, guardMatrix, shop, shopMatrix, cookie, fakeDrink, fakePc, fishHook, herring, fishMail,
+    cookieGlow: glow(10, '#ffd59a', 0.55),
+    fakeGlow: glow(15, '#c8f05c', 0.5),
+    matrixGlow: glow(14, '#2fd06a', 0.5),
+    ballGlow: glow(8, '#ff6a3a', 0.6),
     email,
     emailGlow: glow(10, '#ff4d5a', 0.7),
     exclaim: make(7, 11, 3, 10, (r) => {
@@ -358,8 +585,18 @@ function makeObjects() {
       }
     }, false)),
     power: make(9, 9, 4, 4, (r) => r.stamp('...#... .#.#.#. #..#..# #..#..# #.....# .#...#. ..###..', 1, 1, { '#': C.WHITE })),
+    /** Small gold crown over the elites («Partnere»). */
+    crown: make(11, 8, 5, 8, (r) => r.stamp('#...#...# #...#...# ##.###.## ######### ooooooooo #########', 1, 1, { '#': C.GOLD, o: C.GOLD_M })),
     shadows: { small: shadow(14, 5), medium: shadow(18, 6), large: shadow(22, 7), boss: shadow(44, 12), player: shadow(18, 6) },
   };
+  // Red-tinted copies of every enemy projectile that can hurt: they blink between the two, so they are easy to spot.
+  const RED = 'rgba(255, 48, 48, 0.8)';
+  items.red = {
+    email: tinted(items.email, RED), ticket: tinted(items.ticketShot, RED), ticketSmall: tinted(items.ticketSmall, RED),
+    paper: tinted(items.sheet, RED), calendar: tinted(items.calendar, RED), cartridge: items.cartridge.map((c) => tinted(c, RED)),
+    fishHook: tinted(items.fishHook, RED), herring: tinted(items.herring, RED), fishMail: tinted(items.fishMail, RED),
+  };
+  return items;
 }
 
 // ---------- Office decor ----------

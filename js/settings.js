@@ -14,6 +14,8 @@ const KEY = 'hds_innstillinger';
  * @property {'off'|'small'|'large'} minimap
  * @property {boolean} shake screen shake
  * @property {boolean} fewerFlashes reduced flash effects
+ * @property {boolean} hitNumbers show the hit numbers over the lawyers
+ * @property {boolean} bars show the frustration bars over the lawyers
  */
 
 /** Keys and values saved by older versions, before the code was translated to English. */
@@ -47,6 +49,8 @@ export function defaults() {
     minimap: 'small',
     shake: !reduceMotion(),
     fewerFlashes: reduceMotion(),
+    hitNumbers: true,
+    bars: true,
   };
 }
 
@@ -99,5 +103,11 @@ export class Settings {
   }
   get fewerFlashes() {
     return this.v.fewerFlashes;
+  }
+  get hitNumbers() {
+    return this.v.hitNumbers;
+  }
+  get bars() {
+    return this.v.bars;
   }
 }

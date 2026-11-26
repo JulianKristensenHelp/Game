@@ -12,7 +12,7 @@ export function makeEffect() {
 
 /**
  * Starts an effect.
- * @param {string} type 'glad' | 'puls' | 'sprut' | 'sving' | 'flash' | 'poff' | 'tekst' | 'nypc' | 'drikk'
+ * @param {string} type 'happy' | 'pulse' | 'splash' | 'swing' | 'flash' | 'poof' | 'text' | 'newPcFx' | 'hit' …
  * @param {number} dur duration in seconds
  * @param {number} [r] size
  * @param {number} [a] angle or other number
@@ -41,6 +41,9 @@ export function updateEffects(s, dt) {
   for (let i = f.n - 1; i >= 0; i--) {
     const e = f.items[i];
     e.t += dt;
-    if (e.t >= e.dur) f.removeAt(i);
+    if (e.t >= e.dur) {
+      if (e.type === 'hit') s.hitCount--;
+      f.removeAt(i);
+    }
   }
 }

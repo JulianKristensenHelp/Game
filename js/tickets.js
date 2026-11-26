@@ -2,8 +2,9 @@
 // Tickets (points + experience) and pickups (energy drink on the map, Ny PC).
 import { CONFIG } from './config.js';
 import { givePoints } from './score.js';
-import { drink } from './player.js';
+import { drink, damagePlayer } from './player.js';
 import { newPc } from './enemies.js';
+import { effect } from './effects.js';
 import { INSIDE } from './map.js';
 
 const L = CONFIG.tickets;
@@ -14,7 +15,7 @@ export function makeTicket() {
 }
 
 export function makePickup() {
-  return { x: 0, y: 0, type: 'drink', age: 0 };
+  return { x: 0, y: 0, type: 'drink', age: 0, count: 0 };
 }
 
 /** Drops a ticket where the lawyer stood. */
@@ -28,13 +29,18 @@ export function dropTicket(s, x, y, value) {
   if (s.tickets.n > L.max) merge(s);
 }
 
-/** @param {'drink'|'pc'} type */
-export function dropPickup(s, type, x, y) {
+/**
+ * @param {'drink'|'pc'|'package'|'cookie'|'fakeDrink'|'fakePc'} type cookie = «Helsekjeks», fake… = Fiske-Frida's bait
+ * @param {number} [count] for a package: how many weapon increments it holds
+ */
+export function dropPickup(s, type, x, y, count = 0) {
   const k = s.pickups.acquire();
   k.x = Math.min(INSIDE.x1 - 10, Math.max(INSIDE.x0 + 10, x));
   k.y = Math.min(INSIDE.y1 - 10, Math.max(INSIDE.y0 + 10, y));
   k.type = type;
   k.age = 0;
+  k.count = count;
+  if (type === 'package') s.events.push('packageDropped');
 }
 
 /** Reused lookup for merging (avoids new objects). */
@@ -119,7 +125,8 @@ export function updateTickets(s, dt) {
         l.dragged = true;
       } else {
         l.age += dt;
-        if (l.age >= L.lifetime) {
+        // «Post-it-blokk»: the tickets stay longer
+        if (l.age >= L.lifetime + p.mod.ticketLife) {
           s.stat.ticketsLost++;
           f.removeAt(i);
         }
@@ -142,15 +149,47 @@ export function updateTickets(s, dt) {
   }
 
   const k = s.pickups;
+  const CK = CONFIG.cookie;
   for (let i = k.n - 1; i >= 0; i--) {
     const pk = k.items[i];
     pk.age += dt;
-    const dx = p.x - pk.x, dy = p.y - pk.y, rr = p.r + 10;
+    // The cookie only lies for a while (like the tickets)
+    if (pk.type === 'cookie' && pk.age >= CK.lifetime) {
+      k.removeAt(i);
+      continue;
+    }
+    // The cookie is picked up with the same radius as the tickets, everything else when the player walks over it
+    const rr = pk.type === 'cookie' ? R : p.r + 10;
+    const dx = p.x - pk.x, dy = p.y - pk.y;
     if (dx * dx + dy * dy < rr * rr) {
-      const type = pk.type;
+      const type = pk.type, count = pk.count;
       k.removeAt(i);
       if (type === 'drink') drink(s);
+      else if (type === 'package') s.openPackage(count);
+      else if (type === 'cookie') eatCookie(s, pk.x, pk.y);
+      else if (type === 'fakeDrink' || type === 'fakePc') baited(s, pk.x, pk.y);
       else newPc(s);
     }
   }
+}
+
+/** «Helsekjeks»: a little energy, no sugar rush. */
+function eatCookie(s, x, y) {
+  const p = s.player;
+  p.energy = Math.min(p.maxEnergy, p.energy + CONFIG.cookie.fill);
+  s.stat.cookies++;
+  effect(s, 'text', x, y - 12, 0.9, 0, 0, 0, false, '+' + CONFIG.cookie.fill);
+  s.events.push('cookie');
+}
+
+/** Fiske-Frida's «Lokkemat»: the player took the bait – a little damage and slowed for a while. */
+function baited(s, x, y) {
+  const K = CONFIG.bosses.frida.bait, p = s.player;
+  p.invulnerable = 0;
+  damagePlayer(s, K.damage * (1 + CONFIG.scaling.damagePerMin * (s.time / 60)));
+  p.slow = K.slowTime;
+  p.slowBy = K.slow;
+  s.stat.baited++;
+  effect(s, 'text', x, y - 14, 1.1, 0, 0, 0, false, 'Svindel!');
+  s.events.push('baited');
 }

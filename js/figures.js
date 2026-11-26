@@ -6,6 +6,10 @@ import { CONFIG } from './config.js';
 import { Raster, ramp, hex, toCanvas } from './pixel.js';
 import { Rng } from './utils.js';
 import { drawJohan, drawJohanPortrait, JOHAN_PALETTE } from './johan.js';
+import { drawFrida, drawFriend, FRIDA_PALETTE } from './frida.js';
+
+/** Figures drawn with their own material palette (coloured outlines), in the style of the client's pixel art. */
+const OWN_PALETTE = ['johan', 'frida', 'friend'];
 
 /** Color indices. Numbers with _S/_L are the shadow (+1) and light (+2) of the same color. */
 const I = {
@@ -62,6 +66,9 @@ export const TYPES = {
   nordic: { w: 64, h: 64, rx: 12, ry: 12, kb: 30, kh: 17, legs: 10, shoes: 4, arm: 7, k: 2, item: 'laptop', clothes: 'polo', margin: 3 },
   /** Boss 2: Multifunksjonsmonsteret (the multifunction monster) – a big printer on small legs (drawn separately). */
   printerBoss: { w: 64, h: 64, rx: 0, ry: 0, kb: 52, kh: 34, legs: 7, shoes: 3, arm: 0, k: 2, item: 'none', clothes: 'none', margin: 3 },
+  /** Boss 3: Fiske-Frida (drawn in js/frida.js, 64 × 64) and her two friends (32 × 40). */
+  frida: { w: 64, h: 64, rx: 12, ry: 12, kb: 30, kh: 16, legs: 6, shoes: 3, arm: 6, k: 2, item: 'none', clothes: 'none', margin: 2 },
+  friend: { w: 32, h: 40, rx: 7, ry: 7, kb: 14, kh: 10, legs: 5, shoes: 2, arm: 3, k: 1, item: 'none', clothes: 'none', margin: 2 },
 };
 
 /** Extra frames for the bosses (after the normal walk/flash/happy frames): attack poses and the disappointed look. */
@@ -74,6 +81,9 @@ export const TILE = { walk: 0, blink: 4, happy: 8, left: 9, count: 18 };
 export function anchor(type) {
   // Johan (js/johan.js): the middle of the body, with the feet on row 61
   if (type === 'johan') return { ax: 32, ay: 44 };
+  // Frida's feet are on row 61 like Johan's; the friends' on row 37
+  if (type === 'frida') return { ax: 32, ay: 44 };
+  if (type === 'friend') return { ax: 16, ay: 26 };
   const T = TYPES[type];
   const bottom = T.h - T.margin;
   const legsTop = bottom - T.shoes - T.legs + 1;
@@ -191,6 +201,7 @@ function tinyText(r, text, x, y, c) {
 
 function palette(v, type) {
   if (type === 'johan') return JOHAN_PALETTE.slice();
+  if (type === 'frida' || type === 'friend') return FRIDA_PALETTE.slice();
   /** @type {(number[] | null)[]} */
   const p = new Array(48).fill(null);
   const set = (i, color) => {
@@ -854,6 +865,10 @@ function drawAny(type, v, frame, mirror = false) {
     const r = drawJohan(frame, v.johanVariant);
     return mirror ? r.mirrored() : r;
   }
+  if (type === 'frida' || type === 'friend') {
+    const r = type === 'frida' ? drawFrida(frame) : drawFriend(frame, v.friendVariant);
+    return mirror ? r.mirrored() : r;
+  }
   return type === 'printerBoss' ? drawPrinterBoss(frame, mirror) : drawFigure(/** @type {any} */ (type), v, frame, mirror);
 }
 
@@ -885,6 +900,8 @@ export class Figures {
     this.variants.johan = JOHAN;
     this.variants.nordic = NORDIC;
     this.variants.printerBoss = PRINTER_BOSS;
+    this.variants.frida = [{ fridaVariant: 0 }];
+    this.variants.friend = [{ friendVariant: 0 }, { friendVariant: 1 }];
     /** @type {Map<number | string, HTMLCanvasElement>} */
     this.portraits = new Map();
     /** Pose frames for the bosses. @type {Map<string, Sheet>} */
@@ -937,7 +954,7 @@ export class Figures {
     }
     const { ax, ay } = anchor(type);
     const pal = palette(v, type);
-    const lightPal = pal.map((f, i) => (f && (type === 'johan' || i !== I.OUT) ? f.map((c) => Math.round(c + (255 - c) * 0.6)) : f));
+    const lightPal = pal.map((f, i) => (f && (OWN_PALETTE.includes(type) || i !== I.OUT) ? f.map((c) => Math.round(c + (255 - c) * 0.6)) : f));
     // Merge normal and flash into one strip (the flash columns use the light palette)
     const W = T.w * TILE.count;
     for (let i = 0; i < blinkStrip.d.length; i++) if (blinkStrip.d[i]) strip.d[i] = 0;
@@ -1073,7 +1090,7 @@ export class Figures {
       strip.lim(leftFacing(type, v, 5 + p, r), (p + POSE.count) * T.w, 0);
     }
     const pal = palette(v, type);
-    const lightPal = pal.map((f, i) => (f && (type === 'johan' || i !== I.OUT) ? f.map((c) => Math.round(c + (255 - c) * 0.6)) : f));
+    const lightPal = pal.map((f, i) => (f && (OWN_PALETTE.includes(type) || i !== I.OUT) ? f.map((c) => Math.round(c + (255 - c) * 0.6)) : f));
     const canvas = document.createElement('canvas');
     canvas.width = strip.w;
     canvas.height = T.h * 2;
@@ -1099,7 +1116,7 @@ export class Figures {
       this.queue = [];
       for (const type of Object.keys(this.variants)) for (let v = 0; v < this.variants[type].length; v++) this.queue.push([type, v]);
       // The bosses' poses too
-      for (const type of ['nordic', 'printerBoss', 'boss', 'johan']) for (let v = 0; v < this.variants[type].length; v++) this.queue.push(['pose:' + type, v]);
+      for (const type of ['nordic', 'printerBoss', 'boss', 'johan', 'frida', 'friend']) for (let v = 0; v < this.variants[type].length; v++) this.queue.push(['pose:' + type, v]);
     }
     while (count-- > 0 && this.queue.length) {
       const [type, v] = /** @type {[string, number]} */ (this.queue.shift());

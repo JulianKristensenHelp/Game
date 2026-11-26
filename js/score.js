@@ -21,7 +21,8 @@ export function multText(value) {
  * @returns {number} the points that were given
  */
 export function givePoints(s, basis) {
-  const p = Math.round(basis * multiplier(s));
+  // «Bonusordning»: more points from everything
+  const p = Math.round(basis * multiplier(s) * s.player.mod.points);
   s.score += p;
   return p;
 }

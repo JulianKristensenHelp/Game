@@ -56,6 +56,8 @@ Menyen «Innstillinger» nås fra startskjermen og pausemenyen. Alt lagres lokal
 | Minikart | Av, Liten, Stor | Liten |
 | Skjermristing | av/på | på |
 | Reduserte blinkeffekter | av/på | på hvis nettleseren melder «redusert bevegelse» |
+| Trefftall over advokatene | av/på | på |
+| Frustrasjonsbarer | av/på | på (partnerne har bar uansett) |
 
 Uansett spillstørrelse og skjerm ser alle nøyaktig like stort område av kartet (640 × 360 piksler).
 Er skjermen ikke 16:9, fylles kantene med en rolig ramme. «Tilbakestill til standard» setter alt tilbake.
@@ -76,40 +78,245 @@ hvert innslag i topplisten (portrett ved navnet). Topplisten er felles for alle 
 - **Navn og tittel** står i js/config.js under CONFIG.characters (Odyssefs, Johannes, Jin og Julian, alle med
   tittelen «IT-avdelingen»). Der står også startvåpen og bonus.
 - **Utseendet** er oppdragsgivers egne pikselbilder i `assets/karakterer/` (figur 32 × 32 og portrett 64 × 64 per
-  karakter). De brukes piksel for piksel og tegnes alltid med heltallsskalering uten utglatting. Hvilken fil som hører
-  til hvilken karakter, står i CONFIG.characters (`sprite` og `portrait`): person4 = Odyssefs, person3 = Johannes,
-  person1 = Jin og person2 = Julian (koblet etter utseende).
-- **Gangsyklusen** lages i koden fra den stående figuren: bare beina og føttene (rad 27–30) endres, og figuren dupper
-  én piksel. Hode og overkropp er uendret. Blink ved treff legges oppå som en hvit silhuett.
-- På topplisten brukes den lille 32 × 32-figuren i stedet for et nedskalert portrett.
+  karakter), brukt piksel for piksel: aldri tegnet om, fargejustert eller skalert med et ikke-heltall. Hvilken fil som
+  hører til hvilken karakter, står i `sprite` og `portrait` i CONFIG.characters (person4 = Odyssefs, person3 =
+  Johannes, person1 = Jin, person2 = Julian). Gangsyklusen (4 bilder) flytter bare beina og føttene og gir et hopp
+  på én piksel; hode og overkropp er identiske med originalen. Venstre er speilet, og blink, sukkerkick og skjold
+  legges oppå bildet. Topplisten bruker 32 × 32-figuren.
 - **Forhåndsvisning til godkjenning:** <http://localhost:3000/?debug=karakterer> viser alle fire med portrett,
-  stående figur, animert gangsyklus, navn, tittel, startvåpen og bonus, og Johan under.
+  stående figur, animert gangsyklus og gangbilde 2 og 4, og dessuten Johan og Anonymous med venninnene.
 - Bildene av personene er bare brukt som forelegg. De ligger ikke i prosjektet og publiseres ikke.
 
 ## Våpen, passive og kombinasjoner
 
-Det finnes 11 IT-løsninger (maks 4 samtidig) og 12 passive (maks 6 samtidig). Hvert våpen på nivå 8 pluss
-riktig passiv gir en kombinasjon. Disse er nye eller endret i versjon 3 og 4:
+Det finnes 13 IT-løsninger (maks 4 samtidig), spesialkombinasjonen The Matrix og 28 passive (maks 8 samtidig).
+**Våpnene har ikke nivåer** (versjon 6):
+hvert kort ved nivåopp gir én bestemt oppgradering på ett våpen – mer hjelp, kortere intervall, én mus eller
+tonerkassett til, lengre rekkevidde – og et våpen kan ta så mange oppgraderinger du rekker. Kortet viser tallet før
+og etter («+1 mus (3 → 4)», «Kortere tid mellom aktiveringer (1,2 s → 1,08 s)»). Reglene står i `growth` på hvert
+våpen i `CONFIG.weapons`: `pct` = andel av grunntallet per steg (hjelp vokser lineært, uten tak), `add` = fast
+tillegg, `mul` = ganging (intervall, med gulv), og `max` = tak. **Antall** (mus, kassetter, hopp, treff) har alltid
+et tak – det er taket som holder spillet raskt på en kontor-PC.
+
+**Kortene har fire nivåer (sjeldenhet):** grå = vanlig (1 steg), grønn = uvanlig (2 steg), blå = sjelden (3 steg,
+og det er her effektene kommer), oransje = legendarisk (5 steg, eller to effektnivåer). Sjansene er 68/23/7/2 %, og
+«Hesteskoen» ganger alt over vanlig med 1 + flaks. Nye våpen er alltid uvanlige, passive alltid vanlige.
+
+**Effektene** (sjeldne kort, maks 3–5 nivåer per våpen, `CONFIG.upgrades.effects`): Gjennomtrengende (prosjektilet
+går videre til én advokat til – Toner-kast og Teams-varsel), Sprut (35 % hjelp til naboene), Venter på IT (20 %
+saktere i 2 sekunder), Saken ligger i køen (30 % av hjelpen én gang til etter et sekund), Avvist (skyver
+advokaten bakover), Ekstra kaffe (+8 % kritisk sjanse for det våpenet), Purring (advokater som treffes tar 10 % mer
+hjelp fra alt i 3 sekunder), Eskalering (+15 % hjelp mot partnere og bosser) og Innkalling (treff drar advokaten
+3 piksler mot deg – bare våpen med rekkevidde, så de kommer inn i musering og puls). Hvilke effekter et våpen kan
+få, står i `effects` på våpenet.
+
+**Flere regler per våpen (versjon 6.1):** Skru av og på kan få større dytt (kombinasjonen), Passord-reset raskere
+hopp, HDMI-kabelen bredere bue, Fjernstyring lengre rekkevidde, Trådløse mus og Ctrl+Alt+Del kortere pause per
+advokat, Oppdateringsstrålen tettere takt, Teams-varsel skarpere styring og Skytsengelen kortere tid mellom papirarkene.
+Hjelp-kort kommer 2,5 ganger så ofte som andre regler på et våpen, og antall-kort 1,5 ganger, så byggen ikke
+drukner i småregler (`CONFIG.upgrades.weight`).
+
+**Nytt utvalg og Fjern kortet:** du starter med ett av hvert, og hver hjulpet boss gir ett til. «Nytt utvalg» (R)
+gir tre nye kort. «✕» på et kort (eller B og tallet) fjerner det for resten av vakta, og et nytt kort tar plassen.
+
+**Pakke fra leverandøren:** hver hjulpet boss legger igjen en pakke (3 oppgraderinger, Johan 5), og en hjulpet
+partner gjør det i 2,5 % av tilfellene (1 oppgradering). Pakkene inneholder bare våpenoppgraderinger, minst
+uvanlige, og trekkes fra sin egen tilfeldighetsstrøm. Partnerne legger dessuten igjen 1–5 ticket-lapper.
+
+**Alle våpen sikter på nærmeste advokat** (puls og mus er områdevåpen og trenger ikke sikte). Toner-kast, HDMI-kabelen,
+Oppdateringsstrålen og Fjernstyring gikk tidligere etter gangretningen eller tilfeldige advokater.
+
+**Kombinasjon:** et våpen med 10 oppgraderinger pluss riktig passiv gir en kombinasjon. Kombinasjonen er et nytt
+utgangspunkt (tydelig sterkere enn våpenet med de ti oppgraderingene), og oppgraderingene du tar etterpå vokser
+videre fra den. Effektene beholdes. Disse er nye eller endret i versjon 3 og 4:
 
 | Våpen | + Passiv | = Kombinasjon |
 | --- | --- | --- |
-| Passord-reset (kjede: hopper fra advokat til advokat, 3–10 hopp) | Raskere SSD | Tofaktor (to kjeder i hver sin retning, 16 hopp hver) |
+| Passord-reset (kjede: hopper fra advokat til advokat) | Raskere SSD | Tofaktor (to kjeder i hver sin retning) |
 | Ctrl+Z (bumerang mot nærmeste advokat) | Hurtigtaster | Ctrl+Alt+Del |
-| Oppdateringsstrålen (stråle i gangretningen) | Sertifisering | Tvungen oppdatering |
-| Teams-varsel (målsøkende varsler mot hver sin advokat) | Dobbel skjerm | Allmøte på Teams (hvert varsel deler seg i tre) |
+| Oppdateringsstrålen (stråle i gangretningen) | Shopkeeperen | Tvungen oppdatering |
+| Teams-varsel (målsøkende varsler mot hver sin advokat) | Dobbel skjerm | Allmøte på Teams (hvert varsel deler seg i to) |
 | Støydempende headset (skjold som blokkerer ett treff) | Ergonomisk stol | Hjemmekontor |
-| Skytsengelen (kaster mini-printere som står stille og skyter papirark) | Større boks | Himmelsk serviceavtale |
+| Skytsengelen (kaster mini-printere) | Større boks | Himmelsk serviceavtale |
+| Ping-pong (ball som spretter mot skjermkantene) | Joggesko | Ping of Death (ballen deler seg ved hvert sprett) |
+| Livvakten (brannmur mellom deg og flokken) | – | Del av The Matrix |
 
-Tallene står i CONFIG.weapons og CONFIG.newWeapons. «Dobbel skjerm» bruker en egen tilfeldighetsstrøm, så
-samme valg gir samme runde for alle. Skytsengelens mini-printere fungerer som molotov: de lander der advokaten stod,
-står helt stille og skyter et papirark mot nærmeste advokat innenfor rekkevidden (60 piksler, 69 fra nivå 5) hvert
-0,3. sekund, i 4 sekunder (5 fra nivå 5). Taket på antall samtidig er fast og likt for alle (2, 4 eller 6, og 10 som
-kombinasjon).
+Tallene står i CONFIG.weapons. «Dobbel skjerm» bruker en egen tilfeldighetsstrøm, så samme valg gir samme runde
+for alle. Skytsengelen har et fast tak på antall mini-printere samtidig (maks 12), likt for alle.
+
+### Skytsengelens mini-printere (endringsprompt 4)
+
+Mini-printerne fungerer som molotov i survivors-spill: Skytsengelen kaster dem i en bue mot nærmeste advokat, de
+lander der advokaten stod, og står helt stille. Derfra skyter de et papirark mot nærmeste advokat innenfor
+rekkevidden (60 piksler) hvert 0,3. sekund, og etter ca. 4 sekunder forsvinner de i en liten papirsky. Landingen har
+et lite hopp og en støvsky, arkene mates ut mens de skyter, og en svak sirkel på gulvet viser rekkevidden.
+Himmelsk serviceavtale avslutter fortsatt med papirkonfetti. Oppgraderingene følger reglene fra versjon 6: `life`
+(lenger levetid), `range` (+15 % rekkevidde per steg) og `burst` (kortere tid mellom arkene). Hjelpen er justert så
+våpenet er like sterkt som før målt med `tools/measure-weapons.js`.
+
+### Ping-pong (endringsprompt 4)
+
+Det eneste våpenet som spretter mot kantene av skjermbildet (og ytterveggene) og blir sterkere for hvert sprett.
+Ballen slenges ut i en tilfeldig skrå retning fra sin egen strøm i «Dagens vakt», går gjennom advokatene og hjelper
+alle den treffer (samme ball kan treffe samme advokat maks hvert 0,5. sekund). Hvert sprett gjør ballen 6 % raskere
+og gir +10 % hjelp, opp til et tak (+60 % fra start). Annethvert sprett vises en liten «PING» eller «PONG» (og en
+«pok» når lyden er på), men bare når det er få baller. Ballen forsvinner etter et fast antall sprett.
+Oppgraderingene følger tabellen i endringsprompten som vekstregler: +hjelp, +2 sprett, +1 ball (maks 4), raskere
+baller og høyere tak på hjelpeøkningen. **Ping of Death** (+ Joggesko): hver gang en ball spretter, deler den seg i
+to (maks 12 baller), og ballene etterlater et kort glødende spor. Tallene står i `CONFIG.weapons.pingpong`.
+
+### Livvakten (endringsprompt 4)
+
+En stor, rolig livvakt i svart dress, solbriller og ørepropp med spiralledning går ved siden av spilleren. Med jevne
+mellomrom stiller han seg opp og lager en **brannmur**: en rett linje av animerte flammer 30 piksler fra spilleren,
+på tvers av retningen der flest advokater er (de tetteste flokkene telles i åtte sektorer). Brannmuren står i ca.
+3 sekunder. Advokater i den får hjelp hvert kvarte sekund og går 30 % saktere. Den blokkerer ingenting og skader
+aldri spilleren. Små hengelåser, enere og nuller stiger opp fra gløden. Oppgraderingene: +hjelp, lengre brannmur,
+kortere tid mellom, står lenger, sterkere sinking og flere brannmurer samtidig (maks 3, mot de tetteste flokkene).
+Livvakten har ingen vanlig kombinasjon. Tallene står i `CONFIG.weapons.bodyguard`.
+
+### Shopkeeperen (tidligere Sertifisering)
+
+Samme effekt som før (+8 % erfaring fra ticket-lapper per nivå, maks nivå 5), men nytt navn og nytt ikon: en
+hyggelig butikkmedarbeider i svart genser med en stor hvit «A». Når du har ham, står han som en liten figur ved
+siden av deg og følger etter (bare pynt). Tvungen oppdatering krever nå Oppdateringsstrålen + Shopkeeperen.
+
+### The Matrix (spesialkombinasjon)
+
+Når du har **Skytsengelen med 10 oppgraderinger (eller Himmelsk serviceavtale), Livvakten med 10 oppgraderinger og
+Shopkeeperen**, tilbys The Matrix som et eget kort med grønn kode-ramme ved neste nivåopp, også om en vanlig
+kombinasjon tilbys samtidig. Velger du det:
+
+- Skytsengelen og Livvakten slås sammen til ett våpen, så én våpenplass blir ledig. Shopkeeperen beholdes.
+- En kort animasjon (ca. 2,5 sekunder) spilles mens spillet står på pause: skjermen blir mørk og grønne tegn regner
+  ned, de tre dukker opp og tar på seg solbriller én etter én, og «THE MATRIX» skrives ut bokstav for bokstav.
+  Klikk eller en tast hopper over. Med reduserte blinkeffekter er regnet roligere og uten flimring.
+- Engelen kaster grønne mini-printere og livvakten lager grønne brannmurer, sterkere enn før. Alle tre står rundt
+  deg i svarte frakker og solbriller.
+- **Kode-regn:** hvert 12. sekund faller grønne tegn over skjermen i 3 sekunder og hjelper alle advokater på
+  skjermen litt. Samtidig er det **bullet time**: alle advokater, bosser og fiendeprosjektiler går 50 % saktere, mens
+  du beveger deg som normalt. Bossenes nedtelling går som vanlig.
+- The Matrix vises på oppslagstavla med egen grønn ramme når den er låst opp, og på slutt-skjermen.
+
+Navnet «The Matrix» og den grønne kode-regn-stilen er brukt, men ikke filmens logo, skrifttype, figurer eller
+bilder: tegnene er spillets egen pikselfont. Tallene står i `CONFIG.weapons.matrix`.
+
+### Nivå 9 og våpen uten nivåer
+
+Endringsprompt 4 ber om maks våpennivå 9 og at kombinasjoner krever nivå 9. I versjon 6 har våpnene ikke lenger
+nivåer (hvert kort gir én oppgradering, uten tak), og en kombinasjon krever 10 oppgraderinger – altså allerede
+senere enn «nivå 9». Det systemet er beholdt uendret, se ENDRINGSLOGG.md (konflikter).
+
+### Helsekjeks
+
+Vanlige advokater (ikke bosser, Anonymous' venninner, partnere eller hastesaker) legger av og til igjen en liten kjeks
+med sjokoladebiter når de blir glade: ca. 1 av 100, fra drop-strømmen i «Dagens vakt». Den gir 5 energi (ingen
+sukkerkick), ligger i 10 sekunder og blinker de siste 3, plukkes opp med samme radius som ticket-lappene, har en
+svak, varm glød og vises ikke på minikartet. Maks 6 samtidig. Tallene står i `CONFIG.cookie`. Energidrikken på
+kartet er uendret og fortsatt den viktigste kilden til energi.
+
+### Gjenstandene (versjon 6.1)
+
+| Passiv | Per nivå (maks 5) |
+| --- | --- |
+| Sikkerhetskopi | Overlever ett dødelig treff per vakt (maks 3), får halv energi tilbake og 2 sekunder usårbarhet |
+| Takknemlige advokater | +0,04 energi for hver advokat du hjelper |
+| Post-it-blokk | Ticket-lappene ligger 2 sekunder lenger |
+| Bonusordning | +10 % poeng fra lapper, hastesaker og bosser |
+| Termos | Energidrikken gir +10 energi, og sukkerkicket varer 2 sekunder lenger |
+| Vaktmester | −15 % treghet fra papirbunker, blekk og ventemusikk (maks 75 %) |
+
+Tallene står i `CONFIG.itemPassives`. Alle 28 passive har nå eget ikon (de seks fra versjon 5 manglet ikon).
+
+### Klassepassive (versjon 6)
+
+Hvert våpen har en klasse (`tag`): prosjektil (Toner-kast, Ctrl+Z, Teams-varsel, Ping-pong), kjede (Passord-reset,
+Fjernstyring), område (Skru av og på, Trådløse mus, HDMI-kabelen, Oppdateringsstrålen) og hjelper (Skytsengelen,
+Livvakten, The Matrix, Støydempende headset). Fire passive gir +15 % hjelp per nivå for én klasse: Kastekurs, Nettverkssertifisering,
+Åpent landskap og Sommervikar. Tallene står i `CONFIG.tagPassives`.
+
+### De seks nye passive (versjon 5)
+
+| Passiv | Per nivå (maks 5) |
+| --- | --- |
+| Kaffemaskin | +5 % kritisk sjanse. Et kritisk treff gir 1,5 × hjelp (gult tall) |
+| Mekanisk tastatur | +25 % hjelp fra kritiske treff |
+| Overtid | +15 % hjelp på alle våpen, men −4 % bevegelseshastighet |
+| Hev-senk-pult | +0,35 energi per sekund |
+| Brannmur | +6 % sjanse for å unngå et treff helt (maks 30 %), «Unngikk!» vises |
+| Hesteskoen (erstatter Kontorlotteriet) | +25 % flaks (sjeldnere kort oftere) og +12 % sjanse for et fjerde kort |
+
+Kritiske treff og unnvikelse bruker egne tilfeldighetsstrømmer («Dagens vakt»), så de er like for alle.
+**Kortene ved nivåopp** vektes (`CONFIG.upgrades.weight`): oppgraderinger til våpen du har, kommer oftest, så
+passive du har, så nye våpen og nye passive. Mens du har færre enn to våpen, kommer nye våpen 2,5 ganger så ofte.
+
+### Dine tall ved nivåopp
+
+Under kortene står alle tallene som passive og karakter påvirker: hjelp (og hjelp per klasse), kritisk sjanse og
+kritisk hjelp, tid mellom aktiveringer, område, prosjektilfart, varighet, ekstra prosjektiler, dobbel aktivering,
+maks energi, regenerering, skadereduksjon, unnvikelse, bevegelse, plukkradius, erfaring, flaks, sjansen for et
+fjerde kort og hvor mange nye utvalg og fjerninger du har igjen. Så kommer **hvert våpen** med alle tallene sine
+(hjelp per treff med alle bonuser, intervall, antall, rekkevidde …), antall oppgraderinger, hvor langt det er til
+kombinasjonen, og effektene det har. På små skjermer (under 640 piksler høye) skjules arket.
+
+### Frustrasjonsbar og trefftall
+
+- Hver advokat får en liten rød bar over hodet når den er skadet og nylig ble hjulpet (1,5 sekunder). Bossene har sin
+  egen bar som før.
+- Hvert treff viser et tall som stiger og blekner, med et lite ikon av våpenet som ga hjelpen. Tallet er hele
+  treffet, også det som var mer enn advokaten trengte. Kritiske treff er gule.
+  Treff på samme advokat innen et kvart sekund slås sammen til ett voksende tall, og det er maks 120 tall samtidig.
+- Alt dette er ren grafikk og påvirker aldri spillet. Automatisk kvalitet skrur av ikonene først (middels), og
+  tall og barer helt (lav). Partnerne beholder baren uansett.
+
+## Partnere (eliter)
+
+Fra minutt 5 kan en vanlig advokat komme inn som **partner**: gullkrone, bred frustrasjonsbar som alltid vises,
+6 × frustrasjon, 1,6 × skade, litt tregere og 12 × poeng på lappen. Sjansen starter på 1 % per advokat og øker
+med 0,6 prosentpoeng per minutt (maks 8 %), og det er maks 4 partnere samtidig. Hver har én egenskap (navnet står
+over baren):
+
+| Egenskap | Hva den gjør |
+| --- | --- |
+| Partner-aura | Andre advokater innen 70 piksler tar bare halv hjelp. En gul ring viser rekkevidden |
+| Delegerer | Når partneren er hjulpet, kommer tre juniorfullmektiger ut av den |
+| Har hastverk | Hvert 4. sekund: «!» i et halvt sekund, så et spurt mot der du står |
+
+Tallene står i `CONFIG.elites`. Knappen «Partner» i debug-panelet setter ut én.
 
 **«Haster!»-avsenderen** (fra 2:30) holder seg 150–200 piksler unna og sender e-poster mot der spilleren
 står. Laptopen lyser og et «!» vises 0,5 sekunder før hvert skudd. Maks 15 % av advokatene og maks 30 samtidig,
 og maks 60 fiendeprosjektiler på kartet (e-poster og alle bossangrep til sammen).
 Tallene står i CONFIG.sender og CONFIG.enemyShots.
+
+## Småting som gjør vakta bedre (versjon 6.1)
+
+- **Nivåkø:** når flere nivåer kommer på én gang (pakke, gratis lunsj), står det «(2 nivåer til etter dette)» i
+  overskriften, så du vet at flere kort kommer.
+- **Boss-varsel:** 10 sekunder før hver boss kommer et banner («Nørdic-konsulenten kommer om 10 sekunder»), så
+  du kan plassere deg (`bosses.warnBefore`).
+- **Lappemagnet:** ved nivåopp og når en pakke åpnes, flyr alle lapper innen 140 piksler til deg, så pausen aldri
+  koster lapper (`levelMagnet`).
+- **Bygget ditt** står som brikker på slutt-skjermen, og pausemenyen viser hele «Dine tall».
+- **Innstillinger** for trefftall og frustrasjonsbarer (av/på).
+
+## Hendelser (versjon 6)
+
+Vanskeligheten stiger **lineært**: frustrasjonen er 1 + 0,15 × (minutter − 3) fram til overtid (12:30), der den
+stiger bratt. Variasjonen fra vakt til vakt kommer fra hendelsene, som vises som banner:
+
+| Hendelse | Når | Hva |
+| --- | --- | --- |
+| Lunsjrush! | 2:30, 7:30, 12:30 | En flokk juniorfullmektiger (24 + 3 per minutt) fra én kant |
+| Printerkø! | 4:30, 9:30, 14:30 | En flokk printerentusiaster (8 + 1 per minutt) |
+| Partnermøte! | 7:30, 13:30 | Tre partnere på én gang |
+| Kaffepause | sjelden, fra minutt 2 (6 % per minutt) | Advokatene går halvparten så fort i 12 sekunder |
+| Gratis lunsj! | sjelden, fra minutt 3 (5 % per minutt) | 30 ticket-lapper rundt deg |
+| Serverkrasj! | sjelden, fra minutt 5 (5 % per minutt) | Alle er 35 % raskere og gjør 50 % mer skade i 15 sekunder |
+
+De faste hendelsene venter mens en boss er ute, og det er alltid minst 25 sekunder mellom to hendelser. De sjeldne
+trekkes én gang i minuttet fra sin egen strøm i «Dagens vakt», så de er like for alle samme dag, men ulike fra dag
+til dag. Alt står i `CONFIG.events`.
 
 ## Bossene
 
@@ -121,7 +328,7 @@ sier hvilken boss det var. Poengene kan likevel sendes inn, og topplisten viser 
 | --- | --- | --- | --- |
 | 3:00 | Nørdic-konsulenten | 120 s | Ventemusikk i en ring (sinker), ticket som deler seg i tre, «Vi ringer deg tilbake» (kan ikke hjelpes i 3 s) |
 | 6:00 | Multifunksjonsmonsteret | 120 s | CMYK-patroner som blir blekkdammer, utskriftsjobb på 400 sider, papirstopp (dobbel hjelp i 3 s) |
-| 9:00 | «Fristen er om 2 minutter!» | 120 s | En vifte med tre e-poster |
+| 9:00 | Anonymous og venninnene | 120 s | «Klikk på lenken!» (fiskekrok som drar deg mot henne), silderegn, videresendt svindel-e-post (fra venninnene), lokkemat |
 | 12:00 | Johan (siste boss) | 150 s | Spurt, kalenderinvitasjoner, «Alle på møte!», og fra halv frustrasjon også de tidligere bossenes angrep |
 | 15:00, 18:00 … | Johan igjen | 150 s | Sterkere for hver gang |
 
@@ -131,9 +338,27 @@ sier hvilken boss det var. Poengene kan likevel sendes inn, og topplisten viser 
 - Mens en boss er ute, kommer det færre vanlige advokater (55 %). En boss som er langt unna, jogger for å ta deg igjen.
 - **Navn, replikker og alle tall** står i CONFIG.bosses i js/config.js (`intro`, `line`, `happyText`, Johans
   `title` og `phaseText` er plassholdere som kan endres fritt).
-- **Utseendet** står i js/figures.js: NORDIC (konsulenten) og drawPrinterBoss (printeren). Johan står i js/johan.js,
-  tegnet i samme stil som oppdragsgivers bilder av de fire karakterene (samme pikseltetthet, fargede omriss og myk
-  skyggelegging). Nørdic er et oppdiktet firma med egen logo (krøllparenteser rundt en N) i skoggrønt og lime.
+- **Utseendet** står i js/figures.js (NORDIC for konsulenten, drawPrinterBoss for printeren), js/johan.js (Johan,
+  figur og portrett) og js/frida.js (Anonymous og venninnene). Johan og Anonymous er tegnet i samme stil som
+  oppdragsgivers karakterbilder: 1 piksel detalj, fargede omriss og myk skyggelegging med lys fra venstre. Nørdic er
+  et oppdiktet firma med egen logo (krøllparenteser rundt en N) i skoggrønt og lime.
+
+**Anonymous og venninnene (boss 3):** en hjertelig bestemor (64 × 64) med grått hår i knute, briller i kjede,
+strikket cardigan, håndveske og fiskestang, og to mindre venninner (32 × 40) i egne strikkeklær med mobiltelefon.
+Vitsen er at hun er lurt, ikke at hun er dum. Venninnene har hver sin frustrasjon (15 % av Anonymous') og gir ekstra
+poeng hvis de hjelpes hver for seg, men det er Anonymous som må hjelpes. Når hun blir glad, blir venninnene også glade,
+og hun sier «Oi, var det svindel? Takk, vennen!».
+
+| Angrep | Varsling | Hva skjer |
+| --- | --- | --- |
+| «Klikk på lenken!» | Anonymous svinger stanga over hodet, en stiplet linje viser retningen | Kroken kastes i en rett linje. Treff gir vanlig skade og drar deg 48 piksler mot henne |
+| Silderegn | Små skygger på gulvet (én der du står) | Sild faller på skyggene etter 1 sekund |
+| Videresendt svindel-e-post | Venninnene løfter mobilen og får «!» | Fiskeformede e-poster svømmer i en bølgete linje mot deg |
+| Lokkemat | Ingen tydelig varsling – det er poenget | Falsk energidrikk eller falsk «Ny PC» med en liten fiskekrok. Gir litt skade og sinker i 2 sekunder |
+
+Lokkematen kan avsløres: litt feil farge (gulere grønn boks, rosa skjerm), en synlig fiskekrok, en annen, ujevn
+blink (kjapp dobbeltblink i stedet for den rolige pulsen) og et stivere hopp. Den vises aldri på minikartet, det er
+maks 3 samtidig, og de forsvinner når Anonymous er hjulpet. Alt står i `CONFIG.bosses.frida`.
 - **Bildet av Johan** er bare brukt som forelegg. Det ligger ikke i prosjektet og publiseres ikke.
 - **Test en boss direkte:** <http://localhost:3000/?debug=boss1> til `?debug=boss4` hopper rett til boss 1–4 med
   et typisk bygg for tidspunktet (knappene «Boss 1–4» i debug-panelet gjør det samme).
@@ -146,10 +371,14 @@ siden på nytt. De viktigste:
 | Vil du … | Endre |
 | --- | --- |
 | gjøre starten lettere/vanskeligere | `spawn.rate` (de første punktene), `scaling.startAfterMin` |
-| gjøre midtspillet lettere/vanskeligere | `scaling.frustrationGrowthPerMin`, `spawn.rate` |
-| flytte «veggen» for de beste (nå ca. 15 min) | `scaling.overtimeFromMin` (13), `overtimeGrowthPerMin`, `overtimeSpeedPerMin` |
+| gjøre midtspillet lettere/vanskeligere | `scaling.frustrationPerMin` (lineær, +15 prosentpoeng per minutt), `spawn.rate` |
+| flytte «veggen» for de beste (nå ca. 15–17 min) | `scaling.overtimeFromMin` (12,5), `overtimeGrowthPerMin`, `overtimeSpeedPerMin` |
+| endre hendelsene (lunsjrush, partnermøte, kaffepause …) | `events` (når, hvor ofte, sjanse, størrelse) |
+| endre kortnivåene, effektene, nytt utvalg og pakkene | `upgrades`, `package`, `eliteDrops` |
 | gi raskere/tregere nivåopp | `level` (`base`, `perLevel`, `square`) |
-| endre et våpen | `weapons.<id>.levels` (én linje per nivå) og `combination.stats` |
+| endre et våpen | `weapons.<id>.base` (start), `weapons.<id>.growth` (ett kort = ett steg av én regel), `effects` og `combination.stats` |
+| endre partnerne (eliter) | `elites` (fra når, sjanse, maks samtidig, styrke, egenskaper) |
+| endre de nye passive | `statPassives`, `tagPassives` og `critMult` |
 | endre hastesaken | `enemies.urgent` |
 | endre bossene (navn, replikker, frustrasjon, angrep, nedtelling) | `bosses` |
 | endre energidrikken | `energyDrink` (first, interval, max, minDistance) |
@@ -163,19 +392,16 @@ og om runden endte med sparken. Den sjekker også at to like runder gir nøyakti
 «Dobbel skjerm»), og at utseendet på advokatene ikke påvirker spillet.
 
 `node tools/simulate.js x 25 --statistikk` kjører 10 dager × 4 karakterer for de gode robotene og skriver ut median,
-spredning og hvor mange som fikk sparken. Med tallene som ligger inne nå:
+spredning og hvor mange som fikk sparken (`--detaljer` lister alle tidene). Med tallene som ligger inne nå (versjon 7,
+se ENDRINGSLOGG.md for tabellen) har ekspertrobotene median rundt 11 minutter, en fjerdedel ryker før 7 minutter, og
+veggen i overtid tar de beste mellom 15 og 17 minutter. `--utennye` holder Ping-pong og Livvakten utenfor kortene
+(da er medianen rundt 14 – robotene får sjeldnere de våpnene de planlegger rundt), og `--utenkjeks` slår av kjeksen. Det er med vilje: fra Johan og
+utover er det byggen og flaksen med kortene som avgjør. `--utenpartnere`, `--utenbosser` og `--utenhendelser` viser
+hvor mye partnerne, bossene og hendelsene bidrar. Robotene ser ikke varslene slik et menneske gjør, så de får mer
+skade enn en oppmerksom spiller, men de bygger også dårligere. Prøvespill gjerne med noen kolleger.
 
-| Robot | Median | 25–75 % | Lengst | Sparket |
-| --- | --- | --- | --- | --- |
-| God, bygger bevisst | 9,0 min | 6,4–12,1 min | 14,7 min | 2 av 40 |
-| Ekspert | 10,5 min | 6,0–13,6 min | 15,5 min | 3 av 40 |
-
-Uten bosser (`--utenbosser`) er tallene 9,6 og 12,4 minutter, så bossene gjør det bare litt vanskeligere. Robotene
-ser ikke varslene slik et menneske gjør, så de får mer skade fra bossene enn en oppmerksom spiller. Robotene
-svinger mye fra runde til runde og er ikke mennesker. Prøvespill gjerne med noen kolleger.
-
-**Sammenlign våpen og kombinasjoner:** `node tools/measure-weapons.js` måler hjelp per sekund for alle 11 våpen
-på nivå 8 og som kombinasjon under like forhold. I debug-modus viser overlegget det samme i spillet
+**Sammenlign våpen og kombinasjoner:** `node tools/measure-weapons.js [antall] [våpen,våpen]` måler hjelp per sekund for alle 13
+våpen (The Matrix står på Livvaktens rad) med 16 oppgraderinger jevnt fordelt (uten effekter) og som kombinasjon under like forhold. I debug-modus viser overlegget det samme i spillet
 (hjelp per sekund per våpen, siste 10 sekunder).
 
 ## Slik endrer du kartet
@@ -215,12 +441,14 @@ Legg til `?debug` i adressen: <http://localhost:3000/?debug>. (`?debug=karaktere
 - minnebruk (i Chrome/Edge), automatisk kvalitetsnivå, inn per sekund og frustrasjonsfaktor
 - hjelp per sekund for hvert våpen spilleren har (siste 10 sekunder)
 
-Knappene lar deg hoppe 1 eller 3 minutter frem, gå opp ett eller ti nivåer, få fire våpen på maks nivå
+Knappene lar deg hoppe 1 eller 3 minutter frem, gå opp ett eller ti nivåer, få fire våpen med 16 oppgraderinger
 («Maks bygg») og gjøre dem om til kombinasjoner, slå på udødelighet, og sette ut boss, hastesak, Ny PC,
-energidrikk eller 100 ekstra advokater.
+energidrikk, en partner, en pakke fra leverandøren, en helsekjeks eller 100 ekstra advokater. «The Matrix-bygg»
+gir The Matrix med en gang (med animasjonen), og «Ping-pong + Livvakt» gir begge med 10 oppgraderinger og Joggesko.
 
-**Stresstest (5 min):** starter på minutt 15 med fire våpen som kombinasjoner (Allmøte på Teams, Ctrl+Alt+Del,
-Tvungen oppdatering og Kontorprinteren fra helvete), holder antall advokater på taket (400, med opptil 30 avsendere) og kjører i 5 minutter uten at du kan dø. Den logger FPS, tid per bilde og
+**Stresstest (5 min):** starter på minutt 15 med fire våpen som kombinasjoner (Tofaktor, Kontorprinteren fra
+helvete, Ping of Death og The Matrix), med Anonymous og venninnene ute hele tiden, holder antall advokater på
+taket (400) og kjører i 5 minutter uten at du kan dø. Den logger FPS, tid per bilde og
 minnebruk hvert 30. sekund i konsollen (F12) og viser resultatet i overlegget til slutt.
 Legg til `&utenGPU` (`?debug&utenGPU`) for å tvinge all tegning over på prosessoren – slik en kontor-PC
 uten grafikkortstøtte tegner. Det er verste fall for ytelsen.
@@ -240,11 +468,16 @@ Runder der debug-knappene er brukt, kan ikke sendes inn til topplisten.
 | `js/renderer.js` | Spillverdenen i pixel art (640 × 360) |
 | `js/hud.js` | HUD og minikart |
 | `js/figures.js`, `js/sprites.js`, `js/icons.js`, `js/pixel.js`, `js/pixelfont.js` | Grafikken |
+| `js/johan.js`, `js/frida.js` | Johan og Anonymous med venninnene, i stilen til karakterbildene |
+| `js/matrixfx.js` | Animasjonen når The Matrix velges |
+| `assets/karakterer/` | Oppdragsgivers pikselbilder av de fire karakterene (figur og portrett) |
 | `js/settings.js`, `js/sound.js`, `js/input.js` | Innstillinger, lyd (Web Audio) og tastatur/touch |
 | `js/ui.js`, `js/main.js` | Menyer, hovedløkka, automatisk kvalitet, debug og stresstest |
 | `js/leaderboard.js`, `server/server.js` | Toppliste-klient og Node-server med SQLite |
 | `tools/simulate.js`, `tools/measure-weapons.js`, `tools/build-font.js`, `tools/node.ps1` | Balansetest, våpenmåling, font-generator og hjelpeskript |
 
 **Dagens vakt:** all tilfeldighet kommer fra en seedet generator (mulberry32) med dagens dato i norsk tid
-som seed, i separate strømmer: når advokater kommer, hvor de kommer inn, hastesak/boss, oppgraderingskort,
-Ny PC-drops, energidrikkens plassering, Fjernstyring, «Dobbel skjerm» og utseende. `Math.random()` brukes ikke.
+som seed, i separate strømmer: når advokater kommer (og om de er partnere), hvor de kommer inn, hastesak/boss,
+oppgraderingskort (og kortnivåene), Ny PC-drops, helsekjeks og partnernes lapper, energidrikkens plassering,
+«Dobbel skjerm», kritiske treff, unnvikelse, pakkene fra leverandøren, hendelsene, retningen på pingpongballene og
+utseende. Anonymous' silderegn og lokkemat bruker hastesak/boss-strømmen. `Math.random()` brukes ikke.

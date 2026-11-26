@@ -60,6 +60,21 @@ export const CONFIG = {
     wallMargin: 48,
   },
 
+  /**
+   * «Helsekjeks» (Endringsprompt 4, section 9): an ordinary happy lawyer now and then leaves a small cookie with a
+   * little energy. Rolled on the drops stream («Dagens vakt»). Bosses, Frida's friends, partners and urgent cases never drop one.
+   */
+  cookie: {
+    /** Chance per happy ordinary lawyer. */
+    chance: 0.01,
+    /** Energy restored (no sugar rush). */
+    fill: 5,
+    /** Seconds it stays on the floor, and it blinks the last «blinkTime» seconds (like the tickets). */
+    lifetime: 10, blinkTime: 3,
+    /** Max cookies on the map at the same time. */
+    max: 6,
+  },
+
   newPc: {
     /** Chance of a drop per happy lawyer (bosses always give one). */
     dropChance: 1 / 1500,
@@ -72,10 +87,10 @@ export const CONFIG = {
    * points = value of the ticket (and experience), weight = how often the type is chosen, from = seconds.
    */
   enemies: {
-    junior: { name: 'Juniorfullmektig', from: 0, frustration: 10, speed: 48, radius: 7, damage: 8, points: 10, weight: 1 },
-    senior: { name: 'Seniorpartner', from: 90, frustration: 80, speed: 30, radius: 10, damage: 14, points: 50, weight: 0.2 },
+    junior: { name: 'Juniorfullmektig', from: 0, frustration: 18, speed: 48, radius: 7, damage: 8, points: 10, weight: 1 },
+    senior: { name: 'Seniorpartner', from: 90, frustration: 140, speed: 30, radius: 10, damage: 14, points: 50, weight: 0.2 },
     printer: {
-      name: 'Printerentusiast', from: 180, frustration: 35, speed: 44, radius: 8, damage: 10, points: 30, weight: 0.14,
+      name: 'Printerentusiast', from: 180, frustration: 60, speed: 44, radius: 8, damage: 10, points: 30, weight: 0.14,
       /** Seconds between each paper pile. */
       paperInterval: 2.6,
       /** How long a paper pile stays on the floor. */
@@ -88,7 +103,7 @@ export const CONFIG = {
       paperSlow: 0.4,
     },
     urgent: {
-      name: 'Hastesak', from: 60, frustration: 150, speed: 80, radius: 9, damage: 0, points: 1000,
+      name: 'Hastesak', from: 60, frustration: 220, speed: 80, radius: 9, damage: 0, points: 1000,
       /** Seconds between each urgent case (random between min and max). */
       intervalMin: 45, intervalMax: 60,
       /** Seconds before it disappears on its own. */
@@ -100,6 +115,29 @@ export const CONFIG = {
     },
     /** Shared base values for all bosses. Each boss has its own numbers in CONFIG.bosses below. */
     boss: { name: 'Boss', frustration: 1500, speed: 26, radius: 20, damage: 20, points: 2500 },
+    /** Fiske-Frida's two friends: the real numbers come from CONFIG.bosses.frida.friends when they are spawned. */
+    friend: { name: 'Venninne', from: 1e9, frustration: 100, speed: 30, radius: 9, damage: 6, points: 0, weight: 0 },
+  },
+
+  /**
+   * ELITES («Partnere», version 5): rare, much tougher lawyers with a visible frustration bar, a crown and one
+   * trait each. They are where the extra difficulty lives in the late game. chance = per ordinary lawyer that
+   * spawns (grows per minute, capped). The multipliers apply to the type they are based on.
+   */
+  elites: {
+    from: 300,
+    chanceStart: 0.01, chancePerMin: 0.006, chanceMax: 0.08,
+    maxConcurrent: 4,
+    frustration: 6, damage: 1.6, speed: 0.85, points: 12, radiusAdd: 2,
+    /** The three traits (chosen with the spawn stream). */
+    traits: {
+      /** Other lawyers within «radius» of the partner take only «helpFactor» of the help. */
+      aura: { name: 'Partner-aura', radius: 70, helpFactor: 0.5 },
+      /** When helped, delegates: «count» junior associates appear around it. */
+      split: { name: 'Delegerer', count: 3 },
+      /** Every «every» seconds: a «tell»-second warning («!»), then a «duration»-second dash at «speed» × speed. */
+      rush: { name: 'Har hastverk', every: 4, tell: 0.5, duration: 0.6, speed: 3.2 },
+    },
   },
 
   /**
@@ -112,7 +150,7 @@ export const CONFIG = {
     schedule: [
       { at: 180, type: 'nordic' },
       { at: 360, type: 'printerBoss' },
-      { at: 540, type: 'deadline' },
+      { at: 540, type: 'frida' },
       { at: 720, type: 'johan' },
     ],
     /** After the last one, Johan comes back this often (seconds), stronger each time. */
@@ -123,6 +161,8 @@ export const CONFIG = {
     firedPause: 2.8,
     /** Warning time before an attack (seconds). */
     tell: 0.65,
+    /** A banner this many seconds before each boss arrives («… kommer om 10 sekunder»). */
+    warnBefore: 10,
     /** Distance from the player where the boss appears. */
     spawnDistance: 330,
     /** Boss attacks only start when the boss is this many seconds into the fight (time to see it coming). */
@@ -136,7 +176,7 @@ export const CONFIG = {
       name: 'Nørdic-konsulenten', short: 'NØRDIC',
       intro: 'Nørdic-konsulenten har ankommet!', line: 'Saken er registrert. Forventet svartid: 3–5 virkedager.',
       happyText: 'Sak lukket!',
-      frustration: 850, speed: 28, radius: 20, damage: 8, points: 2500, deadline: 120,
+      frustration: 1300, speed: 28, radius: 20, damage: 8, points: 2500, deadline: 120,
       /** «Du er nummer 47 i køen»: hold music in a ring. The notes only slow the player down. */
       queue: { cooldown: 10, notes: 10, speed: 40, lifetime: 5.5, slow: 0.4, slowTime: 2 },
       /** «Saken er sendt videre»: a ticket that splits into three smaller ones in a fan. */
@@ -148,7 +188,7 @@ export const CONFIG = {
       name: 'Multifunksjonsmonsteret', short: 'PRINTER',
       intro: 'Multifunksjonsmonsteret har våknet!', line: 'PAPIRSTOPP I SKUFF 2',
       happyText: 'Utskrift fullført',
-      frustration: 2200, speed: 24, radius: 22, damage: 9, points: 4000, deadline: 120,
+      frustration: 3400, speed: 24, radius: 22, damage: 9, points: 4000, deadline: 120,
       /** Four colour cartridges (CMYK) in a fan. They land after «flight» seconds and leave an ink puddle. */
       cmyk: { cooldown: 8, speed: 125, flight: 1.3, spread: 0.32, damage: 6, puddleTime: 4, puddleRadius: 16, puddleSlow: 0.3, maxPuddles: 8 },
       /** «Utskriftsjobb på 400 sider»: a fast stream of sheets in a sweeping arc. */
@@ -156,19 +196,40 @@ export const CONFIG = {
       /** «Papirstopp!»: now and then the printer gets stuck – no movement, no attacks, and it takes double help. */
       jam: { every: 15, duration: 3, helpFactor: 2 },
     },
-    deadline: {
-      name: 'Fristen er om 2 minutter!', short: 'FRIST',
-      intro: 'Fristen er om 2 minutter!', line: 'Kan du se på dette før lunsj?',
-      happyText: 'Fristen ble holdt!',
-      frustration: 4400, speed: 27, radius: 20, damage: 11, points: 6000, deadline: 120,
-      /** A fan of emails (the same as from version 3). */
-      emails: { cooldown: 4, count: 3, spread: 0.3, damage: 0.5 },
+    /**
+     * Boss 3 (Endringsprompt 4): Fiske-Frida and her two friends. A warm grandmother who believes every email she gets
+     * and forwards it to everyone she knows – she has been fooled, she is not stupid. All attacks are fish («phishing»).
+     * Frida is the one who must be helped; the friends can be helped separately for extra points.
+     */
+    frida: {
+      // shown to the player as «Anonymous» (the code still calls her «frida»)
+      name: 'Anonymous og venninnene', short: 'ANONYMOUS',
+      intro: 'Anonymous og venninnene har ankommet!', line: 'Jeg har vunnet en iPhone! Bare klikk på lenken, vennen!',
+      happyText: 'Oi, var det svindel? Takk, vennen!',
+      frustration: 6600, speed: 26, radius: 20, damage: 11, points: 6000, deadline: 120,
+      /** The friends: frustration and points as a fraction of Frida's, contact damage, speed factor and follow distance. */
+      friends: { count: 2, frustration: 0.15, points: 0.15, damage: 6, speed: 1.5, follow: 28 },
+      /**
+       * «Klikk på lenken!»: swings the rod over her head (a dashed line shows the direction), then casts the hook in a
+       * straight line. A hit gives normal damage (× damage) and pulls the player «pull» pixels toward Frida over «pullTime» s.
+       */
+      hook: { cooldown: 7, speed: 230, range: 280, damage: 1, pull: 48, pullTime: 0.22 },
+      /** «Silderegn»: shadows on the floor, herring land on them «fall» seconds later. One shadow is where the player stands. */
+      herring: { cooldown: 9, count: 7, spread: 80, fall: 1, radius: 11, damage: 5 },
+      /** «Videresendt svindel-e-post»: the friends raise their phones, then each sends fish-shaped emails in a wavy line. */
+      phish: { cooldown: 6, perFriend: 2, spread: 0.35, speed: 62, wave: 14, waveSpeed: 6, damage: 5, lifetime: 5 },
+      /**
+       * «Lokkemat»: fake pickups (an energy drink or a «Ny PC» with a small fish hook). No warning – that is the point.
+       * Picking one up gives «damage» and slows the player by «slow» for «slowTime» seconds. Max «max» at the same time.
+       * They are never on the minimap and disappear when Frida is helped.
+       */
+      bait: { cooldown: 11, max: 3, minDistance: 90, maxDistance: 190, damage: 6, slow: 0.45, slowTime: 2 },
     },
     johan: {
       name: 'Johan', short: 'JOHAN', title: 'SISTE BOSS: JOHAN',
       intro: 'SISTE BOSS: JOHAN', line: 'Har du et lite minutt?',
       phaseText: 'Johan tar av seg dressjakka', happyText: 'Bra jobba!',
-      frustration: 6500, speed: 30, radius: 20, damage: 12, points: 15000, deadline: 150,
+      frustration: 9800, speed: 30, radius: 20, damage: 12, points: 15000, deadline: 150,
       /** Second phase from half frustration: faster and attacks more often (cooldown × «cooldowns»). */
       phase2: { at: 0.5, speed: 1.25, cooldowns: 0.75 },
       /** «Har du et lite minutt?»: points at the player, then sprints in a straight line. damage = × his damage. */
@@ -200,7 +261,7 @@ export const CONFIG = {
 
   /** The «Haster!» ("Urgent!") sender: keeps its distance and sends emails («Haster!!!») at the player. */
   sender: {
-    name: '«Haster!»-avsender', from: 150, frustration: 30, speed: 40, radius: 7, damage: 9, points: 40,
+    name: '«Haster!»-avsender', from: 150, frustration: 50, speed: 40, radius: 7, damage: 9, points: 40,
     /** How often the type is chosen (fraction of the weight of a junior associate). */
     weight: 0.25,
     /** Cap: max fraction of the active lawyers, and max number at the same time. */
@@ -226,26 +287,29 @@ export const CONFIG = {
   },
 
   /** How many different looks each type has (purely cosmetic). */
-  figureVariants: { junior: 42, printer: 42, senior: 42, urgent: 21, boss: 12, sender: 42 },
+  figureVariants: { junior: 42, printer: 42, senior: 42, urgent: 21, boss: 12, sender: 42, friend: 2 },
 
-  /** How ordinary lawyers get tougher over time. */
+  /**
+   * How ordinary lawyers get tougher over time (version 6: linear, not compounding). The weapons grow without a
+   * cap now, so the curve is a straight line until overtime: frustration = 1 + frustrationPerMin × (minutes − startAfterMin).
+   */
   scaling: {
-    /** Frustration is multiplied by this every minute (1.08 = +8 %, compounding). */
-    frustrationGrowthPerMin: 1.08,
+    /** Extra frustration per minute after the calm start (0.2 = +20 percentage points per minute, linear). */
+    frustrationPerMin: 0.15,
     /** The increase in frustration starts after this many minutes (calm start). */
     startAfterMin: 3,
-    /** Increased damage per minute (0.06 = +6 %). */
+    /** Increased damage per minute (0.06 = +6 %, linear). */
     damagePerMin: 0.06,
     /** Increased speed per minute (0.025 = +2.5 %), so you can't outrun everything forever. */
-    speedPerMin: 0.025,
+    speedPerMin: 0.03,
     /** Highest speed increase (1.55 = +55 %). The juniors never get faster than the player. */
     speedMax: 1.55,
     /** After this minute («Overtid», "Overtime") everything rises steeply, with no cap. */
-    overtimeFromMin: 13,
+    overtimeFromMin: 12.5,
     /** In overtime, frustration and damage are additionally multiplied by this every minute. */
-    overtimeGrowthPerMin: 1.6,
+    overtimeGrowthPerMin: 1.8,
     /** In overtime the lawyers additionally get this much faster per minute (0.15 = +15 %), with no cap. */
-    overtimeSpeedPerMin: 0.15,
+    overtimeSpeedPerMin: 0.22,
   },
 
   spawn: {
@@ -282,6 +346,43 @@ export const CONFIG = {
     ringGap: 0.9,
   },
 
+  /**
+   * EVENTS (version 6). Scheduled events happen at the same time on every shift (at = seconds, repeat = seconds between
+   * repeats, 0 = once). Rare events are rolled once a minute from «from» with their own random stream («Dagens vakt»),
+   * so they are the same for everyone on the same day but differ from day to day. Timed events set a mood
+   * (speed and damage factors on the ordinary lawyers) for «duration» seconds.
+   */
+  events: {
+    scheduled: [
+      { id: 'lunchRush', at: 150, repeat: 300 },
+      { id: 'printerQueue', at: 270, repeat: 300 },
+      { id: 'partnerMeeting', at: 450, repeat: 360 },
+    ],
+    rare: [
+      { id: 'coffeeBreak', from: 120, chance: 0.06 },
+      { id: 'freeLunch', from: 180, chance: 0.05 },
+      { id: 'serverCrash', from: 300, chance: 0.05 },
+    ],
+    /** Seconds between any two events (a scheduled event waits, a rare one is skipped). */
+    minGap: 25,
+    /** Scheduled events wait while a boss is out. */
+    waitForBoss: true,
+    defs: {
+      /** A flock of junior associates from one direction: count + perMin × minutes. */
+      lunchRush: { name: 'Lunsjrush!', text: 'Hele kantina kommer samtidig', type: 'junior', count: 24, perMin: 3, max: 70 },
+      /** A flock of printer enthusiasts. */
+      printerQueue: { name: 'Printerkø!', text: 'Printerentusiastene har funnet en ny printer', type: 'printer', count: 8, perMin: 1, max: 24 },
+      /** A few partners (elites) at once, straight from the meeting room. */
+      partnerMeeting: { name: 'Partnermøte!', text: 'Partnerne kommer rett fra møtet', count: 3 },
+      /** The lawyers walk slowly for a while. */
+      coffeeBreak: { name: 'Kaffepause', text: 'Advokatene går saktere en stund', duration: 12, speed: 0.5, damage: 1 },
+      /** Tickets all over the floor around the player. */
+      freeLunch: { name: 'Gratis lunsj!', text: 'Ticket-lapper over hele gulvet', tickets: 30, value: 20, radius: 170 },
+      /** Everyone is faster and angrier for a while. */
+      serverCrash: { name: 'Serverkrasj!', text: 'Alle er raskere og sintere en stund', duration: 15, speed: 1.35, damage: 1.5 },
+    },
+  },
+
   /** The phases are shown as text when they change. */
   phases: [
     { from: 0, name: 'Morgenkaffe' },
@@ -303,7 +404,9 @@ export const CONFIG = {
   },
 
   /** Experience required for the next level = base + perLevel × level + square × level². */
-  level: { base: 20, perLevel: 13, square: 1.5 },
+  level: { base: 20, perLevel: 10, square: 1.2 },
+  /** At every level-up (and package), tickets within this radius fly to the player, so the pause never costs them. */
+  levelMagnet: 140,
 
   multiplier: {
     start: 1.0,
@@ -317,8 +420,72 @@ export const CONFIG = {
   /** Points for the «Kaffepause-bonus» ("Coffee break bonus") when everything is maxed out. */
   coffeeBreakBonus: 500,
 
-  /** Max number of weapons and passives, and max level. */
-  limits: { weapons: 4, passives: 6, weaponLevel: 8, passiveLevel: 5 },
+  /** Max number of weapons and passives, and max passive level. Weapons have no level cap (see CONFIG.upgrades). */
+  limits: { weapons: 4, passives: 8, passiveLevel: 5 },
+
+  /**
+   * UPGRADES (version 6). A weapon has no levels: every card at level-up gives one specific increment
+   * (more help, shorter interval, one more projectile, an effect …) and a weapon can take any number of them.
+   * Cards have a tier (rarity) that scales the increment: steps = how many growth steps a numeric card gives.
+   * tierOdds = chance per tier; «Hesteskoen» (luck) multiplies the odds of everything above common.
+   */
+  upgrades: {
+    tiers: [
+      { id: 'common', name: 'Vanlig', color: '#8a94a0', steps: 1 },
+      { id: 'uncommon', name: 'Uvanlig', color: '#2fd06a', steps: 2 },
+      { id: 'rare', name: 'Sjelden', color: '#3aa0ff', steps: 3 },
+      { id: 'legendary', name: 'Legendarisk', color: '#ff9f43', steps: 5 },
+    ],
+    tierOdds: [0.68, 0.23, 0.07, 0.02],
+    /** How many increments a weapon needs before its combination can be chosen (plus the matching passive). */
+    combinationAfter: 10,
+    /** Rerolls («Nytt utvalg») and banishes («Fjern kortet») per shift, and how many more each helped boss gives. */
+    rerolls: 1, banishes: 1, perBoss: 1,
+    /**
+     * Effect modifiers: rare cards that change how a weapon behaves. Each has a max level per weapon.
+     * pierce = the projectile continues to one more lawyer per level. splash = hits also help the lawyers right next
+     * to the target. slow = hit lawyers walk slower for a while. linger = part of the help is given once more a
+     * moment later. knockback = hits push the lawyer back. crit = extra critical chance for that weapon only.
+     */
+    effects: {
+      pierce: { name: 'Gjennomtrengende', text: 'Prosjektilet går videre til én advokat til.', max: 3 },
+      splash: { name: 'Sprut', text: 'Hvert treff gir også 35 % hjelp til advokatene rett ved.', max: 3, radius: 16, fraction: 0.35, maxNeighbors: 6 },
+      slow: { name: 'Venter på IT', text: 'Advokater som treffes går 20 % saktere i 2 sekunder.', max: 3, value: 0.2, time: 2, maxSlow: 0.6 },
+      linger: { name: 'Saken ligger i køen', text: '30 % av hjelpen gis én gang til etter et sekund.', max: 3, fraction: 0.3, delay: 1 },
+      knockback: { name: 'Avvist', text: 'Treff skyver advokaten 5 piksler bakover.', max: 3, px: 5 },
+      crit: { name: 'Ekstra kaffe', text: '+8 % kritisk sjanse for dette våpenet.', max: 5, value: 0.08 },
+      /** Version 6.1: mark = hit lawyers take more help from everything for a while, escalation = more help to
+       *  partners and bosses, pull = hits drag the lawyer toward the player (groups them for area weapons). */
+      mark: { name: 'Purring', text: 'Advokater som treffes tar 10 % mer hjelp fra alt i 3 sekunder.', max: 3, value: 0.1, time: 3 },
+      escalation: { name: 'Eskalering', text: '+15 % hjelp mot partnere og bosser.', max: 3, value: 0.15 },
+      pull: { name: 'Innkalling', text: 'Treff drar advokaten 3 piksler mot deg (bare våpen med rekkevidde).', max: 3, px: 3 },
+    },
+    /**
+     * Card weights at level-up: increments to a weapon you have (shared by its growth rules, weighted: help counts
+     * «helpRule» times, counts «countRule» times, other rules once), its effects (shared), a passive you have, a new
+     * weapon and a new passive. Owned things come up far more often, so you can build.
+     */
+    weight: { ownedWeapon: 6, effect: 1.5, ownedPassive: 2, fresh: 1.2, freshPassive: 0.6, helpRule: 2.5, countRule: 1.5 },
+    /** New weapons are offered this many times as often while the player has fewer than «earlySlots» weapons. */
+    earlyWeaponBoost: 2.5, earlySlots: 2,
+  },
+
+  /**
+   * «Pakke fra leverandøren» (version 6): a package that gives several weapon increments at once, always from a
+   * helped boss and now and then from a helped partner (elite). Package cards are at least «minTier».
+   */
+  package: {
+    name: 'Pakke fra leverandøren',
+    bossCount: 3, johanCount: 5, eliteCount: 1,
+    /** Chance that a helped partner drops a package (drops stream). */
+    eliteChance: 0.025,
+    minTier: 1,
+    /** Seconds the package stays on the floor (it never disappears, this only drives the glow). */
+    lifetime: 1e9,
+  },
+
+  /** Partners (elites) drop between ticketsMin and ticketsMax tickets, each worth ticketFraction of their points. */
+  eliteDrops: { ticketsMin: 1, ticketsMax: 5, ticketFraction: 0.5 },
 
   /** Max number of projectiles in the air per weapon (performance). */
   maxProjectilesPerWeapon: 60,
@@ -336,254 +503,315 @@ export const CONFIG = {
   },
 
   /**
-   * WEAPONS. Each line in "levels" holds the full numbers for that level (level 1 at the top).
-   * help = how much frustration is removed per hit, interval = seconds between activations,
-   * text = what is shown on the upgrade card.
+   * WEAPONS (version 6). Each weapon has a "base" (its numbers before any upgrade) and "growth": the increments a
+   * level-up card can give. There are no levels: a weapon can take any number of increments, and the stats are
+   * computed from base + the increments taken (weaponStats() in js/weapons.js).
+   *
+   * Growth rules per stat:  { add: n }   = +n per step,
+   *                         { pct: f }   = +f × base per step (linear, never capped – this is how help grows),
+   *                         { mul: f }   = × f per step (compounding; use min/max as a floor or cap),
+   *                         { set: v, once: true } = a one-time change (e.g. back: true).
+   *                         max/min = cap (the card is not offered past it). Count-like stats (count, hits, hops …)
+   *                         must have a max: that cap is what keeps the game fast on an office PC.
+   * The combination (max increments + its passive) swaps "base" for "combination.stats"; the increments keep
+   * applying on top, and rules for stats the combination does not have are turned into help increments.
+   * tag = the weapon's class (projectile, chain, area, helper), used by the tag passives.
+   * effects = which effect modifiers the weapon can take (see CONFIG.upgrades.effects).
+   * countName = what "count" is called on the card («+1 mus»).
    */
   weapons: {
     powerCycle: {
-      name: 'Skru av og på',
+      name: 'Skru av og på', tag: 'area',
       description: 'En puls rundt deg hjelper alle i nærheten.',
-      levels: [
-        { radius: 48, help: 12, interval: 1.0, text: 'En puls rundt deg hjelper alle i nærheten.' },
-        { radius: 55, help: 12, interval: 1.0, text: 'Større radius på pulsen.' },
-        { radius: 55, help: 17, interval: 1.0, text: 'Mer hjelp per puls.' },
-        { radius: 55, help: 17, interval: 0.85, text: 'Kortere tid mellom hver puls.' },
-        { radius: 63, help: 17, interval: 0.85, text: 'Større radius på pulsen.' },
-        { radius: 63, help: 24, interval: 0.85, text: 'Mer hjelp per puls.' },
-        { radius: 63, help: 24, interval: 0.7, text: 'Kortere tid mellom hver puls.' },
-        { radius: 72, help: 32, interval: 0.7, text: 'Større radius og mer hjelp.' },
-      ],
+      base: { radius: 44, help: 11, interval: 1.0 },
+      growth: { help: { pct: 0.35 }, radius: { add: 6, max: 120 }, interval: { mul: 0.9, min: 0.4 }, nudge: { add: 1, max: 10 } },
+      effects: ['slow', 'knockback', 'crit', 'linger', 'mark', 'escalation'],
       combination: {
         passive: 'ram', name: 'Full omstart',
         text: 'Mye større puls som går raskere og skyver advokatene tilbake.',
         /** nudge = how far the lawyers are pushed per pulse. */
-        stats: { radius: 85, help: 20, interval: 0.65, nudge: 4 },
+        stats: { radius: 72, help: 30, interval: 0.62, nudge: 4 },
       },
     },
     toner: {
-      name: 'Toner-kast',
-      description: 'Kaster tonerkassetter i en vifte dit du går. De sprekker og hjelper alle rundt.',
-      levels: [
-        { count: 3, splash: 30, help: 18, interval: 1.2, speed: 190, range: 190, spread: 0.35, text: 'Kaster tonerkassetter i en vifte dit du går. De sprekker og hjelper alle rundt.' },
-        { count: 3, splash: 30, help: 18, interval: 1.1, speed: 190, range: 190, spread: 0.35, text: 'Kortere tid mellom hvert kast.' },
-        { count: 3, splash: 34, help: 18, interval: 1.1, speed: 190, range: 190, spread: 0.35, text: 'Større tonersprut.' },
-        { count: 3, splash: 34, help: 24, interval: 1.1, speed: 190, range: 190, spread: 0.35, text: 'Mer hjelp per kassett.' },
-        { count: 4, splash: 34, help: 24, interval: 1.05, speed: 190, range: 190, spread: 0.35, text: '+1 tonerkassett per kast.' },
-        { count: 4, splash: 39, help: 24, interval: 1.05, speed: 190, range: 190, spread: 0.35, text: 'Større tonersprut.' },
-        { count: 4, splash: 39, help: 32, interval: 1.0, speed: 190, range: 190, spread: 0.35, text: 'Mer hjelp per kassett.' },
-        { count: 5, splash: 39, help: 36, interval: 1.0, speed: 190, range: 190, spread: 0.35, text: '+1 tonerkassett og mer hjelp.' },
-      ],
+      name: 'Toner-kast', tag: 'projectile',
+      description: 'Kaster tonerkassetter i en vifte mot nærmeste advokat. De sprekker og hjelper alle rundt.',
+      countName: 'tonerkassett',
+      base: { count: 2, splash: 28, help: 15, interval: 1.2, speed: 190, range: 190, spread: 0.35 },
+      growth: { help: { pct: 0.3 }, count: { add: 1, max: 10 }, splash: { add: 4, max: 70 }, interval: { mul: 0.9, min: 0.45 }, range: { add: 15, max: 320 } },
+      effects: ['pierce', 'slow', 'crit', 'linger', 'knockback', 'mark', 'escalation', 'pull'],
       combination: {
         passive: 'paperTray', name: 'Kontorprinteren fra helvete',
         text: 'Kaster tonerkassetter i alle retninger samtidig, med stor sprut.',
-        stats: { count: 8, splash: 38, help: 24, interval: 1.4, speed: 200, range: 210, spread: 0 },
+        stats: { count: 8, splash: 40, help: 26, interval: 1.2, speed: 200, range: 210, spread: 0 },
       },
     },
     password: {
-      name: 'Passord-reset',
+      name: 'Passord-reset', tag: 'chain',
       description: 'En nøkkel hopper fra advokat til advokat, som et kjedelyn.',
-      levels: [
-        /**
-         * hops = how many lawyers the chain hits, range = max distance per hop, hopTime = seconds per hop,
-         * reach = how far away the first lawyer can be.
-         */
-        { hops: 3, help: 30, interval: 1.05, range: 80, hopTime: 0.07, reach: 200, text: 'En nøkkel hopper fra advokat til advokat, som et kjedelyn.' },
-        { hops: 4, help: 30, interval: 1.05, range: 80, hopTime: 0.07, reach: 200, text: '+1 hopp.' },
-        { hops: 5, help: 30, interval: 1.05, range: 80, hopTime: 0.07, reach: 200, text: '+1 hopp.' },
-        { hops: 6, help: 33, interval: 1.05, range: 80, hopTime: 0.07, reach: 200, text: '+1 hopp og +10 % hjelp.' },
-        { hops: 7, help: 33, interval: 1.05, range: 80, hopTime: 0.07, reach: 200, text: '+1 hopp.' },
-        { hops: 8, help: 33, interval: 1.05, range: 80, hopTime: 0.07, reach: 200, text: '+1 hopp.' },
-        { hops: 9, help: 33, interval: 1.05, range: 80, hopTime: 0.07, reach: 200, text: '+1 hopp.' },
-        { hops: 10, help: 36, interval: 1.05, range: 80, hopTime: 0.07, reach: 200, text: '+1 hopp og +10 % hjelp.' },
-      ],
+      countName: 'hopp',
+      /**
+       * hops = how many lawyers the chain hits, range = max distance per hop, hopTime = seconds per hop,
+       * reach = how far away the first lawyer can be, chains = chains at the same time (the combination).
+       */
+      base: { hops: 3, help: 24, interval: 1.05, range: 80, hopTime: 0.07, reach: 200 },
+      growth: { help: { pct: 0.5 }, hops: { add: 1, max: 24 }, interval: { mul: 0.9, min: 0.4 }, range: { add: 6, max: 140 }, hopTime: { mul: 0.88, min: 0.03 }, chains: { add: 1, max: 4 } },
+      effects: ['slow', 'crit', 'linger', 'splash', 'mark', 'escalation', 'pull'],
       combination: {
         passive: 'ssd', name: 'Tofaktor',
-        text: 'To kjeder samtidig i hver sin retning, og hver kan hoppe til 16 advokater.',
-        /** chains = number of chains at the same time. */
-        stats: { hops: 16, chains: 2, help: 22, interval: 1.05, range: 85, hopTime: 0.06, reach: 220 },
+        text: 'To kjeder samtidig i hver sin retning, med flere hopp og kortere intervall.',
+        stats: { hops: 8, chains: 2, help: 34, interval: 0.8, range: 96, hopTime: 0.06, reach: 230 },
       },
     },
     hdmi: {
-      name: 'HDMI-kabelen',
-      description: 'En kabel svinges i en bue foran deg og hjelper alle den treffer.',
-      levels: [
-        /** arc = width of the arc in radians (2.1 ≈ 120 degrees). back = also swings backward. */
-        { lengthPx: 54, help: 22, interval: 1.0, arc: 2.4, back: false, text: 'En kabel svinges i en bue foran deg og hjelper alle den treffer.' },
-        { lengthPx: 58, help: 22, interval: 1.0, arc: 2.4, back: false, text: 'Lengre kabel.' },
-        { lengthPx: 58, help: 26, interval: 1.25, arc: 2.1, back: false, text: 'Mer hjelp per sving.' },
-        { lengthPx: 58, help: 26, interval: 1.25, arc: 2.1, back: true, text: 'Kabelen svinges både foran og bak.' },
-        { lengthPx: 58, help: 26, interval: 1.05, arc: 2.1, back: true, text: 'Kortere tid mellom hver sving.' },
-        { lengthPx: 68, help: 26, interval: 1.05, arc: 2.1, back: true, text: 'Lengre kabel.' },
-        { lengthPx: 68, help: 38, interval: 1.05, arc: 2.1, back: true, text: 'Mer hjelp per sving.' },
-        { lengthPx: 78, help: 48, interval: 0.9, arc: 2.1, back: true, text: 'Lengre kabel, mer hjelp og raskere sving.' },
-      ],
+      name: 'HDMI-kabelen', tag: 'area',
+      description: 'En kabel svinges i en bue mot nærmeste advokat og hjelper alle den treffer.',
+      /** arc = width of the arc in radians (2.4 ≈ 140 degrees). back = also swings backward. */
+      base: { lengthPx: 52, help: 18, interval: 1.0, arc: 2.4, back: false },
+      growth: { help: { pct: 0.25 }, lengthPx: { add: 7, max: 130 }, interval: { mul: 0.9, min: 0.4 }, arc: { add: 0.35, max: 4.6 }, back: { set: true, once: true } },
+      effects: ['knockback', 'slow', 'crit', 'linger', 'mark', 'escalation'],
       combination: {
         passive: 'extensionCord', name: 'Kabelkaos',
         text: 'Kabelen svinges i en full sirkel rundt deg.',
-        stats: { lengthPx: 88, help: 30, interval: 0.9, arc: 6.2832, back: true },
+        stats: { lengthPx: 80, help: 34, interval: 0.8, arc: 6.2832, back: true },
       },
     },
     remote: {
-      name: 'Fjernstyring',
-      description: 'Tilfeldige advokater på skjermen får hjelp via et glimt ovenfra.',
-      levels: [
-        { hits: 1, help: 24, interval: 1.6, text: 'Tilfeldige advokater på skjermen får hjelp via et glimt ovenfra.' },
-        { hits: 2, help: 24, interval: 1.6, text: '+1 treff per gang.' },
-        { hits: 2, help: 34, interval: 1.6, text: 'Mer hjelp per treff.' },
-        { hits: 2, help: 34, interval: 1.35, text: 'Kortere tid mellom hver gang.' },
-        { hits: 3, help: 34, interval: 1.35, text: '+1 treff per gang.' },
-        { hits: 3, help: 46, interval: 1.35, text: 'Mer hjelp per treff.' },
-        { hits: 4, help: 46, interval: 1.15, text: '+1 treff og kortere intervall.' },
-        { hits: 6, help: 60, interval: 1.15, text: '+2 treff og mer hjelp.' },
-      ],
+      name: 'Fjernstyring', tag: 'chain',
+      description: 'De nærmeste advokatene får hjelp via et glimt ovenfra.',
+      countName: 'treff',
+      /** reach = how far away a lawyer can be picked. */
+      base: { hits: 1, help: 20, interval: 1.6, reach: 330 },
+      growth: { help: { pct: 0.5 }, hits: { add: 1, max: 16 }, interval: { mul: 0.9, min: 0.4 }, reach: { add: 25, max: 520 } },
+      effects: ['crit', 'linger', 'splash', 'slow', 'mark', 'escalation', 'pull'],
       combination: {
         passive: 'admin', name: 'Domene-admin',
         text: 'Treffer mange advokater samtidig, med kort intervall.',
-        stats: { hits: 9, help: 60, interval: 0.9 },
+        stats: { hits: 7, help: 60, interval: 0.8, reach: 360 },
       },
     },
     mouse: {
-      name: 'Trådløse mus',
+      name: 'Trådløse mus', tag: 'area',
       description: 'Mus kretser i en bane rundt deg og hjelper alle de treffer.',
-      levels: [
-        /** track = distance from the player, rotation = radians per second, hitPause = seconds before the same lawyer can be hit again. */
-        { count: 3, track: 40, rotation: 3.0, help: 13, hitPause: 0.45, text: 'Mus kretser i en bane rundt deg og hjelper alle de treffer.' },
-        { count: 3, track: 48, rotation: 3.0, help: 13, hitPause: 0.45, text: 'Større bane.' },
-        { count: 3, track: 55, rotation: 2.6, help: 9, hitPause: 0.45, text: 'Større bane.' },
-        { count: 3, track: 55, rotation: 3.3, help: 9, hitPause: 0.45, text: 'Raskere rotasjon.' },
-        { count: 4, track: 55, rotation: 3.3, help: 12, hitPause: 0.45, text: '+1 mus og mer hjelp.' },
-        { count: 4, track: 62, rotation: 3.3, help: 12, hitPause: 0.45, text: 'Større bane.' },
-        { count: 4, track: 62, rotation: 4.0, help: 15, hitPause: 0.45, text: 'Raskere rotasjon og mer hjelp.' },
-        { count: 6, track: 62, rotation: 4.0, help: 19, hitPause: 0.45, text: '+2 mus og mer hjelp.' },
-      ],
+      countName: 'mus',
+      /** track = distance from the player, rotation = radians per second, hitPause = seconds before the same lawyer can be hit again. */
+      base: { count: 3, track: 40, rotation: 3.0, help: 12, hitPause: 0.45 },
+      growth: { help: { pct: 0.45 }, count: { add: 1, max: 16 }, track: { add: 4, max: 90 }, rotation: { add: 0.6, max: 9 }, hitPause: { mul: 0.88, min: 0.15 } },
+      effects: ['slow', 'knockback', 'crit', 'linger', 'mark', 'escalation'],
       combination: {
         passive: 'batteries', name: 'Musematta',
-        text: 'Musene suser så fort at de danner en nesten sammenhengende ring.',
-        stats: { count: 10, track: 66, rotation: 6.5, help: 21, hitPause: 0.3 },
+        text: 'Åtte mus suser rundt deg i en bredere og raskere ring.',
+        stats: { count: 8, track: 60, rotation: 5.5, help: 30, hitPause: 0.35 },
       },
     },
-  },
-
-  /** The four new IT solutions (added in version 3). Same structure as the weapons above. */
-  newWeapons: {
     ctrlz: {
-      name: 'Ctrl+Z',
+      name: 'Ctrl+Z', tag: 'projectile',
       description: 'En stor Ctrl+Z-tast kastes mot nærmeste advokat og kommer tilbake.',
-      levels: [
-        /** range = how far the key flies before it turns around. */
-        { count: 1, range: 110, help: 16, interval: 1.6, speed: 220, text: 'En stor Ctrl+Z-tast kastes mot nærmeste advokat og kommer tilbake.' },
-        { count: 1, range: 125, help: 16, interval: 1.5, speed: 220, text: 'Lengre rekkevidde.' },
-        { count: 2, range: 125, help: 16, interval: 1.5, speed: 220, text: '+1 tast.' },
-        { count: 2, range: 140, help: 22, interval: 1.4, speed: 220, text: 'Lengre rekkevidde og mer hjelp.' },
-        { count: 2, range: 140, help: 22, interval: 1.3, speed: 230, text: 'Kortere tid mellom hvert kast.' },
-        { count: 3, range: 150, help: 22, interval: 1.3, speed: 230, text: '+1 tast.' },
-        { count: 3, range: 160, help: 24, interval: 1.2, speed: 240, text: 'Mer hjelp og lengre rekkevidde.' },
-        { count: 3, range: 170, help: 28, interval: 1.1, speed: 250, text: 'Mer hjelp, raskere kast.' },
-      ],
+      countName: 'tast',
+      /** range = how far the key flies before it turns around. The combination has radius/period/rotation instead. */
+      base: { count: 1, range: 110, help: 14, interval: 1.6, speed: 220 },
+      growth: { help: { pct: 0.35 }, count: { add: 1, max: 8 }, range: { add: 12, max: 260 }, interval: { mul: 0.9, min: 0.5 }, speed: { add: 20, max: 400 }, radius: { add: 8, max: 170 }, rotation: { add: 0.3, max: 7 }, hitPause: { mul: 0.88, min: 0.15 } },
+      effects: ['slow', 'knockback', 'crit', 'linger', 'mark', 'escalation', 'pull'],
       combination: {
         passive: 'shortcuts', name: 'Ctrl+Alt+Del',
         text: 'Flere taster går i en spiral ut og inn rundt deg.',
         /** radius = how far out the spiral goes, period = seconds out and in, rotation = radians per second. */
-        stats: { count: 5, radius: 100, period: 2.4, rotation: 3, help: 30, hitPause: 0.4 },
+        stats: { count: 5, radius: 90, period: 2.4, rotation: 3.0, help: 30, hitPause: 0.45 },
       },
     },
     beam: {
-      name: 'Oppdateringsstrålen',
-      description: 'En lang fremdriftsindikator skyter ut som en stråle dit du går.',
-      levels: [
-        /** help is given every "tick" seconds while the beam lasts. pause = time between each beam. */
-        { lengthPx: 140, width: 10, duration: 1.0, pause: 2.6, help: 11, tick: 0.2, text: 'En lang fremdriftsindikator skyter ut som en stråle dit du går.' },
-        { lengthPx: 155, width: 10, duration: 1.0, pause: 2.5, help: 12, tick: 0.2, text: 'Lengre stråle.' },
-        { lengthPx: 155, width: 12, duration: 1.1, pause: 2.4, help: 12, tick: 0.2, text: 'Bredere stråle som varer lenger.' },
-        { lengthPx: 170, width: 12, duration: 1.1, pause: 2.2, help: 15, tick: 0.2, text: 'Lengre stråle og mer hjelp.' },
-        { lengthPx: 170, width: 14, duration: 1.2, pause: 2.0, help: 16, tick: 0.2, text: 'Bredere stråle, kortere pause.' },
-        { lengthPx: 190, width: 14, duration: 1.3, pause: 1.8, help: 18, tick: 0.2, text: 'Lengre stråle som varer lenger.' },
-        { lengthPx: 200, width: 16, duration: 1.4, pause: 1.6, help: 21, tick: 0.2, text: 'Bredere stråle og mer hjelp.' },
-        { lengthPx: 220, width: 18, duration: 1.5, pause: 1.4, help: 24, tick: 0.2, text: 'Lengst og bredest, kortest pause.' },
-      ],
+      name: 'Oppdateringsstrålen', tag: 'area',
+      description: 'En lang fremdriftsindikator skyter ut som en stråle mot nærmeste advokat.',
+      /** help is given every "tick" seconds while the beam lasts. pause = time between each beam. */
+      base: { lengthPx: 130, width: 10, duration: 1.0, pause: 2.6, help: 10, tick: 0.2 },
+      growth: { help: { pct: 0.6 }, lengthPx: { add: 18, max: 320 }, width: { add: 2.5, max: 30 }, duration: { add: 0.2, max: 3 }, pause: { mul: 0.82, min: 0.6 }, tick: { mul: 0.9, min: 0.08 }, rotation: { add: 0.2, max: 3 } },
+      effects: ['slow', 'crit', 'linger', 'mark', 'escalation', 'pull'],
       combination: {
         passive: 'certification', name: 'Tvungen oppdatering',
         text: 'To stråler sveiper sakte rundt deg hele tiden.',
-        stats: { lengthPx: 200, width: 18, rotation: 0.9, help: 14, tick: 0.2 },
+        stats: { lengthPx: 180, width: 16, rotation: 0.8, help: 18, tick: 0.45 },
       },
     },
     teams: {
-      name: 'Teams-varsel',
-      description: 'Teams-varsler skytes ut og svinger seg mot hver sin advokat.',
-      levels: [
-        /** count = alerts per volley (each picks its own lawyer), turn = how sharply they steer (radians per second). */
-        { count: 1, help: 32, interval: 1.4, speed: 200, turn: 7, reach: 240, text: 'Teams-varsler skytes ut og svinger seg mot hver sin advokat.' },
-        { count: 2, help: 32, interval: 1.4, speed: 200, turn: 7, reach: 240, text: '+1 varsel.' },
-        { count: 2, help: 40, interval: 1.3, speed: 210, turn: 7, reach: 240, text: 'Mer hjelp og kortere intervall.' },
-        { count: 3, help: 40, interval: 1.3, speed: 210, turn: 7.5, reach: 250, text: '+1 varsel.' },
-        { count: 3, help: 48, interval: 1.2, speed: 220, turn: 7.5, reach: 250, text: 'Mer hjelp og kortere intervall.' },
-        { count: 4, help: 48, interval: 1.15, speed: 220, turn: 8, reach: 260, text: '+1 varsel.' },
-        { count: 4, help: 56, interval: 1.05, speed: 230, turn: 8, reach: 260, text: 'Mer hjelp og kortere intervall.' },
-        { count: 5, help: 62, interval: 1.0, speed: 240, turn: 8, reach: 270, text: '+1 varsel og mer hjelp.' },
-      ],
+      name: 'Teams-varsel', tag: 'projectile',
+      description: 'Teams-varsler skytes ut og svinger seg mot hver sin advokat, nærmeste først.',
+      countName: 'varsel',
+      /** count = alerts per volley (each picks its own lawyer), turn = how sharply they steer (radians per second). */
+      base: { count: 1, help: 26, interval: 1.4, speed: 200, turn: 7, reach: 240 },
+      growth: { help: { pct: 0.65 }, count: { add: 1, max: 10 }, interval: { mul: 0.9, min: 0.45 }, reach: { add: 12, max: 360 }, turn: { add: 0.6, max: 12 } },
+      effects: ['pierce', 'crit', 'linger', 'splash', 'slow', 'mark', 'escalation'],
       combination: {
         passive: 'dualMonitor', name: 'Allmøte på Teams',
-        text: 'Hvert varsel deler seg i tre nye målsøkende varsler når det treffer.',
+        text: 'Hvert varsel deler seg i to nye målsøkende varsler når det treffer.',
         /** split = new alerts on each hit (they do not split again). */
-        stats: { count: 4, help: 70, interval: 0.95, speed: 240, turn: 8, reach: 270, split: 3 },
+        stats: { count: 4, help: 50, interval: 0.9, speed: 240, turn: 8, reach: 280, split: 2 },
       },
     },
     angel: {
-      name: 'Skytsengelen',
+      name: 'Skytsengelen', tag: 'helper',
       description: 'En liten skytsengel svever rundt deg og kaster mini-printere som hjelper advokatene.',
-      levels: [
-        /**
-         * The mini printers work like a molotov: they land where the lawyer stood, stand completely still,
-         * and shoot a sheet of paper at the nearest lawyer within «range» every «every» seconds.
-         * perThrow = mini printers per throw, max = max at the same time (fixed and the same for everyone),
-         * life = seconds a mini printer stands and shoots, help = help per sheet.
-         */
-        { perThrow: 1, max: 2, interval: 2.6, life: 4, help: 37, every: 0.3, range: 60, text: 'En liten skytsengel svever rundt deg og kaster mini-printere som hjelper advokatene.' },
-        { perThrow: 1, max: 2, interval: 2.6, life: 4, help: 43, every: 0.3, range: 60, text: '+15 % hjelp.' },
-        { perThrow: 1, max: 2, interval: 2.1, life: 4, help: 43, every: 0.3, range: 60, text: 'Kaster oftere.' },
-        { perThrow: 2, max: 4, interval: 2.1, life: 4, help: 43, every: 0.3, range: 60, text: '2 mini-printere per kast, maks 4 samtidig.' },
-        { perThrow: 2, max: 4, interval: 2.1, life: 5, help: 43, every: 0.3, range: 69, text: 'Mini-printerne står og skyter 1 sekund lenger, og +15 % rekkevidde.' },
-        { perThrow: 2, max: 4, interval: 2.1, life: 5, help: 49.5, every: 0.3, range: 69, text: '+15 % hjelp.' },
-        { perThrow: 2, max: 4, interval: 1.7, life: 5, help: 49.5, every: 0.3, range: 69, text: 'Kaster oftere.' },
-        { perThrow: 3, max: 6, interval: 1.7, life: 5, help: 49.5, every: 0.3, range: 69, text: '3 mini-printere per kast, maks 6 samtidig.' },
-      ],
+      countName: 'mini-printer',
+      /**
+       * The mini printers work like a molotov (Endringsprompt 4): they land where the lawyer stood, stand completely
+       * still, and shoot a sheet of paper at the nearest lawyer within «range» every «burst» seconds.
+       * perThrow = mini printers per throw, max = max at the same time (fixed and the same for everyone),
+       * life = seconds a mini printer stands and shoots, help = help per sheet, burst = seconds between sheets,
+       * range = how far from the printer a lawyer can be shot at.
+       */
+      base: { perThrow: 1, max: 2, interval: 2.6, life: 4, help: 41, burst: 0.3, range: 60 },
+      growth: { help: { pct: 0.3 }, perThrow: { add: 1, max: 6 }, max: { add: 1, max: 12 }, interval: { mul: 0.9, min: 0.8 }, life: { add: 0.5, max: 8 }, range: { add: 9, max: 130 }, burst: { mul: 0.9, min: 0.15 } },
+      effects: ['slow', 'crit', 'linger', 'mark', 'escalation'],
       combination: {
         passive: 'biggerCan', name: 'Himmelsk serviceavtale',
-        text: 'Lysende glorie og større vinger: dobbelt så mange mini-printere, som avslutter med papirkonfetti.',
+        text: 'Lysende glorie og større vinger: flere mini-printere, som avslutter med papirkonfetti.',
         /** confetti = help in the final burst of paper confetti, confettiRadius = its radius. */
-        stats: { perThrow: 6, max: 10, interval: 1.7, life: 5, help: 27.5, every: 0.3, range: 69, confetti: 40, confettiRadius: 50 },
+        stats: { perThrow: 4, max: 6, interval: 1.9, life: 5, help: 56, burst: 0.3, range: 69, confetti: 50, confettiRadius: 50 },
       },
     },
     headset: {
-      name: 'Støydempende headset',
+      name: 'Støydempende headset', tag: 'helper',
       description: 'Et skjold som blokkerer ett treff og sender ut en puls. Lades opp igjen.',
-      levels: [
-        /** charge = seconds before the shield is ready again, charges = hits it can take before recharging. */
-        { charge: 20, pulseRadius: 50, help: 30, charges: 1, text: 'Et skjold som blokkerer ett treff og sender ut en puls. Lades opp igjen.' },
-        { charge: 18.5, pulseRadius: 55, help: 35, charges: 1, text: 'Raskere oppladning, større puls.' },
-        { charge: 17, pulseRadius: 60, help: 40, charges: 1, text: 'Raskere oppladning, mer hjelp.' },
-        { charge: 15, pulseRadius: 65, help: 45, charges: 1, text: 'Raskere oppladning.' },
-        { charge: 13.5, pulseRadius: 70, help: 52, charges: 1, text: 'Større puls og mer hjelp.' },
-        { charge: 12, pulseRadius: 75, help: 60, charges: 1, text: 'Raskere oppladning.' },
-        { charge: 10, pulseRadius: 82, help: 70, charges: 1, text: 'Raskere oppladning, større puls.' },
-        { charge: 8, pulseRadius: 90, help: 80, charges: 1, text: 'Lades på 8 sekunder.' },
-      ],
+      countName: 'ladning',
+      /** charge = seconds before the shield is ready again, charges = hits it can take before recharging. */
+      base: { charge: 20, pulseRadius: 50, help: 26, charges: 1 },
+      growth: { help: { pct: 0.3 }, charge: { mul: 0.88, min: 4 }, pulseRadius: { add: 8, max: 160 }, charges: { add: 1, max: 4 } },
+      effects: ['knockback', 'slow', 'crit', 'mark', 'escalation'],
       combination: {
         passive: 'ergonomicChair', name: 'Hjemmekontor',
-        text: 'Skjoldet blokkerer to treff før det må lades, og pulsen blir mye større.',
-        stats: { charge: 9, pulseRadius: 130, help: 80, charges: 2 },
+        text: 'Skjoldet blokkerer tre treff før det må lades, og pulsen blir mye større.',
+        stats: { charge: 9, pulseRadius: 100, help: 70, charges: 3 },
       },
+    },
+    /**
+     * Ping-pong (Endringsprompt 4): the only weapon that bounces off the edges of the screen (and the outer walls) and
+     * gets stronger with every bounce. The balls go through the lawyers; a lawyer can be hit by the same ball at most
+     * once per «hitPause» seconds. The launch direction is a random diagonal from the ping-pong stream («Dagens vakt»).
+     * count = balls at the same time, bounces = bounces before a ball is gone, speed = start speed,
+     * boost = how much each bounce adds (speed × (1 + speedUp), help + helpUp of the start help), boostMax = the cap on
+     * the extra help (0.6 = +60 %), interval = seconds between launching new balls while there is room.
+     * The weapon has no level cap like the others (version 6); the growth rules follow the client's level table:
+     * +help, +2 bounces, +1 ball, faster balls and a higher cap on the help increase.
+     */
+    pingpong: {
+      name: 'Ping-pong', tag: 'projectile',
+      description: 'En pingpongball spretter mellom skjermkantene og blir sterkere for hvert sprett.',
+      countName: 'ball',
+      base: { count: 1, bounces: 4, help: 30, speed: 150, boostMax: 0.6, interval: 1.6 },
+      growth: { help: { pct: 0.15 }, bounces: { add: 2, max: 16 }, count: { add: 1, max: 4 }, speed: { add: 12, max: 240 }, boostMax: { add: 0.2, max: 1.4 }, interval: { mul: 0.9, min: 0.6 } },
+      effects: ['crit', 'linger', 'slow', 'knockback', 'mark', 'escalation'],
+      /** Fixed for everyone: the extra speed and help per bounce, the top speed and the hit pause per lawyer. */
+      speedUp: 0.06, helpUp: 0.1, maxSpeed: 320, hitPause: 0.5, radius: 5,
+      /** The «PING»/«PONG» text is only shown while there are at most this many balls. */
+      textMaxBalls: 4,
+      combination: {
+        passive: 'sneakers', name: 'Ping of Death',
+        text: 'Hver gang en ball spretter, deler den seg i to (maks 12 baller), og ballene etterlater et glødende spor.',
+        /** maxBalls = fixed cap on balls at the same time (also for splits). */
+        stats: { count: 4, bounces: 8, help: 22, speed: 170, boostMax: 1.0, interval: 1.2, maxBalls: 12 },
+      },
+    },
+    /**
+     * Livvakten (the bodyguard, Endringsprompt 4): a helper like Skytsengelen. He walks beside the player and now and
+     * then lays a «brannmur» (firewall) – a line of flames «distance» pixels from the player, across the direction where
+     * most lawyers are, so it stands between the player and the flock. Lawyers in it get help every «tick» seconds and
+     * walk «slow» slower. It never blocks movement and never hurts the player.
+     * walls = firewalls per activation (toward the densest flocks), lengthPx = length, duration = seconds it stands,
+     * interval = seconds between each time. No regular combination: he is part of The Matrix.
+     */
+    bodyguard: {
+      name: 'Livvakten', tag: 'helper',
+      description: 'En rolig livvakt følger deg og lager en brannmur av flammer mellom deg og flokken.',
+      countName: 'brannmur',
+      base: { walls: 1, lengthPx: 60, help: 26, interval: 5.5, duration: 3, slow: 0.3 },
+      growth: { help: { pct: 0.15 }, lengthPx: { add: 12, max: 150 }, interval: { mul: 0.88, min: 2.5 }, duration: { add: 1, max: 6 }, walls: { add: 1, max: 3 }, slow: { add: 0.05, max: 0.5 } },
+      effects: ['crit', 'linger', 'mark', 'escalation'],
+      /** Fixed for everyone: distance from the player, flame band width, help tick, max firewalls at the same time. */
+      distance: 30, width: 10, tick: 0.25, maxWalls: 3,
+    },
+    /**
+     * THE MATRIX (Endringsprompt 4, section 7): the rarest combination. Skytsengelen (10 increments or combined) +
+     * Livvakten (10 increments) + Shopkeeperen merge into one weapon (one weapon slot is freed). The angel still throws
+     * mini printers and the bodyguard still lays firewalls, in green «code» style and stronger. Every «rainEvery»
+     * seconds green characters rain over the screen for «rainTime» seconds: every «rainTick» seconds all lawyers on
+     * screen get «rainHelp», and everything hostile (lawyers, bosses and their projectiles) moves «slowMo» as fast
+     * («bullet time»). The player moves as normal. Never offered as a new weapon – only as the special card.
+     * Angel stats: perThrow, max, interval, life, help (per sheet), burst, range. Firewall stats: walls, lengthPx,
+     * wallHelp, wallInterval, duration, slow.
+     */
+    matrix: {
+      name: 'The Matrix', tag: 'helper', hidden: true,
+      description: 'Skytsengelen og Livvakten i grønn kode, med kode-regn og bullet time.',
+      countName: 'mini-printer',
+      base: {
+        perThrow: 3, max: 7, interval: 1.7, life: 5, help: 40, burst: 0.25, range: 75,
+        walls: 2, lengthPx: 100, wallHelp: 11, wallInterval: 4, duration: 4, slow: 0.4,
+        rainEvery: 12, rainTime: 3, rainTick: 0.5, rainHelp: 20, slowMo: 0.5,
+      },
+      growth: {
+        help: { pct: 0.12 }, wallHelp: { pct: 0.12 }, rainHelp: { pct: 0.15 }, perThrow: { add: 1, max: 6 }, max: { add: 1, max: 12 },
+        walls: { add: 1, max: 3 }, lengthPx: { add: 12, max: 160 }, interval: { mul: 0.92, min: 0.8 }, wallInterval: { mul: 0.9, min: 2.5 },
+      },
+      effects: ['slow', 'crit', 'linger', 'mark', 'escalation'],
+      /** What it takes: the angel (increments or combined), the bodyguard's increments, and Shopkeeperen (any level). */
+      requires: { angel: 'angel', bodyguard: 'bodyguard', passive: 'certification' },
+      cardText: 'Skytsengelen og Livvakten slås sammen til ett våpen i grønn kode. Kode-regn og bullet time hvert 12. sekund. Frigjør én våpenplass.',
     },
   },
 
-  /** The four new passives (added in version 3). */
+  /** Kept for older tools: all weapons now live in CONFIG.weapons. */
+  newWeapons: {},
+
+  /** The passives added in version 3. */
   newPassives: {
     dualMonitor: { name: 'Dobbel skjerm', value: 0.05, text: '+5 % sjanse for at et våpen aktiveres to ganger på rad.' },
     shortcuts: { name: 'Hurtigtaster', value: 0.12, text: '+12 % fart på prosjektiler, bumeranger og kjeder.' },
     ergonomicChair: { name: 'Ergonomisk stol', value: 0.06, text: '−6 % skade fra treff.' },
-    certification: { name: 'Sertifisering', value: 0.08, text: '+8 % erfaring fra ticket-lapper.' },
+    /** «Shopkeeperen» (Endringsprompt 4, was «Sertifisering»): same effect; also stands next to the player as a small figure. */
+    certification: { name: 'Shopkeeperen', value: 0.08, text: '+8 % erfaring fra ticket-lapper.' },
   },
+
+  /**
+   * The passives added in version 5 and 6 (Brotato-style stats). All of them are shown on the stat sheet at level-up.
+   * crit = chance that a hit gives critMult × help. regen = energy per second. dodge = chance that a hit misses.
+   * luck = «Hesteskoen», see CONFIG.upgrades.
+   */
+  statPassives: {
+    coffeeMachine: { name: 'Kaffemaskin', value: 0.05, text: '+5 % kritisk sjanse (kritiske treff gir ekstra hjelp).' },
+    mechKeyboard: { name: 'Mekanisk tastatur', value: 0.25, text: '+25 % hjelp fra kritiske treff.' },
+    overtime: { name: 'Overtid', value: 0.15, speedCost: 0.04, text: '+15 % hjelp på alle våpen, men −4 % bevegelseshastighet.' },
+    standingDesk: { name: 'Hev-senk-pult', value: 0.35, text: '+0,35 energi per sekund i regenerering.' },
+    firewall: { name: 'Brannmur', value: 0.06, max: 0.3, text: '+6 % sjanse for å unngå et treff helt.' },
+    /** «Hesteskoen» (luck, version 6): rarer cards are more likely, and a chance of a fourth card. */
+    horseshoe: { name: 'Hesteskoen', value: 0.25, fourthCard: 0.12, text: '+25 % flaks: sjeldnere kort oftere, og +12 % sjanse for et fjerde kort.' },
+  },
+
+  /**
+   * The passives added in version 6.1 (items, Brotato-style). revives = lethal hits survived per shift,
+   * lifesteal = energy per helped lawyer, ticketLife = extra seconds a ticket stays, points = more points from
+   * everything, drinkFill/kickTime = bigger energy drinks, slowRes = less slowdown from paper piles, ink and hold music.
+   */
+  itemPassives: {
+    backup: { name: 'Sikkerhetskopi', value: 1, max: 3, restore: 0.5, grace: 2, text: 'Overlever ett dødelig treff per vakt (maks 3) og får halv energi tilbake.' },
+    grateful: { name: 'Takknemlige advokater', value: 0.04, text: '+0,04 energi for hver advokat du hjelper.' },
+    postIt: { name: 'Post-it-blokk', value: 2, text: 'Ticket-lappene ligger 2 sekunder lenger på gulvet.' },
+    bonusScheme: { name: 'Bonusordning', value: 0.1, text: '+10 % poeng fra lapper, hastesaker og bosser.' },
+    thermos: { name: 'Termos', fill: 10, kick: 2, text: 'Energidrikken gir +10 energi og sukkerkicket varer 2 sekunder lenger.' },
+    janitor: { name: 'Vaktmester', value: 0.15, max: 0.75, text: '−15 % treghet fra papirbunker, blekk og ventemusikk.' },
+  },
+
+  /**
+   * Tag passives (version 6): +value help for every weapon with that tag (see "tag" on each weapon).
+   * Commit to a class and the passive pays for all the weapons in it.
+   */
+  tagPassives: {
+    throwingCourse: { name: 'Kastekurs', tag: 'projectile', value: 0.15, text: '+15 % hjelp fra prosjektilvåpen: Toner-kast, Ctrl+Z, Teams-varsel og Ping-pong.' },
+    networkCert: { name: 'Nettverkssertifisering', tag: 'chain', value: 0.15, text: '+15 % hjelp fra kjedevåpen: Passord-reset og Fjernstyring.' },
+    openPlan: { name: 'Åpent landskap', tag: 'area', value: 0.15, text: '+15 % hjelp fra områdevåpen: Skru av og på, Trådløse mus, HDMI-kabelen og Oppdateringsstrålen.' },
+    summerIntern: { name: 'Sommervikar', tag: 'helper', value: 0.15, text: '+15 % hjelp fra hjelperne: Skytsengelen, Livvakten og Støydempende headset.' },
+  },
+
+  /** Base critical hit multiplier (before «Mekanisk tastatur»). */
+  critMult: 1.5,
 
   /**
    * PASSIVES. "value" is the effect per level (0.10 = 10 %).
@@ -636,7 +864,7 @@ export const CONFIG = {
   leaderboard: {
     maxName: 20,
     /** Max points per second survived (generous). */
-    maxPointsPerSecond: 5000,
+    maxPointsPerSecond: 9000,
     /** Max lawyers helped per second survived. */
     maxHelpedPerSecond: 50,
     /** Max submissions per minute from the same address (generous, in case a whole household shares an address behind a proxy). */
@@ -646,9 +874,33 @@ export const CONFIG = {
   },
 };
 
-// The new weapons and passives are merged with the old ones, so the rest of the game sees 10 weapons and 12 passives.
+// The passives from version 3, 5, 6 and 6.1 are merged with the original ones, so the rest of the game sees 28 passives.
 Object.assign(CONFIG.weapons, CONFIG.newWeapons);
-Object.assign(CONFIG.passives, CONFIG.newPassives);
+Object.assign(CONFIG.passives, CONFIG.newPassives, CONFIG.statPassives, CONFIG.tagPassives, CONFIG.itemPassives);
+
+/** The tag of each weapon id (for the tag passives). */
+export const WEAPON_TAG = /** @type {Record<string, string>} */ ({});
+for (const [id, w] of Object.entries(CONFIG.weapons)) WEAPON_TAG[id] = /** @type {any} */ (w).tag ?? 'area';
+
+/**
+ * How each stat is named on the upgrade cards and the stat sheet, and how its value is shown.
+ * unit: 's' = seconds, 'px' = pixels, 'n' = a count, '' = plain number, 'rad' = radians per second.
+ */
+export const STAT_LABEL = {
+  help: ['hjelp per treff', ''], interval: ['tid mellom aktiveringer', 's'], radius: ['puls', 'px'], splash: ['tonersprut', 'px'],
+  track: ['bane', 'px'], rotation: ['rotasjon', 'rad'], range: ['rekkevidde', 'px'], reach: ['rekkevidde', 'px'], lengthPx: ['lengde', 'px'],
+  width: ['bredde', 'px'], duration: ['varighet', 's'], pause: ['pause', 's'], speed: ['fart', 'px'], turn: ['styring', 'rad'],
+  hops: ['hopp', 'n'], hits: ['treff', 'n'], chains: ['kjeder', 'n'], charge: ['oppladning', 's'], pulseRadius: ['puls', 'px'], arc: ['bue', 'rad'],
+  nudge: ['dytt', 'px'], hitPause: ['pause per advokat', 's'], burst: ['tid mellom papirark', 's'],
+  charges: ['ladninger', 'n'], life: ['levetid', 's'], max: ['samtidig', 'n'], back: ['svinges også bakover', ''], count: ['antall', 'n'],
+  perThrow: ['per kast', 'n'], hopTime: ['tid per hopp', 's'], tick: ['takt', 's'], period: ['periode', 's'], spread: ['spredning', ''],
+  // Endringsprompt 4: Ping-pong, Livvakten and The Matrix
+  bounces: ['sprett', 'n'], boostMax: ['tak på hjelpeøkning', ''], walls: ['brannmurer', 'n'], slow: ['sinking', ''],
+  wallHelp: ['hjelp fra brannmuren', ''], wallInterval: ['tid mellom brannmurer', 's'], rainHelp: ['hjelp fra kode-regnet', ''],
+  maxBalls: ['maks baller', 'n'], rainEvery: ['kode-regn hvert', 's'], rainTime: ['kode-regnet varer', 's'], rainTick: ['kode-regn takt', 's'],
+  slowMo: ['bullet time', ''],
+};
+
 // The sender uses the same fields as the other lawyer types.
 /** @type {any} */ (CONFIG.enemies).sender = CONFIG.sender;
 

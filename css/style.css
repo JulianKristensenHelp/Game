@@ -165,10 +165,28 @@ strong { font-weight: normal; color: var(--primary-dark); }
 
 /* ---------- Level-up ---------- */
 .levelTitle { color: #fff; font-size: 1.75em; margin-bottom: 1em; text-shadow: 0.125em 0.125em 0 #000; }
+.levelTitle .levelQueue { display: block; font-size: 0.55em; color: #ffe066; margin-top: 0.3em; }
+#pauseStats { margin-top: 1em; }
+#endBuild { margin: 0.2em 0 0.6em; }
+#endBuild .build { font-size: 0.82em; }
 #cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25em; justify-content: center; }
 #cards.one { grid-template-columns: minmax(0, 22em); }
 #cards.two { grid-template-columns: repeat(2, minmax(0, 22em)); }
-@media (max-width: 760px) { #cards, #cards.two { grid-template-columns: 1fr; gap: 0.75em; } }
+#cards.four { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.9em; }
+@media (max-width: 760px) { #cards, #cards.two { grid-template-columns: 1fr; gap: 0.75em; } #cards.four { grid-template-columns: 1fr 1fr; } }
+
+/* The stat sheet under the cards (every number the passives change, and the build so far) */
+.statSheet { margin: 1em auto 0; max-width: 56em; background: rgba(244, 241, 234, 0.94); color: var(--text); padding: 0.6em 0.9em 0.7em; box-shadow: 0 0 0 0.125em var(--border); text-align: left; }
+.statSheet h3 { margin: 0 0 0.35em; font-size: 0.8em; text-transform: uppercase; color: var(--muted); }
+.statGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(12.5em, 1fr)); gap: 0.1em 1.2em; font-size: 0.82em; }
+.statGrid .stat { display: flex; justify-content: space-between; gap: 0.5em; border-bottom: 0.0625em dotted #c9bfa8; padding: 0.1em 0; }
+.statGrid .statValue { color: var(--primary-dark); white-space: nowrap; }
+.statGrid .stat.zero .statValue { color: var(--muted); }
+.build { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4em; margin-top: 0.55em; font-size: 0.82em; }
+.build .chip { display: inline-flex; align-items: center; gap: 0.35em; background: #ffffff; padding: 0.15em 0.45em 0.15em 0.3em; box-shadow: 0 0 0 0.0625em var(--border); }
+.build .chip.evo { background: #fff4c2; }
+.build .chip canvas.icon { width: 1.5em; height: 1.5em; image-rendering: pixelated; }
+@media (max-height: 640px) { .statSheet { display: none; } }
 .card {
   position: relative;
   display: flex; flex-direction: column; align-items: center; gap: 0.4em;
@@ -184,11 +202,61 @@ strong { font-weight: normal; color: var(--primary-dark); }
 .card .name { font-size: 1.35em; }
 .card .level { font-size: 0.9em; text-transform: uppercase; color: var(--primary-dark); }
 .card .text { font-size: 1.05em; line-height: 1.45; }
+/* Tiers (rarity): grey = common, green = uncommon, blue = rare, orange = legendary. A stripe at the top and a tinted frame. */
+.card::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 0.5em; background: #8a94a0; }
+.card.tier0::before { background: #8a94a0; }
+.card.tier1::before { background: #2fd06a; }
+.card.tier2::before { background: #3aa0ff; }
+.card.tier3::before { background: #ff9f43; }
+.card.tier1 { background: #f0fbf3; box-shadow: 0 -0.25em 0 0 #1e7a40, 0 0.25em 0 0 #1e7a40, -0.25em 0 0 0 #1e7a40, 0.25em 0 0 0 #1e7a40, inset 0 -0.5em 0 0 #c9ecd4; }
+.card.tier1 .level { color: #1e7a40; }
+.card.tier2 { background: #eef6ff; box-shadow: 0 -0.25em 0 0 #1f5fa8, 0 0.25em 0 0 #1f5fa8, -0.25em 0 0 0 #1f5fa8, 0.25em 0 0 0 #1f5fa8, inset 0 -0.5em 0 0 #c4dcf7, 0 0 0 0.6em rgba(58, 160, 255, 0.35); }
+.card.tier2 .level { color: #1f5fa8; }
+.card.tier3 { background: #fff1e3; box-shadow: 0 -0.25em 0 0 #a8520a, 0 0.25em 0 0 #a8520a, -0.25em 0 0 0 #a8520a, 0.25em 0 0 0 #a8520a, inset 0 -0.5em 0 0 #ffd6ad, 0 0 0 0.75em rgba(255, 159, 67, 0.45); }
+.card.tier3 .level { color: #a8520a; }
+.card .banish { position: absolute; top: 0.6em; right: 0.6em; width: 1.6em; height: 1.6em; display: grid; place-items: center; background: #ffffff; color: var(--danger); box-shadow: 0 0 0 0.125em var(--border); font-size: 0.9em; }
+.card .banish:hover { background: #ffe3e3; }
+#cards.banishMode .card { outline: 0.25em dashed var(--danger); outline-offset: 0.25em; }
+#cards.banishMode .card .banish { background: var(--danger); color: #fff; }
+.levelActions { display: flex; align-items: center; justify-content: center; gap: 1em; flex-wrap: wrap; margin-top: 0.8em; }
+.levelActions button { margin: 0; }
+#packageCards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25em; justify-content: center; margin-bottom: 1em; }
+#packageCards.one { grid-template-columns: minmax(0, 22em); }
+#packageCards.two { grid-template-columns: repeat(2, minmax(0, 22em)); }
+#packageCards.four { grid-template-columns: repeat(auto-fit, minmax(12em, 1fr)); gap: 0.8em; }
+#packageCards .card { cursor: default; }
+#packageCards .card:hover { transform: none; }
+@media (max-width: 760px) { #packageCards, #packageCards.two, #packageCards.four { grid-template-columns: 1fr; gap: 0.75em; } }
+/* The weapon sheet at level-up: every number per weapon, and the effects taken */
+.weaponSheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(16em, 1fr)); gap: 0.5em; margin-top: 0.6em; font-size: 0.82em; }
+.weaponBox { background: #ffffff; padding: 0.4em 0.55em 0.45em; box-shadow: 0 0 0 0.0625em var(--border); }
+.weaponBox.evo { background: #fff4c2; }
+.weaponHead { display: flex; align-items: center; gap: 0.4em; flex-wrap: wrap; }
+.weaponHead canvas.icon { width: 1.6em; height: 1.6em; image-rendering: pixelated; }
+.weaponHead .name { color: var(--primary-dark); }
+.weaponStats { display: flex; flex-wrap: wrap; gap: 0.1em 0.9em; margin-top: 0.2em; }
+.weaponStats .wstat { display: inline-flex; gap: 0.35em; }
+.weaponStats .statName { color: var(--muted); }
+.weaponFx { display: flex; flex-wrap: wrap; gap: 0.3em; margin-top: 0.3em; }
+.weaponFx .chip { background: #eef6ff; padding: 0.05em 0.4em; box-shadow: 0 0 0 0.0625em #1f5fa8; color: #1f5fa8; }
 .card.highlighted {
   background: #fff4c2;
   box-shadow: 0 -0.25em 0 0 #8a5a00, 0 0.25em 0 0 #8a5a00, -0.25em 0 0 0 #8a5a00, 0.25em 0 0 0 #8a5a00, inset 0 -0.5em 0 0 #f5cf3a, 0 0 0 0.75em rgba(245, 207, 58, 0.45);
 }
 .card.highlighted .level { color: #a15c00; }
+/* The Matrix (Endringsprompt 4): its own card with a green «code» frame */
+.card.matrix {
+  background: #0d1a10; color: #c8ffd4;
+  background-image: repeating-linear-gradient(90deg, rgba(47, 208, 106, 0.10) 0 0.25em, transparent 0.25em 1.5em);
+  box-shadow: 0 -0.25em 0 0 #2fd06a, 0 0.25em 0 0 #2fd06a, -0.25em 0 0 0 #2fd06a, 0.25em 0 0 0 #2fd06a, inset 0 -0.5em 0 0 #145c2e, 0 0 0 0.75em rgba(47, 208, 106, 0.45);
+}
+.card.matrix::before { background: #2fd06a; }
+.card.matrix .level { color: #7dff9e; }
+.card.matrix:hover { background-color: #12261a; }
+/* The Matrix animation: over the game, scaled exactly like it (set by main.js) */
+#matrixFx { position: fixed; z-index: 30; image-rendering: pixelated; cursor: pointer; background: transparent; }
+#noticeBoard li.matrix { background: #0d1a10; color: #c8ffd4; box-shadow: 0 0 0 0.2em #2fd06a; }
+#noticeBoard li.matrix small { color: #7dff9e; }
 @media (max-width: 760px) {
   .card { min-height: 0; flex-direction: row; flex-wrap: wrap; text-align: left; padding: 0.75em 0.9em 0.75em 2.6em; column-gap: 0.75em; }
   .card canvas.icon { width: 3.5em; height: 3.5em; }

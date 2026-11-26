@@ -300,14 +300,63 @@ const DRAW = {
     r.px(12, 14, C.NEAR_BLACK);
   },
   certification: (r) => {
-    // diploma with rosette
-    r.rect(1, 2, 12, 10, C.PAPER);
-    r.rect(3, 4, 8, 1, C.GRAY);
-    r.rect(3, 6, 6, 1, C.GRAY);
-    r.rect(3, 8, 7, 1, C.GRAY);
-    r.ellipse(12, 11, 3, 3, C.GOLD);
-    r.rect(10, 13, 2, 3, C.RED);
-    r.rect(13, 13, 2, 3, C.RED);
+    // Shopkeeperen (Endringsprompt 4): a friendly shop assistant in a black sweater with a big white «A»
+    r.rect(2, 9, 12, 7, C.NEAR_BLACK);
+    r.rect(1, 11, 14, 5, C.NEAR_BLACK);
+    r.stamp('.#. #.# ### #.#', 6, 11, { '#': C.WHITE });
+    r.ellipse(8, 5, 3.6, 3.8, C.WOOD_L);
+    r.ellipse(8, 2.2, 4, 2, C.POT);
+    r.px(6, 5, C.NEAR_BLACK);
+    r.px(10, 5, C.NEAR_BLACK);
+    r.rect(7, 7, 3, 1, C.DARK_RED);
+  },
+  // ----- Endringsprompt 4 -----
+  pingpong: (r) => {
+    // a red ping-pong paddle and a white ball
+    r.ellipse(6, 6, 5, 5, C.RED);
+    r.ellipse(5, 5, 2.5, 2.5, C.WINE_L);
+    r.rect(9, 9, 2, 2, C.WOOD);
+    r.rect(10, 10, 3, 3, C.WOOD_M);
+    r.rect(12, 12, 3, 3, C.WOOD_M);
+    r.ellipse(12.5, 3.5, 2.5, 2.5, C.NEAR_WHITE);
+  },
+  'evo:pingpong': (r) => {
+    // Ping of Death: a red-hot ball splitting in two, with glowing trails behind both
+    for (let i = 0; i < 5; i++) {
+      r.px(1 + i, 14 - i, i < 2 ? C.YELLOW : C.ORANGE);
+      r.px(2 + i, 14 - i, C.ORANGE);
+      r.px(1 + i, 9 - Math.floor(i / 2), C.ORANGE);
+    }
+    r.ellipse(10, 8.5, 3.6, 3.6, C.RED);
+    r.rect(9, 7, 2, 2, C.YELLOW);
+    r.ellipse(13, 3, 2.2, 2.2, C.RED);
+    r.px(12, 2, C.YELLOW);
+  },
+  bodyguard: (r) => {
+    // Livvakten: head with sunglasses and an earpiece, black suit, and a small flame
+    r.rect(2, 11, 12, 5, C.NEAR_BLACK);
+    r.rect(7, 11, 2, 3, C.WHITE);
+    r.ellipse(8, 6, 4, 4.3, C.POT_M);
+    r.rect(4, 2, 8, 2, C.NEAR_BLACK);
+    r.rect(5, 5, 6, 2, C.NEAR_BLACK);
+    r.px(5, 5, C.DARK_GRAY);
+    r.px(9, 5, C.DARK_GRAY);
+    r.px(12, 7, C.LIGHT_GRAY);
+    r.px(13, 8, C.LIGHT_GRAY);
+    r.px(12, 9, C.LIGHT_GRAY);
+    r.ellipse(13, 13, 2, 2.6, C.ORANGE);
+    r.px(13, 13, C.YELLOW);
+  },
+  matrix: (r) => {
+    // The Matrix: green falling code with a pair of black sunglasses
+    for (const [x, h] of [[1, 9], [4, 13], [7, 6], [10, 11], [13, 8]]) {
+      for (let y = 0; y < h; y += 2) r.px(x, 15 - h + y, y === h - 1 || y === h - 2 ? C.LIGHT_GREEN : C.GREEN);
+    }
+    r.rect(1, 6, 6, 3, C.NEAR_BLACK);
+    r.rect(9, 6, 6, 3, C.NEAR_BLACK);
+    r.rect(7, 6, 2, 1, C.NEAR_BLACK);
+    r.px(2, 6, C.LIGHT_GREEN);
+    r.px(10, 6, C.LIGHT_GREEN);
   },
   // ----- Version 4 -----
   angel: (r) => {
@@ -337,6 +386,167 @@ const DRAW = {
     r.rect(4, 10, 8, 5, C.NEAR_WHITE);
     r.rect(5, 9, 6, 2, C.PAPER);
     r.rect(5, 12, 4, 1, C.TEAL);
+  },
+  // ----- Version 5 (the stat passives) -----
+  coffeeMachine: (r) => {
+    // a coffee machine with a cup under the spout
+    r.rect(2, 1, 12, 7, C.DARK_GRAY);
+    r.rect(3, 2, 10, 2, C.NEAR_BLACK);
+    r.rect(4, 3, 3, 1, C.GREEN);
+    r.rect(10, 3, 2, 1, C.RED);
+    r.rect(7, 8, 2, 2, C.NEAR_BLACK);
+    r.rect(5, 10, 6, 4, C.WHITE);
+    r.rect(6, 11, 4, 1, C.BROWN);
+    r.rect(11, 11, 2, 2, C.WHITE);
+    r.rect(2, 14, 12, 1, C.DARK_GRAY);
+  },
+  mechKeyboard: (r) => {
+    // a mechanical keyboard with a lit key
+    r.rect(0, 5, 16, 9, C.NEAR_BLACK);
+    for (let y = 6; y < 13; y += 3) for (let x = 1; x < 15; x += 3) r.rect(x, y, 2, 2, C.LIGHT_GRAY);
+    r.rect(7, 9, 2, 2, C.GOLD);
+    r.rect(4, 12, 8, 1, C.GRAY);
+    r.stamp('.#. ### .#.', 6, 1, { '#': C.YELLOW });
+  },
+  overtime: (r) => {
+    // a clock showing late hours, with a moon
+    r.ellipse(7, 8.5, 6, 6, C.WHITE);
+    r.ellipse(7, 8.5, 5, 5, C.NEAR_WHITE);
+    r.rect(7, 4, 1, 5, C.NEAR_BLACK);
+    r.rect(7, 8, 4, 1, C.NEAR_BLACK);
+    r.px(7, 8, C.RED);
+    r.ellipse(13.5, 3, 2.5, 2.5, C.YELLOW);
+    r.ellipse(14.5, 2.5, 2, 2, 0);
+  },
+  standingDesk: (r) => {
+    // a sit-stand desk with a monitor, raised
+    r.rect(4, 1, 8, 5, C.DARKER);
+    r.rect(5, 2, 6, 3, C.LIGHT_BLUE);
+    r.rect(1, 7, 14, 2, C.WOOD_L);
+    r.rect(1, 9, 14, 1, C.WOOD);
+    r.rect(3, 10, 2, 5, C.DARK_GRAY);
+    r.rect(11, 10, 2, 5, C.DARK_GRAY);
+    r.stamp('.#. ###', 7, 11, { '#': C.GREEN });
+  },
+  firewall: (r) => {
+    // a brick wall with flames on top
+    r.stamp('..#...#...#.... .###.###.###... ###############', 0, 0, { '#': C.ORANGE });
+    r.rect(1, 2, 14, 1, C.YELLOW);
+    r.rect(0, 4, 16, 11, C.RED);
+    for (let y = 4; y < 15; y += 3) {
+      r.rect(0, y + 2, 16, 1, C.DARK_RED);
+      for (let x = (y / 3) % 2 === 0 ? 3 : 1; x < 16; x += 5) r.rect(x, y, 1, 2, C.DARK_RED);
+    }
+  },
+  // ----- Version 6.1 (the items) -----
+  backup: (r) => {
+    // an external drive with a green check mark
+    r.rect(1, 4, 14, 8, C.DARK_SLATE);
+    r.rect(2, 5, 12, 6, C.SLATE);
+    r.rect(3, 6, 6, 1, C.LIGHT_GRAY);
+    r.rect(3, 8, 4, 1, C.LIGHT_GRAY);
+    r.rect(12, 6, 1, 1, C.GREEN);
+    r.stamp('....# ...## #.##. ###.. .#...', 9, 10, { '#': C.GREEN });
+  },
+  grateful: (r) => {
+    // a thank-you card with a heart
+    r.rect(2, 2, 12, 12, C.PAPER);
+    r.rect(2, 2, 12, 1, C.LIGHT_GRAY);
+    r.stamp('.##.##. ####### ####### .#####. ..###.. ...#...', 4, 5, { '#': C.RED });
+  },
+  postIt: (r) => {
+    // a yellow post-it block with a curled corner
+    r.rect(2, 2, 12, 12, C.YELLOW);
+    r.rect(2, 2, 12, 2, C.GOLD_L);
+    r.rect(4, 6, 7, 1, C.OCHRE);
+    r.rect(4, 8, 8, 1, C.OCHRE);
+    r.rect(4, 10, 5, 1, C.OCHRE);
+    r.stamp('..# .## ###', 11, 11, { '#': C.DARK_YELLOW });
+  },
+  bonusScheme: (r) => {
+    // a bag of coins with a percent sign
+    r.rect(5, 1, 6, 2, C.WOOD_M);
+    r.ellipse(8, 9.5, 6, 5.5, C.WOOD);
+    r.ellipse(8, 9.5, 4.5, 4, C.WOOD_L);
+    r.stamp('##..# ##.#. ..#.. .#.## #..##', 5, 7, { '#': C.GOLD_M });
+  },
+  thermos: (r) => {
+    // a steel thermos with steam
+    r.rect(5, 2, 6, 2, C.DARK_GRAY);
+    r.rect(4, 4, 8, 11, C.LIGHT_GRAY);
+    r.rect(4, 4, 2, 11, C.WHITE);
+    r.rect(5, 7, 6, 4, C.RED);
+    r.rect(12, 6, 1, 5, C.DARK_GRAY);
+    r.px(6, 0, C.LIGHT_GRAY);
+    r.px(9, 0, C.LIGHT_GRAY);
+  },
+  janitor: (r) => {
+    // a mop in a bucket
+    r.rect(9, 0, 2, 10, C.WOOD);
+    r.rect(6, 9, 8, 4, C.LIGHT_GRAY);
+    r.rect(2, 8, 8, 7, C.BLUE);
+    r.rect(2, 8, 8, 1, C.LIGHT_BLUE);
+    r.rect(3, 9, 1, 5, C.DARK_BLUE);
+    r.rect(1, 7, 10, 1, C.DARK_GRAY);
+  },
+  // ----- Version 6 -----
+  horseshoe: (r) => {
+    // a gold horseshoe, open at the bottom, with nail holes
+    r.ellipse(8, 7.5, 6.5, 6.5, C.GOLD);
+    r.ellipse(8, 7.5, 3.5, 3.5, 0);
+    r.rect(5, 10, 6, 6, 0);
+    r.rect(2, 13, 3, 2, C.GOLD_M);
+    r.rect(11, 13, 3, 2, C.GOLD_M);
+    for (const [x, y] of [[3, 7], [13, 7], [5, 3], [11, 3]]) r.px(x, y, C.GOLD_M);
+  },
+  throwingCourse: (r) => {
+    // a paper plane with a dotted flight path
+    r.stamp('..........## .......##### ....######## .#########.. ....######.. .......####. ..........#.', 1, 3, { '#': C.WHITE });
+    r.stamp('....######.. .......###..', 1, 6, { '#': C.LIGHT_GRAY });
+    for (let x = 1; x < 8; x += 2) r.px(x, 12 - Math.floor(x / 3), C.LIGHT_BLUE);
+  },
+  networkCert: (r) => {
+    // three network nodes joined by cables, with a certificate seal
+    r.rect(1, 1, 5, 4, C.GREEN);
+    r.rect(10, 1, 5, 4, C.GREEN);
+    r.rect(5, 10, 6, 4, C.GREEN);
+    r.rect(3, 5, 1, 4, C.LIGHT_GRAY);
+    r.rect(12, 5, 1, 4, C.LIGHT_GRAY);
+    r.rect(3, 9, 10, 1, C.LIGHT_GRAY);
+    r.ellipse(13, 12, 2.5, 2.5, C.GOLD);
+  },
+  openPlan: (r) => {
+    // a floor plan: four desks in an open office
+    r.rect(0, 1, 16, 14, C.CREAM);
+    for (const [x, y] of [[2, 3], [9, 3], [2, 9], [9, 9]]) {
+      r.rect(x, y, 5, 3, C.WOOD_L);
+      r.rect(x + 1, y + 3, 3, 1, C.CHAIR);
+    }
+    r.rect(7, 1, 1, 14, C.LIGHT_GRAY);
+  },
+  summerIntern: (r) => {
+    // a cheerful intern in a company t-shirt and a cap
+    r.rect(5, 1, 6, 2, C.RED);
+    r.rect(4, 3, 8, 1, C.RED);
+    r.rect(5, 4, 6, 4, C.WOOD_L);
+    r.px(6, 5, C.DARKER);
+    r.px(9, 5, C.DARKER);
+    r.rect(6, 7, 4, 1, C.DARK_RED);
+    r.rect(3, 9, 10, 6, C.TEAL);
+    r.rect(6, 10, 4, 2, C.WHITE);
+    r.rect(1, 9, 2, 4, C.WOOD_L);
+    r.rect(13, 8, 2, 3, C.WOOD_L);
+  },
+  package: (r) => {
+    // the supplier package: cardboard box with tape and a gold sticker
+    r.rect(1, 4, 14, 11, C.WOOD);
+    r.rect(1, 4, 14, 3, C.WOOD_L);
+    r.rect(1, 14, 14, 1, C.WOOD_M);
+    r.rect(7, 4, 2, 11, C.BEIGE);
+    r.rect(2, 9, 4, 3, C.WHITE);
+    r.rect(3, 10, 2, 1, C.GRAY);
+    r.stamp('.#. ### .#.', 10, 9, { '#': C.GOLD });
+    r.rect(5, 1, 6, 3, C.ORANGE);
   },
   fired: (r) => {
     // the moving box (you are fired): cardboard box with a plant and a mug
