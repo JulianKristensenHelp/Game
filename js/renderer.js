@@ -450,19 +450,19 @@ export class Renderer {
 
   /**
    * The capture point (Endringsprompt 5): a circle on the floor with a progress ring that fills while the player holds
-   * it. Teal when free, red while a lawyer stands in it («Opptatt!»). Calm (no pulse) with reduced flashing.
+   * it. Teal, and gold while the player stands in it (only the player counts). Calm (no pulse) with reduced flashing.
    * @param {import('./capture.js').ActiveCapture} a
    */
   drawCapture(s, a, now) {
     const ctx = this.ctx, C = CONFIG.capture;
     const R = C.radius;
-    const color = a.busy ? '#e5484d' : a.inside ? '#f5cf3a' : '#14b8a6';
+    const color = a.inside ? '#f5cf3a' : '#14b8a6';
     ctx.globalAlpha = this.settings.fewerFlashes ? 0.85 : 0.7 + Math.sin(now * 4) * 0.15;
-    drawSprite(ctx, ring(R, color, 2, a.busy ? 0.14 : 0.1, 6), a.x, a.y);
+    drawSprite(ctx, ring(R, color, 2, 0.1, 6), a.x, a.y);
     ctx.globalAlpha = 1;
     // the progress ring just inside the circle, clockwise from the top
     const fraction = Math.min(1, a.progress / C.holdTime);
-    ctx.fillStyle = a.busy ? '#ff9f9f' : '#fff6c8';
+    ctx.fillStyle = '#fff6c8';
     const r = R - 5;
     for (let t = 0; t < fraction * TAU; t += 0.07) ctx.fillRect(Math.round(a.x + Math.sin(t) * r) - 1, Math.round(a.y - Math.cos(t) * r) - 1, 2, 2);
   }
@@ -477,13 +477,12 @@ export class Renderer {
     return sp;
   }
 
-  /** The icon over the capture point (bobbing gently), with «Opptatt!» while a lawyer blocks it. */
+  /** The icon over the capture point (bobbing gently). */
   drawCaptureMarker(a, now) {
     const ctx = this.ctx;
     const bob = this.settings.fewerFlashes ? 0 : Math.round(Math.sin(now * 3) * 2);
     const ic = icon('capture:' + a.id);
     ctx.drawImage(ic, Math.round(a.x - 8), Math.round(a.y - CONFIG.capture.radius - 20 + bob));
-    if (a.busy && a.inside) this.font.draw(ctx, CONFIG.capture.busyText, a.x, a.y - CONFIG.capture.radius - 30 + bob, '#ff9f9f', 1, '#1d1626', 'center');
   }
 
   /** Happy animation: smile and thumbs up with a small hop and sparkles, then a small pixel cloud. */
@@ -785,8 +784,8 @@ export class Renderer {
    */
   drawWall(pr, now) {
     const ctx = this.ctx, item = this.spr.item;
-    const green = pr.evo === 2;
-    const set = green ? item.flameGreen : item.flame;
+    const green = pr.evo === 2, blue = pr.evo === 1;
+    const set = green ? item.flameGreen : blue ? item.flameBlue : item.flame;
     const cos = Math.cos(pr.angle), sin = Math.sin(pr.angle);
     const L = pr.range;
     const fade = Math.min(1, pr.t / 0.25, pr.life / 0.4);
@@ -794,7 +793,7 @@ export class Renderer {
     const calm = this.settings.fewerFlashes;
     // a faint band on the floor
     ctx.globalAlpha = 0.25 * fade;
-    ctx.fillStyle = green ? '#2fd06a' : '#ff9f43';
+    ctx.fillStyle = green ? '#2fd06a' : blue ? '#3aa0ff' : '#ff9f43';
     for (let k = 0; k <= n; k++) {
       const u = -L + (2 * L * k) / n;
       ctx.fillRect(Math.round(pr.x - sin * u) - 3, Math.round(pr.y + cos * u) - 1, 7, 3);

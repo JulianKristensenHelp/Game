@@ -402,7 +402,9 @@ function updateEvents(s) {
 /** Carries out one event. The direction comes from the events stream. */
 export function fireEvent(s, id) {
   const k = EV.defs[id];
-  const rng = s.rng.events;
+  // The details come from their own run stream (Endringsprompt 6): drawing them from the events stream made the
+  // later rare-event rolls depend on when the scheduled events fired (and so on how fast a boss was helped).
+  const rng = s.rng.eventDetails;
   const p = s.player;
   const min = s.time / 60;
   s.lastEvent = s.time;

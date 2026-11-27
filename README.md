@@ -17,11 +17,14 @@ long as you can, collect tickets, and climb the shared daily leaderboard.
   character art in `assets/karakterer/`. Every screen sees the same area of the map.
 - **Four playable characters**, each with its own starting weapon and bonus, drawn by the client as pixel art
   (`assets/karakterer/`, used pixel for pixel with integer scaling).
-- **13 weapons with no level cap** (max 4 at once), **28 passives** (max 8 at once), **12 combinations**
-  (evolutions) and the rare special combination **The Matrix** (Skytsengelen + Livvakten + Shopkeeperen, with code
-  rain and bullet time). Every level-up card is one specific increment: more help, a shorter interval, one more mouse or
-  cartridge, or an effect modifier (pierce, splash, slow, lingering help, knockback, crit, mark, escalation, pull). Cards have four tiers
-  (common, uncommon, rare, legendary) with bigger increments, and luck («Hesteskoen») makes the rare ones more likely.
+- **13 weapons up to level 9** (max 4 at once), **28 passives up to level 5** (max 8 at once), **13 combinations**
+  (one per weapon, «level 10»: the weapon at level 9 + its passive) and the rare special combination **The Matrix**
+  (Skytsengelen + Livvakten + Shopkeeperen, with code rain and bullet time). See the table below. Every level-up card
+  is one specific increment and one level: more help, a shorter interval, one more mouse or cartridge, or an effect
+  modifier (pierce, splash, slow, lingering help, knockback, crit, mark, escalation, pull). Every valid card has the
+  same chance, an available combination is always shown, and the same set of cards never comes twice in a row. Cards
+  have four tiers (common, uncommon, rare, legendary) with bigger increments, and luck («Hesteskoen») makes the rare
+  ones more likely.
   Rerolls and banishes, supplier packages from bosses, and tag passives for weapon classes. All weapons aim at the
   nearest lawyer.
 - **Brotato-style stats:** critical hits, armour, regeneration, dodge and luck, all shown on a stat sheet with every
@@ -41,11 +44,70 @@ long as you can, collect tickets, and climb the shared daily leaderboard.
   and her friends at 9:00 and the final boss at 12:00, who returns every 3 minutes after that), each with its own
   telegraphed attacks. Bosses are mandatory: if a boss's countdown
   runs out, you're fired («Du har fått sparken!») and the shift ends.
-- **"Today's shift" (Dagens vakt):** all randomness is seeded from today's date (Europe/Oslo), so everyone
-  plays the same waves and gets the same upgrade offers for the same choices.
+- **"Today's shift" (Dagens vakt) and the run seed:** the *structure* of the shift is seeded from today's date
+  (Europe/Oslo) and is the same for everyone all day: when the bosses come, when the office events and the
+  capture-point events come and which ones, the difficulty curve, where the energy drinks and «Sky-synk» appear, and
+  when and where the urgent case comes. Everything else is new in every round, from a run seed made with
+  `crypto.getRandomValues` when the round starts: the upgrade cards offered, where and when ordinary lawyers appear
+  and which types, ring waves and flocks, drops (cookies, Ny PC, packages), «Dobbel skjerm», crits, dodges, the
+  ping-pong launch direction and other weapon randomness, the details of the bosses' attacks, and the lawyers' looks.
+  The run seed is saved with the leaderboard entry and shown in the debug overlay; `?debug&seed=<seed>` replays a
+  round (such a replay is never submitted). The start screen still shows «Dagens vakt: [date]».
 - **Shared daily leaderboard** using a tiny Node.js server with built-in SQLite. It resets at midnight Norwegian time.
 - Keyboard (WASD/arrow keys) and touch (virtual joystick), with settings for volume, screen size, UI scale,
   minimap, screen shake, reduced flashing, hit numbers and frustration bars. Sound is off by default.
+
+## Weapons, passives and combinations
+
+Every weapon goes from level 1 to 9 (one level per card). At level 9, with its passive at any level, the combination is offered as a highlighted «level 10» card; after it the weapon takes no more cards. Passives go to level 5. The caps live in one place, `CONFIG.limits` in `js/config.js`, and the debug overlay warns if anything ever goes over them. New in v7.2 (Endringsprompt 6) is marked in **bold**.
+
+| Weapon (level 1–9) | Added | + Passive | = Combination (level 10) | Combination added |
+| --- | --- | --- | --- | --- |
+| Skru av og på | original | Ekstra RAM | Full omstart | original |
+| Toner-kast | original | Papirskuff | Kontorprinteren fra helvete | original |
+| Passord-reset | original | Raskere SSD | Tofaktor | original |
+| HDMI-kabelen | original | Lang skjøteledning | Kabelkaos | original |
+| Fjernstyring | original | Admin-rettigheter | Domene-admin | original |
+| Trådløse mus | original | Nye batterier | Musematta | original |
+| Ctrl+Z | original | Hurtigtaster | Ctrl+Alt+Del | original |
+| Oppdateringsstrålen | original | Shopkeeperen | Tvungen oppdatering | original |
+| Teams-varsel | original | Dobbel skjerm | Allmøte på Teams | original |
+| Skytsengelen | original | Større boks | Himmelsk serviceavtale | original |
+| Støydempende headset | original | Ergonomisk stol | Hjemmekontor | original |
+| Ping-pong | v7.0 | Joggesko | Ping of Death | v7.0 |
+| Livvakten | v7.0 | Brannmur | Neste generasjons brannmur | **new in v7.2** |
+| Skytsengelen (level 9 or combined) + Livvakten (level 9 or combined) | v7.0 | Shopkeeperen | The Matrix (special) | v7.0 (Livvakten combined also accepted from **v7.2**) |
+
+| Passive (level 1–5) | Added | Effect per level | Used in combination |
+| --- | --- | --- | --- |
+| Ekstra RAM | original | +10 % større område på alle våpen. | Full omstart |
+| Papirskuff | original | +5 % hjelp på alle våpen. | Kontorprinteren fra helvete |
+| Nye batterier | original | +10 % varighet og hastighet på våpen. | Musematta |
+| Raskere SSD | original | −8 % tid mellom hver aktivering av våpen. | Tofaktor |
+| Joggesko | original | +8 % bevegelseshastighet. | Ping of Death |
+| Større boks | original | +20 maks energi og fyller opp 20 energi. | Himmelsk serviceavtale |
+| Lang skjøteledning | original | +25 % større radius for å plukke opp ticket-lapper. | Kabelkaos |
+| Admin-rettigheter | original | +10 % hjelp på alle våpen. | Domene-admin |
+| Dobbel skjerm | v3 | +5 % sjanse for at et våpen aktiveres to ganger på rad. | Allmøte på Teams |
+| Hurtigtaster | v3 | +12 % fart på prosjektiler, bumeranger og kjeder. | Ctrl+Alt+Del |
+| Ergonomisk stol | v3 | −6 % skade fra treff. | Hjemmekontor |
+| Shopkeeperen | v3 (renamed v7.0) | +8 % erfaring fra ticket-lapper. | Tvungen oppdatering, The Matrix |
+| Kaffemaskin | v5–6 (other developer) | +5 % kritisk sjanse (kritiske treff gir ekstra hjelp). | – |
+| Mekanisk tastatur | v5–6 (other developer) | +25 % hjelp fra kritiske treff. | – |
+| Overtid | v5–6 (other developer) | +15 % hjelp på alle våpen, men −4 % bevegelseshastighet. | – |
+| Hev-senk-pult | v5–6 (other developer) | +0,35 energi per sekund i regenerering. | – |
+| Brannmur | v5–6 (other developer) | +6 % sjanse for å unngå et treff helt. | Neste generasjons brannmur (**new in v7.2**) |
+| Hesteskoen | v5–6 (other developer) | +25 % flaks: sjeldnere kort oftere, og +12 % sjanse for et fjerde kort. | – |
+| Kastekurs | v6 (other developer) | +15 % hjelp fra prosjektilvåpen: Toner-kast, Ctrl+Z, Teams-varsel og Ping-pong. | – |
+| Nettverkssertifisering | v6 (other developer) | +15 % hjelp fra kjedevåpen: Passord-reset og Fjernstyring. | – |
+| Åpent landskap | v6 (other developer) | +15 % hjelp fra områdevåpen: Skru av og på, Trådløse mus, HDMI-kabelen og Oppdateringsstrålen. | – |
+| Sommervikar | v6 (other developer) | +15 % hjelp fra hjelperne: Skytsengelen, Livvakten og Støydempende headset. | – |
+| Sikkerhetskopi | v6.1 (other developer) | Overlever ett dødelig treff per vakt (maks 3) og får halv energi tilbake. | – |
+| Takknemlige advokater | v6.1 (other developer) | +0,04 energi for hver advokat du hjelper. | – |
+| Post-it-blokk | v6.1 (other developer) | Lappene gir full erfaring og full poengverdi i 2 sekunder lenger. | – |
+| Bonusordning | v6.1 (other developer) | +10 % poeng fra lapper, hastesaker og bosser. | – |
+| Termos | v6.1 (other developer) | Energidrikken gir +10 energi og sukkerkicket varer 2 sekunder lenger. | – |
+| Vaktmester | v6.1 (other developer) | −15 % treghet fra papirbunker, blekk og ventemusikk. | – |
 
 ## Requirements
 
@@ -150,7 +212,8 @@ tools/                Balance simulator, weapon measurement, font generator
 | Command | What it does |
 | --- | --- |
 | `npm run simulate` | Bots play full runs in seconds and report survival times, plus determinism checks |
-| `npm run measure-weapons` | Measures help per second for every weapon with 16 increments and as a combination (`node tools/measure-weapons.js 24` for another count) |
+| `npm run measure-weapons` | Measures help per second for every weapon at level 9, as its combination (level 10) and The Matrix |
+| `npm run bot-test` | The automatic test player plays 2 × 120 rounds with different run seeds and characters, and reports round length, combination timing, level pace, help per second per weapon, bosses' fire rates, capture points and card offer counts |
 | `npm run build-font` | Rebuilds `fonts/kontorpiksel.ttf` from the glyphs in `js/pixelfont.js` |
 
 On Windows without Node.js: `powershell -File tools/node.ps1 tools/simulate.js`.

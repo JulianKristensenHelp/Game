@@ -5,7 +5,7 @@ import { mmss, formatNumber } from './utils.js';
 import { multText } from './score.js';
 import { weaponName, weaponStats } from './weapons.js';
 import { iconElement, weaponIconId } from './icons.js';
-import { statValue } from './upgrades.js';
+import { statValue, weaponLevel } from './upgrades.js';
 
 /** @returns {HTMLElement} */
 export const el = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
@@ -201,8 +201,8 @@ export function drawStatSheet(s, holderId = 'levelStats') {
     const box = make('div', 'weaponBox' + (w.evo ? ' evo' : ''));
     const head = make('div', 'weaponHead');
     const k = CONFIG.weapons[w.id].combination;
-    const combo = w.id === 'matrix' ? 'spesialkombinasjon' : w.evo ? 'kombinasjon' : !k ? (w.picks >= after ? 'klar for The Matrix' : `${after - w.picks} igjen til The Matrix`) : w.picks >= after ? `klar for kombinasjon med ${CONFIG.passives[k.passive].name}` : `${after - w.picks} igjen til kombinasjon`;
-    head.append(iconElement(weaponIconId(w)), make('span', 'name', weaponName(w)), make('span', 'muted', `+${w.picks} · ${combo}`));
+    const combo = w.id === 'matrix' ? 'spesialkombinasjon' : w.evo ? 'kombinasjon' : w.picks >= after ? `maks, klar for kombinasjon med ${CONFIG.passives[k.passive].name}` : `${after - w.picks} igjen til nivå ${G.weaponLevel}`;
+    head.append(iconElement(weaponIconId(w)), make('span', 'name', weaponName(w)), make('span', 'muted', `Nivå ${weaponLevel(w)} · ${combo}`));
     box.append(head);
     const t = weaponStats(w);
     const tag = m.tag[CONFIG.weapons[w.id].tag] ?? 1;
@@ -242,7 +242,7 @@ export function drawBuild(s) {
   for (const w of p.weapons) {
     const chip = make('span', 'chip' + (w.evo ? ' evo' : ''));
     const fx = Object.entries(w.fx).filter(([, n]) => n > 0).map(([id, n]) => `${FX[id].name} ${n}`).join(', ');
-    chip.append(iconElement(weaponIconId(w)), make('span', '', `${weaponName(w)} +${w.picks}${fx ? ' · ' + fx : ''}`));
+    chip.append(iconElement(weaponIconId(w)), make('span', '', `${weaponName(w)} nivå ${weaponLevel(w)}${fx ? ' · ' + fx : ''}`));
     build.append(chip);
   }
   for (const pa of p.passives) {
@@ -352,7 +352,7 @@ export function drawNoticeBoard() {
     if (found.includes(id)) {
       const li = make('li');
       const text = make('div');
-      text.append(make('span', '', k.name), make('small', '', `${v.name} (${CONFIG.upgrades.combinationAfter} oppgraderinger) + ${CONFIG.passives[k.passive].name}`));
+      text.append(make('span', '', k.name), make('small', '', `${v.name} (nivå ${CONFIG.limits.weaponLevel}) + ${CONFIG.passives[k.passive].name} = nivå ${CONFIG.limits.weaponLevel + 1}`));
       li.append(iconElement('evo:' + id), text);
       holder.append(li);
     } else {
@@ -363,10 +363,10 @@ export function drawNoticeBoard() {
   }
   // The Matrix: the rarest one, with its own frame when it is unlocked
   if (found.includes('matrix')) {
-    const R = CONFIG.weapons.matrix.requires, after = CONFIG.upgrades.combinationAfter;
+    const R = CONFIG.weapons.matrix.requires, lv = CONFIG.limits.weaponLevel;
     const li = make('li', 'matrix');
     const text = make('div');
-    text.append(make('span', '', CONFIG.weapons.matrix.name), make('small', '', `${CONFIG.weapons[R.angel].name} (${after} oppgraderinger eller kombinert) + ${CONFIG.weapons[R.bodyguard].name} (${after}) + ${CONFIG.passives[R.passive].name}`));
+    text.append(make('span', '', CONFIG.weapons.matrix.name), make('small', '', `${CONFIG.weapons[R.angel].name} (nivå ${lv} eller kombinert) + ${CONFIG.weapons[R.bodyguard].name} (nivå ${lv} eller kombinert) + ${CONFIG.passives[R.passive].name}`));
     li.append(iconElement('matrix'), text);
     holder.append(li);
   } else {
@@ -418,7 +418,7 @@ export function drawStats(s) {
   if (st.combinations.length > 0) {
     line(`Kombinasjoner låst opp: ${st.combinations.map((id) => combinationName(id)).join(', ')}`);
   } else {
-    line(`Ingen kombinasjoner denne vakta – ${CONFIG.upgrades.combinationAfter} oppgraderinger på et våpen + riktig passiv gir én`);
+    line(`Ingen kombinasjoner denne vakta – et våpen på nivå ${CONFIG.limits.weaponLevel} + riktig passiv gir én`);
   }
   if (st.captures > 0) line(`Du klarte ${st.captures} av ${st.captureEvents} ${st.captureEvents === 1 ? 'hendelse' : 'hendelser'} med punkt på kartet`);
   else if (st.captureEvents > 0) line(`Du klarte ingen av ${st.captureEvents} ${st.captureEvents === 1 ? 'hendelse' : 'hendelser'} med punkt på kartet`);

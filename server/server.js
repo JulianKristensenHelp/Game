@@ -7,7 +7,7 @@
 //
 // API:
 //   GET  /api/leaderboard?date=YYYY-MM-DD&name=Kari  → { date, top: [...], own, count }
-//   POST /api/score  { name, score, time, helped, maxMult, date, character, fired } → { ok, improved, spot }
+//   POST /api/score  { name, score, time, helped, maxMult, date, character, fired, seed } → { ok, improved, spot }
 //   (fired = the round ended with «Du har fått sparken!» – a boss's countdown ran out)
 import http from 'node:http';
 import fs from 'node:fs';
@@ -32,7 +32,7 @@ function dateOslo(now = new Date()) {
 // The storage sits behind two functions (getDay, save), so it is easy to replace.
 
 /**
- * @typedef {{name:string, score:number, time:number, helped:number, maxMult:number, character:string, fired?:boolean}} Row
+ * @typedef {{name:string, score:number, time:number, helped:number, maxMult:number, character:string, fired?:boolean, seed?:string}} Row
  * @typedef {{getDay:(date:string)=>Row[], save:(date:string, key:string, row:Row)=>boolean, deleteOlder:(date:string)=>void, type:string}} Store
  */
 
@@ -59,6 +59,7 @@ async function makeSqliteStore() {
     score INTEGER NOT NULL, time INTEGER NOT NULL, helped INTEGER NOT NULL, max_mult REAL NOT NULL,
     character TEXT NOT NULL DEFAULT '',
     fired INTEGER NOT NULL DEFAULT 0,
+    seed TEXT NOT NULL DEFAULT '',
     updated TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (date, name_key))`);
   // Databases from older versions used Norwegian table and column names: copy the rows over once.
@@ -78,11 +79,17 @@ async function makeSqliteStore() {
   } catch {
     /* the column already exists */
   }
-  const load = db.prepare('SELECT name, score, time, helped, max_mult AS maxMult, character, fired FROM entries WHERE date = ? ORDER BY score DESC, time DESC, updated ASC');
+  // Version 7.2 (Endringsprompt 6): the run seed («rundeseed»), so a round on the leaderboard can be replayed.
+  try {
+    db.exec("ALTER TABLE entries ADD COLUMN seed TEXT NOT NULL DEFAULT ''");
+  } catch {
+    /* the column already exists */
+  }
+  const load = db.prepare('SELECT name, score, time, helped, max_mult AS maxMult, character, fired, seed FROM entries WHERE date = ? ORDER BY score DESC, time DESC, updated ASC');
   const getOne = db.prepare('SELECT score FROM entries WHERE date = ? AND name_key = ?');
-  const upsert = db.prepare(`INSERT INTO entries (date, name_key, name, score, time, helped, max_mult, character, fired) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  const upsert = db.prepare(`INSERT INTO entries (date, name_key, name, score, time, helped, max_mult, character, fired, seed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (date, name_key) DO UPDATE SET name = excluded.name, score = excluded.score, time = excluded.time,
-      helped = excluded.helped, max_mult = excluded.max_mult, character = excluded.character, fired = excluded.fired, updated = datetime('now')`);
+      helped = excluded.helped, max_mult = excluded.max_mult, character = excluded.character, fired = excluded.fired, seed = excluded.seed, updated = datetime('now')`);
   const erase = db.prepare('DELETE FROM entries WHERE date < ?');
   return {
     type: 'SQLite',
@@ -90,7 +97,7 @@ async function makeSqliteStore() {
     save(date, key, row) {
       const old = /** @type {any} */ (getOne.get(date, key));
       if (old && old.score >= row.score) return false;
-      upsert.run(date, key, row.name, row.score, row.time, row.helped, row.maxMult, row.character, row.fired ? 1 : 0);
+      upsert.run(date, key, row.name, row.score, row.time, row.helped, row.maxMult, row.character, row.fired ? 1 : 0, row.seed ?? '');
       return true;
     },
     deleteOlder: (date) => void erase.run(date),
@@ -181,7 +188,9 @@ function validate(body) {
   return {
     date,
     key: name.toLocaleLowerCase('nb'),
-    row: { name, score, time: Math.round(time), helped, maxMult: Math.round(maxMult * 10) / 10, character, fired: body.fired === true },
+    row: { name, score, time: Math.round(time), helped, maxMult: Math.round(maxMult * 10) / 10, character, fired: body.fired === true,
+      // the run seed: hex only, so nothing odd is stored
+      seed: typeof body.seed === 'string' && /^[0-9a-f]{1,32}$/.test(body.seed) ? body.seed : '' },
   };
 }
 

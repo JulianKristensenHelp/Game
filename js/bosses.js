@@ -2,7 +2,8 @@
 // The bosses (version 4): a fixed order with Johan last, a countdown that gets you fired («Du har fått sparken!»),
 // and each boss's own attacks. Every attack is warned before it comes (a pose, a light or a «!»), so it can be avoided.
 // All boss projectiles live in the same pool as the emails and count toward the cap of CONFIG.enemyShots.max.
-// Like the rest of the game logic, this uses no screen, sound or Math.random(): «Dagens vakt» (today's shift) stays the same for everyone.
+// Like the rest of the game logic, this uses no screen, sound or Math.random(). The schedule is the same for everyone
+// («Dagens vakt»); the random parts of the attacks come from the round's own stream (Endringsprompt 6).
 import { CONFIG } from './config.js';
 import { TAU } from './utils.js';
 import { effect } from './effects.js';
@@ -76,7 +77,7 @@ export function updateBossSchedule(s) {
 
 /** Puts boss number s.bossNo out on the map, a good distance from the player. */
 export function spawnBoss(s, type) {
-  const p = s.player, rs = s.rng.special;
+  const p = s.player, rs = s.rng.bossAttacks;
   const a = rs.next() * TAU, D = B.spawnDistance;
   let x = p.x + Math.cos(a) * D, y = p.y + Math.sin(a) * D;
   if (x < INSIDE.x0 + 40 || x > INSIDE.x1 - 40) x = p.x - Math.cos(a) * D;
@@ -358,7 +359,7 @@ function startAttack(s, e) {
     }
     case 'herring': {
       // «Silderegn»: shadows on the floor – one where the player stands, the rest around – and herring land on them
-      const H = B.frida.herring, rs = s.rng.special;
+      const H = B.frida.herring, rs = s.rng.bossAttacks;
       for (let j = 0; j < H.count; j++) {
         const v = rs.next() * TAU, d = j === 0 ? 0 : 18 + rs.next() * H.spread;
         const x = Math.min(INSIDE.x1 - 8, Math.max(INSIDE.x0 + 8, e.aimX + Math.cos(v) * d));
@@ -402,7 +403,7 @@ function startAttack(s, e) {
     case 'meeting': {
       // «Alle på møte!» ("Everyone to the meeting!"): a ring of junior associates around the player, with a clear opening
       const M = J.meeting, p = s.player;
-      const gapAt = s.rng.special.next() * TAU;
+      const gapAt = s.rng.bossAttacks.next() * TAU;
       const arc = TAU - M.gap;
       for (let i = 0; i < M.count; i++) {
         const v = gapAt + M.gap / 2 + (arc * (i + 0.5)) / M.count;
@@ -444,11 +445,11 @@ function baitCount(s) {
 }
 
 /**
- * «Lokkemat»: fake pickups appear a little away from the player (special stream, so they are the same for everyone).
+ * «Lokkemat»: fake pickups appear a little away from the player (the boss attack stream, new for every round).
  * A fake energy drink or a fake «Ny PC», each with a small fish hook. Never on the minimap.
  */
 function spawnBait(s) {
-  const K = B.frida.bait, p = s.player, rs = s.rng.special;
+  const K = B.frida.bait, p = s.player, rs = s.rng.bossAttacks;
   const n = K.max - baitCount(s);
   for (let i = 0; i < Math.min(2, n); i++) {
     const v = rs.next() * TAU, d = K.minDistance + rs.next() * (K.maxDistance - K.minDistance);

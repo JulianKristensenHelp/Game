@@ -10,6 +10,7 @@ import { mmss, formatNumber } from './utils.js';
 import { multiplier, multText } from './score.js';
 import { makeCanvas, ctx2d } from './pixel.js';
 import { CAPTURE_IDS } from './capture.js';
+import { weaponLevel } from './upgrades.js';
 
 const KB = CONFIG.map.width, KH = CONFIG.map.height;
 const GR = CONFIG.display;
@@ -23,6 +24,8 @@ const SYMBOL = {
   /** Endringsprompt 5: «Sky-synk» (a small cloud) and the capture point (a target). */
   cloud: ['..##..', '.####.', '######'],
   target: ['.###.', '#...#', '#.#.#', '#...#', '.###.'],
+  /** Endringsprompt 6: a small shop (roof, door) for «Snacks på Jacobs». */
+  shop: ['#######', '.#####.', '#.....#', '#.#.#.#', '#.###.#', '#######'],
 };
 
 export class Hud {
@@ -184,7 +187,7 @@ export class Hud {
       else if (p.type === 'cloud') this.stamp(ctx, SYMBOL.cloud, p.x * k, p.y * k, sk, '#ffffff', '#1f6fbf');
     }
     const cap = s.capture.active;
-    if (cap) this.stamp(ctx, SYMBOL.target, cap.x * k, cap.y * k, sk, cap.busy ? '#ff6b6b' : '#ffd240', '#4a3600');
+    if (cap) this.stamp(ctx, cap.id === 'snacks' ? SYMBOL.shop : SYMBOL.target, cap.x * k, cap.y * k, sk, '#ffd240', '#4a3600');
     for (let i = 0; i < s.enemies.n; i++) {
       const e = s.enemies.items[i];
       if (!e.active || e.leaving) continue;
@@ -232,7 +235,7 @@ export class Hud {
     const new8 = (this.firedText ? 1 : 0) + (this.intro && now < this.intro.end + 400 ? 2 : 0);
     // The capture-point countdown: whole seconds, the progress in tenths, and whether it is blocked
     const cap = s.capture.active;
-    const new9 = cap ? Math.ceil(cap.left) * 10000 + Math.round(cap.progress * 10) * 10 + (cap.busy ? 1 : 0) : -1;
+    const new9 = cap ? Math.ceil(cap.left) * 10000 + Math.round(cap.progress * 10) * 10 + (cap.inside ? 1 : 0) : -1;
     const changed = this.signature !== 'game' || v[0] !== new0 || v[1] !== new1 || v[2] !== new2 || v[3] !== new3 || v[4] !== new4 || v[5] !== new5 || v[6] !== new6 || v[7] !== new7 || v[8] !== new8 || v[9] !== new9;
     const sig = 'game';
     const animating = bannerActive || joystick.active || !!this.firedText || (!!this.intro && now < this.intro.end + 400);
@@ -444,7 +447,8 @@ export class Hud {
     }
     for (let i = 0; i < CONFIG.limits.weapons; i++) {
       const vw = s.player.weapons[i];
-      if (vw) drawSlot(i * (slot + gap), vRow, weaponIconId(vw), vw.picks, vw.evo, false);
+      // the weapon's level (1–9), and «10» for a combination or The Matrix (Endringsprompt 6)
+      if (vw) drawSlot(i * (slot + gap), vRow, weaponIconId(vw), weaponLevel(vw), vw.evo || vw.id === 'matrix', false, String(weaponLevel(vw)));
       else drawSlot(i * (slot + gap), vRow, '', 0, false, true);
     }
     // Endringsprompt 5: the permanent bonuses from the capture-point events, after the weapons («×2»)
@@ -482,20 +486,20 @@ export class Hud {
 
   /**
    * The capture-point event: a small box with the event's icon, «Ta punktet 0:32» and a progress bar
-   * (red with «Opptatt!» while a lawyer stands in the circle).
+   * (the box turns gold while the player stands in the circle).
    * @param {import('./capture.js').ActiveCapture} cap
    */
   drawCaptureClock(ctx, x, y, cap) {
     const s = this.s, K = CONFIG.capture;
     const fs = Math.max(1, s - 1);
-    const text = `${cap.busy ? K.busyText : K.countdownText} ${mmss(Math.max(0, Math.ceil(cap.left)))}`;
+    const text = `${K.countdownText} ${mmss(Math.max(0, Math.ceil(cap.left)))}`;
     const tw = textWidth(text) * fs;
     const iconS = 10 * s;
     const bw = tw + iconS + 8 * s, bh = Math.max(iconS, FH * fs) + 7 * s;
     const bx = Math.round(x - bw / 2);
     ctx.fillStyle = '#1d1626';
     ctx.fillRect(bx, y, bw, bh);
-    ctx.fillStyle = cap.busy ? '#7a1f24' : '#2a3140';
+    ctx.fillStyle = cap.inside ? '#5a4a10' : '#2a3140';
     ctx.fillRect(bx + s, y + s, bw - 2 * s, bh - 2 * s);
     ctx.drawImage(icon('capture:' + cap.id), bx + 2 * s, y + 2 * s, iconS, iconS);
     this.font.draw(ctx, text, bx + 4 * s + iconS, y + 2 * s + Math.round((iconS - FH * fs) / 2), '#ffffff', fs, '#1d1626');
@@ -503,7 +507,7 @@ export class Hud {
     const pw = bw - 4 * s, py = y + bh - 3 * s;
     ctx.fillStyle = '#16202b';
     ctx.fillRect(bx + 2 * s, py, pw, s * 2);
-    ctx.fillStyle = cap.busy ? '#e5484d' : '#f5cf3a';
+    ctx.fillStyle = '#f5cf3a';
     ctx.fillRect(bx + 2 * s, py, Math.round(pw * Math.min(1, cap.progress / K.holdTime)), s * 2);
   }
 

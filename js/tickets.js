@@ -13,7 +13,7 @@ const CS = CONFIG.cloudSync;
 
 /**
  * A ticket on the floor, or a case pile («saksbunke») of several stale ones.
- * xp = experience (always paid in full), pts = the point base that the age factor is applied to,
+ * xp = full experience (a stale ticket or a pile pays CONFIG.tickets.staleXp of it), pts = the point base that the age factor is applied to,
  * age = seconds since it was dropped (for a pile: its point-weighted age), count = tickets in it (1 = a single ticket).
  * dragged = flying toward the player. sync = pulled in by «Sky-synk» (arrives within its pull time).
  */
@@ -25,7 +25,7 @@ export function makePickup() {
   return { x: 0, y: 0, type: 'drink', age: 0, count: 0 };
 }
 
-/** Seconds a ticket gives full points: the base plus «Post-it-blokk». Read live, so tickets already out get it too. */
+/** Seconds a ticket is fresh (full points and full experience): the base plus «Post-it-blokk». Read live, so tickets already out get it too. */
 export function freshTime(s) {
   return L.freshTime + s.player.mod.ticketFresh;
 }
@@ -226,10 +226,12 @@ export function updateTickets(s, dt) {
     if (l.sync) step = Math.max(step, syncLeft > dt ? (d * dt) / syncLeft : d);
     if (d <= step + p.r) {
       // Points are given the moment the ticket is picked up, with its age factor and the multiplier right now.
-      // The experience is always full.
+      // Experience (Endringsprompt 6): full while the ticket is fresh, a fixed «staleXp» share once it is stale – and
+      // always for a pile, which only ever holds stale tickets. Judged when it reaches the player (also with Sky-synk).
       const factor = pointFactor(l.age, fresh);
       givePoints(s, l.pts * factor);
-      s.xp += l.xp * p.mod.xp;
+      const stale = l.count > 1 || l.age > fresh;
+      s.xp += l.xp * (stale ? L.staleXp : 1) * p.mod.xp;
       s.stat.ticketsPicked += l.count;
       if (l.count === 1 && l.age <= fresh) s.stat.ticketsFresh++;
       s.events.push('ticket');

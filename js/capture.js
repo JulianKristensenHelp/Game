@@ -1,7 +1,7 @@
 // @ts-check
 // Capture-point events (Endringsprompt 5): «Snacks på Jacobs», «Spille pingpong» and «Møterommet».
-// Now and then the player is called to a fixed spot on the map and has to stand in the circle there for a while,
-// with no lawyers in it. Taking it gives a permanent bonus for the rest of the shift and one free level.
+// Now and then the player is called to a fixed spot on the map and has to stand in the circle there for a while
+// (only the player counts, Endringsprompt 6). Taking it gives a permanent bonus for the rest of the shift and one free level.
 // When the events come and which one it is come from their own stream («Dagens vakt»), so everyone gets the same
 // events at the same time for the same choices. All numbers are in CONFIG.capture, the spots in js/map.js (HOTSPOTS).
 import { CONFIG } from './config.js';
@@ -24,7 +24,6 @@ export const CAPTURE_IDS = Object.keys(C.defs);
  * @property {number} progress seconds held (0 … CONFIG.capture.holdTime)
  * @property {boolean} started the player has stepped in at least once (the extra flock has been sent)
  * @property {boolean} inside the player stands in the circle right now
- * @property {boolean} busy a lawyer stands in the circle right now (the progress is stopped)
  * @property {number} angle the direction of the extra flock (drawn when the event starts, so the stream stays in step)
  */
 
@@ -51,7 +50,7 @@ export function startCapture(s, id) {
   const st = s.capture;
   const spot = HOTSPOTS[id];
   st.counts[id]++;
-  st.active = { id, x: spot.x, y: spot.y, left: C.deadline, progress: 0, started: false, inside: false, busy: false, angle: s.rng.capture.next() * TAU };
+  st.active = { id, x: spot.x, y: spot.y, left: C.deadline, progress: 0, started: false, inside: false, angle: s.rng.capture.next() * TAU };
   s.stat.captureEvents++;
   s.events.push('captureStart:' + id);
 }
@@ -91,24 +90,14 @@ function runCapture(s, a, dt) {
   const p = s.player;
   const R2 = C.radius * C.radius;
   a.left -= dt;
+  // Endringsprompt 6: only the player counts – lawyers in the circle do not stop the progress
   a.inside = (p.x - a.x) ** 2 + (p.y - a.y) ** 2 < R2;
-  // «Opptatt»: any lawyer in the circle stops the progress (bosses never come here: no event while one is out)
-  a.busy = false;
-  const f = s.enemies;
-  for (let i = 0; i < f.n; i++) {
-    const e = f.items[i];
-    if (!e.active || e.leaving) continue;
-    if ((e.x - a.x) ** 2 + (e.y - a.y) ** 2 < R2) {
-      a.busy = true;
-      break;
-    }
-  }
   if (a.inside) {
     if (!a.started) {
       a.started = true;
       sendFlock(s, a);
     }
-    if (!a.busy) a.progress += dt;
+    a.progress += dt;
   } else {
     a.progress = Math.max(0, a.progress - C.drain * dt);
   }

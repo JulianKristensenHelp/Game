@@ -393,6 +393,20 @@ const DRAW = {
     r.rect(12, 9, 1, 3, C.NEAR_BLACK);
     r.rect(12, 11, 2, 1, C.NEAR_BLACK);
   },
+  'evo:bodyguard': (r) => {
+    // Neste generasjons brannmur (Endringsprompt 6): a triangle of blue-white flames with the bodyguard's
+    // sunglasses in the middle
+    for (let i = 0; i <= 12; i++) {
+      const c = i % 3 === 0 ? C.WHITE : C.LIGHT_BLUE;
+      r.px(2 + i, 14, i % 2 ? C.BLUE : c);
+      r.px(8 - Math.round(i / 2), 14 - i, i % 2 ? C.BLUE : c);
+      r.px(8 + Math.round(i / 2), 14 - i, i % 2 ? C.BLUE : c);
+    }
+    for (const [x, y] of [[4, 13], [11, 13], [8, 3], [5, 9], [11, 9]]) r.px(x, y, C.LIGHT_BLUE);
+    r.rect(5, 9, 6, 2, C.NEAR_BLACK);
+    r.px(6, 9, C.DARK_GRAY);
+    r.px(9, 9, C.DARK_GRAY);
+  },
   matrix: (r) => {
     // The Matrix: green falling code with a pair of black sunglasses
     for (const [x, h] of [[1, 9], [4, 13], [7, 6], [10, 11], [13, 8]]) {

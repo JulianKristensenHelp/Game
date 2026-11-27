@@ -297,4 +297,35 @@ const d2 = playRound('Med Dobbel skjerm (på nytt)', 1, true, 50, false, plan, f
 const hasDual = d1.player.passives.some((p) => p.id === 'dualMonitor');
 console.log(`Dobbel skjerm deterministisk: ${d1.score === d2.score && d1.time === d2.time ? 'JA' : 'NEI'} (passiven ble ${hasDual ? '' : 'ikke '}valgt i runden)`);
 console.log(`Utseendet påvirker ikke spillet: ${a.score === c.score && a.time === c.time && a.helped === c.helped ? 'JA – annet utseende ga nøyaktig samme runde' : 'NEI – utseendet lekker inn i spillogikken!'}`);
+
+// Endringsprompt 6: the run seed. Two seeds on the same day must give clearly different rounds, while the structure
+// from «Dagens vakt» stays the same: where the energy drinks and «Sky-synk» appear, when the first capture-point event
+// comes and which one, and when the bosses come. The same seed twice must give the same round.
+function structure(seed) {
+  const s = new Game(date, 0, seed);
+  const spots = [];
+  let firstCapture = '', cards = '';
+  for (let t = 0; t < 5 * 60 * 60 && s.status !== 'done'; t++) {
+    s.tick(0, 0);
+    s.debug.immortal = true;
+    for (const e of s.events) if (e.startsWith('captureStart:') && !firstCapture) firstCapture = `${e.slice(13)} ${s.time.toFixed(2)}`;
+    s.events.length = 0;
+    for (let i = 0; i < s.pickups.n; i++) {
+      const k = s.pickups.items[i];
+      const key = `${k.type} ${Math.round(k.x)},${Math.round(k.y)}`;
+      if ((k.type === 'drink' || k.type === 'cloud') && !spots.includes(key)) spots.push(key);
+    }
+    if (s.status === 'levelUp') {
+      if (!cards) cards = s.cards.map((c) => c.key).join(',');
+      s.chooseCard(0);
+    }
+  }
+  const enemies = [];
+  for (let i = 0; i < Math.min(20, s.enemies.n); i++) enemies.push(Math.round(s.enemies.items[i].x));
+  return { spots: spots.join(' | '), firstCapture, nextBoss: s.nextBoss, cards, enemies: enemies.join(','), score: s.score, helped: s.helped };
+}
+const r1 = structure('a1b2c3d4'), r2 = structure('9f8e7d6c'), r1b = structure('a1b2c3d4');
+console.log(`Rundeseed: samme seed gir samme runde: ${JSON.stringify(r1) === JSON.stringify(r1b) ? 'JA' : 'NEI'}`);
+console.log(`Rundeseed: to seeder gir ulike runder (kort, advokater): ${r1.cards !== r2.cards && r1.enemies !== r2.enemies ? 'JA' : 'NEI'} (første kort: ${r1.cards} / ${r2.cards})`);
+console.log(`Dagens vakt: lik for begge seeder (energidrikk og Sky-synk, første punkt-hendelse, bossene): ${r1.spots === r2.spots && r1.firstCapture === r2.firstCapture && r1.nextBoss === r2.nextBoss ? 'JA' : 'NEI'} (${r1.firstCapture}; ${r1.spots.split(' | ').length} steder)`);
 void multiplier;

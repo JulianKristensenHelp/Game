@@ -403,10 +403,15 @@ function makeObjects() {
   };
   const ball = [0, 1, 2, 3].map((f) => make(9, 9, 4, 4, ballDraw(f, false)));
   const ballEvo = [0, 1, 2, 3].map((f) => make(9, 9, 4, 4, ballDraw(f, true)));
-  /** Firewall flames: 3 frames, orange (Livvakten) and green (The Matrix). No outline – they glow. */
+  /**
+   * Firewall flames: 3 frames, orange (Livvakten), green (The Matrix) and blue-white («Neste generasjons brannmur»,
+   * Endringsprompt 6). No outline – they glow.
+   * @param {boolean | 'blue'} green
+   */
   const flameDraw = (f, green) => (r) => {
     const h = [8, 10, 9][f], o = [0, 1, -1][f];
-    const outer = green ? C.GREEN : C.ORANGE, mid = green ? C.LIGHT_GREEN : C.YELLOW, core = green ? C.WHITE : C.GOLD_L;
+    const blue = green === 'blue';
+    const outer = blue ? C.BLUE : green ? C.GREEN : C.ORANGE, mid = blue ? C.LIGHT_BLUE : green ? C.LIGHT_GREEN : C.YELLOW, core = green ? C.WHITE : C.GOLD_L;
     for (let y = 0; y < h; y++) {
       const w = Math.max(1, Math.round(3.2 * Math.sin(((y + 1) / (h + 1)) * Math.PI * 0.9)));
       const x0 = 4 - w + (y < h / 2 ? o : 0);
@@ -417,6 +422,7 @@ function makeObjects() {
   };
   const flame = [0, 1, 2].map((f) => make(9, 12, 4, 11, flameDraw(f, false), false));
   const flameGreen = [0, 1, 2].map((f) => make(9, 12, 4, 11, flameDraw(f, true), false));
+  const flameBlue = [0, 1, 2].map((f) => make(9, 12, 4, 11, flameDraw(f, 'blue'), false));
   /** Small glyphs that drift up from the firewall: a padlock, a one and a zero. */
   const lockSmall = make(5, 6, 2, 3, (r) => r.stamp('.###. .#.#. ##### ##.## #####', 0, 1, { '#': C.GOLD_L }), false);
   const one = make(3, 5, 1, 2, (r) => r.stamp('.#. ##. .#. .#. ###', 0, 0, { '#': C.GOLD_L }), false);
@@ -607,7 +613,7 @@ function makeObjects() {
     angel, angelEvo, mini, miniEvo, sheetSmall,
     angelGlow: glow(14, '#fff2a8', 0.55),
     // Endringsprompt 4
-    angelMatrix, miniMatrix, sheetMatrix, ball, ballEvo, flame, flameGreen, lockSmall, one, zero, oneGreen, zeroGreen,
+    angelMatrix, miniMatrix, sheetMatrix, ball, ballEvo, flame, flameGreen, flameBlue, lockSmall, one, zero, oneGreen, zeroGreen,
     guard, guardMatrix, shop, shopMatrix, cookie, fakeDrink, fakePc, fishHook, herring, fishMail,
     cookieGlow: glow(10, '#ffd59a', 0.55),
     fakeGlow: glow(15, '#c8f05c', 0.5),
@@ -705,26 +711,69 @@ function makeDecor() {
   p.desk = make(40, 24, 20, 12, desk(false));
   p.deskUp = make(40, 24, 20, 12, desk(true));
   /**
-   * Endringsprompt 5: Jacob's desk (the «Snacks på Jacobs» spot) – an ordinary desk with a big bowl of snacks where
-   * the coffee cup usually is, and a name plate «JACOB» on the front edge.
+   * Endringsprompt 6: Jacobs – a small grocery shop (the «Snacks på Jacobs» spot), replacing Jacob's desk from
+   * Endringsprompt 5. Shelves with goods, a fridge with drinks, a snack counter and a till, under a simple sign that
+   * says «JACOBS». The sign is the game's own: a plain wooden board with dark letters and a small basket – not the real
+   * chain's logo, colours or typeface.
    */
-  p.jacobDesk = make(44, 32, 22, 12, (r) => {
-    const plain = new Raster(40, 24);
-    desk(false)(plain);
-    r.lim(plain, 2, 0);
-    // the snack bowl: red bowl, crisps, a few sweets
-    r.ellipse(34, 15, 6, 3.5, C.DARK_RED);
-    r.ellipse(34, 14, 6, 2.5, C.RED);
-    r.ellipse(34, 12.5, 4.5, 2.4, C.YELLOW);
-    for (const [x, y, c] of [[31, 12, C.ORANGE], [34, 11, C.GOLD_L], [36, 12, C.ORANGE], [33, 13, C.PINK], [37, 13, C.LIGHT_GREEN], [32, 13, C.GOLD]]) r.px(x, y, c);
-    // the name plate
-    r.rect(10, 23, 25, 8, C.DARKER);
-    r.rect(11, 24, 23, 6, C.GOLD_L);
-    r.stamp('### ..# ..# #.# .##', 13, 24, { '#': C.NEAR_BLACK });
-    r.stamp('.#. #.# ### #.# #.#', 17, 24, { '#': C.NEAR_BLACK });
-    r.stamp('.## #.. #.. #.. .##', 21, 24, { '#': C.NEAR_BLACK });
-    r.stamp('.#. #.# #.# #.# .#.', 25, 24, { '#': C.NEAR_BLACK });
-    r.stamp('##. #.# ##. #.# ##.', 29, 24, { '#': C.NEAR_BLACK });
+  p.jacobsShop = make(124, 80, 62, 44, (r) => {
+    // the walls and the inside
+    r.rect(2, 16, 120, 58, C.WOOD_M);
+    r.rect(5, 22, 114, 48, C.CREAM);
+    // a blue and white striped awning under the sign
+    for (let x = 4; x < 120; x += 8) {
+      r.rect(x, 16, 4, 5, C.BLUE);
+      r.rect(x + 4, 16, 4, 5, C.NEAR_WHITE);
+    }
+    r.rect(4, 21, 116, 1, C.DARK_BLUE);
+    // the sign: a wooden board with the shop's name and a small shopping basket
+    r.rect(22, 0, 80, 15, C.WOOD_M);
+    r.rect(23, 1, 78, 13, C.WOOD_L);
+    r.stamp('#...# .###. #.#.# #####', 27, 4, { '#': C.BROWN });
+    r.rect(28, 3, 3, 1, C.BROWN);
+    const LETTERS = {
+      J: '..### ...#. ...#. ...#. #..#. #..#. .##..',
+      A: '.###. #...# #...# ##### #...# #...# #...#',
+      C: '.#### #.... #.... #.... #.... #.... .####',
+      O: '.###. #...# #...# #...# #...# #...# .###.',
+      B: '####. #...# #...# ####. #...# #...# ####.',
+      S: '.#### #.... #.... .###. ....# ....# ####.',
+    };
+    [...'JACOBS'].forEach((ch, i) => r.stamp(LETTERS[ch], 38 + i * 9, 4, { '#': C.NEAR_BLACK }));
+    // shelves with goods (left)
+    r.rect(8, 26, 34, 40, C.WOOD);
+    const goods = [C.RED, C.YELLOW, C.GREEN, C.BLUE, C.ORANGE, C.PURPLE, C.PINK, C.LIGHT_BLUE];
+    for (let row = 0; row < 3; row++) {
+      const y = 28 + row * 13;
+      r.rect(9, y, 32, 10, C.WOOD_L);
+      for (let i = 0; i < 7; i++) r.rect(10 + i * 4 + (row % 2), y + 3 + ((i + row) % 2), 3, 7 - ((i + row) % 2), goods[(i * 3 + row) % goods.length]);
+      r.rect(9, y + 10, 32, 2, C.WOOD_M);
+    }
+    // the fridge with drinks (right)
+    r.rect(88, 24, 28, 44, C.NEAR_WHITE);
+    r.rect(90, 26, 24, 38, C.ICE_BLUE);
+    for (let row = 0; row < 4; row++) {
+      r.rect(90, 34 + row * 9, 24, 1, C.LIGHT_GRAY2);
+      for (let i = 0; i < 6; i++) r.rect(91 + i * 4, 27 + row * 9, 2, 6, [C.GREEN, C.RED, C.ORANGE, C.LIGHT_BLUE][(i + row) % 4]);
+    }
+    r.rect(112, 40, 1, 8, C.GRAY);
+    // the snack counter with bags of crisps and a basket of sweets (middle)
+    r.rect(46, 50, 38, 16, C.WOOD);
+    r.rect(46, 50, 38, 3, C.WOOD_L);
+    for (const [x, c] of [[48, C.ORANGE], [53, C.YELLOW], [58, C.RED], [63, C.GOLD]]) {
+      r.rect(x, 42, 4, 8, c);
+      r.px(x + 1, 44, C.WHITE);
+    }
+    r.ellipse(73, 47, 5, 3, C.BROWN);
+    for (const [x, c] of [[70, C.PINK], [72, C.LIGHT_GREEN], [74, C.YELLOW], [76, C.RED]]) r.px(x, 45, c);
+    // the till
+    r.rect(76, 38, 8, 8, C.DARK_GRAY);
+    r.rect(77, 39, 6, 3, C.LIGHT_GREEN);
+    r.rect(75, 46, 10, 4, C.DARKER);
+    // the threshold and a doormat
+    r.rect(2, 72, 120, 4, C.GRAY);
+    r.rect(48, 70, 28, 6, C.DARK_SLATE);
+    r.rect(50, 72, 24, 2, C.SLATE);
   });
   /** Endringsprompt 5: the ping-pong table (the «Spille pingpong» spot), seen from above, with a net, a bat and a ball. */
   p.pingpongTable = make(70, 42, 35, 21, (r) => {

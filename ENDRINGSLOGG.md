@@ -1,5 +1,223 @@
 # Endringslogg
 
+## Versjon 7.2 – 27. november 2026 (Kristensens endringsprompt 6)
+
+Bygget på versjon 7.1. Det den andre utvikleren har laget, er bare endret der endringsprompten sier det (seksjon 1,
+2 og 7). Hver slik endring er beskrevet under.
+
+### 1. Feil: nivåtaket var borte, og kombinasjonene kom nesten aldri
+**Årsak.** Taket ble ikke overskrevet ved et uhell, men fjernet med vilje i versjon 6 (den andre utviklerens
+kortsystem). Våpnene fikk ingen nivåer. Hvert kort ga en «oppgradering» uten tak (hjelp har ingen `max`, så det
+fantes alltid et gyldig kort), og en kombinasjon krevde 10 oppgraderinger. I versjon 7.0 beholdt jeg dette (se
+konflikt 1 der) i stedet for å innføre nivå 9. Tre ting gjorde at kombinasjonene sjelden kom i praksis:
+1. Trekningen sjekket aldri maks nivå. Oppgraderingene ble spredt på alle fire våpnene i det uendelige, så det tok
+   lang tid før ett våpen hadde ti.
+2. **Feil i tellingen:** et kort med to tillegg (for eksempel «+1 mus og +hjelp») talte som to oppgraderinger. Det
+   gjorde tellingen ujevn og uforutsigbar.
+3. Passiven kombinasjonen krever, kom sjelden opp, fordi kortene var vektet mot våpen man allerede hadde.
+
+**Rettet:**
+- Alle våpen har maks nivå 9 og alle passive maks nivå 5, også den andre utviklerens. Taket står ett sted:
+  `CONFIG.limits` (`weaponLevel: 9`, `passiveLevel: 5`). `upgrades.combinationAfter` regnes ut fra det.
+- Et nytt våpen er nivå 1, og hvert kort er nøyaktig ett nivå (`giveCard`).
+- Et våpen på nivå 9 tilbys aldri som oppgradering igjen. Pakker fra leverandøren respekterer også taket.
+- Nivå 9 + passiven (uansett nivå) gir kombinasjonen som et fremhevet «Nivå 10»-kort. Kortet og HUD-ikonet viser 10.
+- Etter kombinasjonen tar våpenet ikke flere kort. The Matrix er også «nivå 10» og tar ikke flere kort.
+- HUD-en viser nivå 1–9 på våpnene, og kortene viser «Nivå X av 9».
+- Når alt er maksert, tilbys bare «Kaffepause-bonus», som før.
+- **Automatisk sjekk i debug-modus:** overlegget viser «nivåtak ok». Går noe våpen over nivå 9 eller noen passiv
+  over nivå 5, kommer en feilmelding i konsollen, et rødt banner og en linje i overlegget (`capViolations`).
+
+### 2. Alle våpen har én kombinasjon
+- Alle 12 kombinasjonene i tabellen fantes og var koblet til riktig passiv (kontrollert mot `CONFIG.weapons`).
+- Bygget har 13 våpen. Det eneste uten kombinasjon var Livvakten.
+- Den komplette tabellen over våpen, passive og kombinasjoner står i README.md.
+
+**Kombinasjon jeg har designet:**
+
+| Våpen | Passiv | Kombinasjon | Effekt |
+| --- | --- | --- | --- |
+| Livvakten | Brannmur (den andre utviklerens passiv fra versjon 5, ikke brukt i noen kombinasjon fra før) | **Neste generasjons brannmur** | Tre lengre brannmurer (150 px) i en trekant rundt spilleren, med én side mot den tetteste flokken. De står i 5 s, bremser 40 % og brenner i blå-hvite flammer. Nytt ikon: en flammetrekant med livvaktens solbriller |
+
+- The Matrix godtar nå Livvakten på nivå 9 eller som kombinasjon, på samme måte som Skytsengelen.
+- Oppslagstavla viser nå alle 13 kombinasjonene og The Matrix.
+
+### 3. Capture-punktene: bare spilleren teller, større sirkel
+- Fremdriften sjekker bare om spilleren står i sirkelen. «Opptatt»-tilstanden og visningen av den er fjernet.
+- Sirkelen og boksen blir gule mens spilleren står i den.
+- Radiusen er 70 logiske piksler (var 40).
+- Alt annet er som før.
+
+### 4. RNG: rundene blir forskjellige
+**Funn i tilfeldighetsgeneratoren:**
+- Generatoren (mulberry32 med xmur3-hash) er i orden.
+- Hver strøm har sitt eget seed-navn og sin egen tilstand. Ingen strøm nullstilles under runden, og `Math.random()`
+  brukes ikke.
+- **Hovedårsaken** til like runder: alle de 16 strømmene var seedet fra datoen alene. Med samme valg ble det samme
+  runde hele dagen, og i starten av en runde er valgene nesten alltid like.
+- **Delt tilstand 1:** strømmen `spesial` ble brukt både til hastesakens tidspunkt og til bossenes angrep. Hvor lang
+  bosskampen var, flyttet derfor hastesakene.
+- **Delt tilstand 2:** strømmen `hendelser` ble brukt både til de sjeldne hendelsenes trekning og til retningen på
+  de faste hendelsene. Når en boss forsinket en fast hendelse, endret det de sjeldne hendelsene senere.
+- Faste seeds (`figurer|…`, `pynt`, `matrix-intro`) finnes bare i ren grafikk og er med vilje.
+
+**Ny fordeling:**
+- **Likt for alle hele dagen (datoen):**
+  - når bossene kommer (fast)
+  - når og hvilke kontorhendelser og punkt-hendelser som kommer
+  - vanskelighetskurven (fra `CONFIG`)
+  - hvor energidrikken og Sky-synk kommer
+  - hastesakens tidspunkt og sted
+- **Nytt i hver runde (rundeseeden):**
+  - kortene
+  - vanlige advokater (når, hvor og hvilke typer, og partnerne)
+  - ringbølger og flokker, og detaljene i hendelsene (egen strøm `hendelsesdetaljer`)
+  - drops
+  - Dobbel skjerm, kritiske treff, unnvikelse, ping-pong og Fjernstyring
+  - det tilfeldige i bossenes angrep (egen strøm `bossangrep`)
+  - utseendet
+- Rundeseeden lages med `crypto.getRandomValues` (16 heksadesimale tegn). Den lagres på topplisten (ny kolonne
+  `seed`, lagt til automatisk i eksisterende databaser) og vises i debug-overlegget.
+- `?debug&seed=…` spiller av en runde på nytt. En slik runde sendes ikke inn.
+- **Kortene:** hvert gyldige kort har lik sjanse (`upgrades.equalOdds`). Det gjelder også den andre utviklerens
+  vekter, som er tatt ut av bruk med dette valget. Detaljer:
+  - Effektene på et våpen er ett kort.
+  - Tilgjengelige kombinasjoner vises alltid.
+  - Samme sett med kort tilbys aldri to ganger på rad.
+  - Bot-testen viser at alle 13 våpen og alle 28 passive blir tilbudt.
+- Simulatoren sjekker nå:
+  - samme seed gir samme runde;
+  - to seeder gir ulike runder;
+  - strukturen fra dagens vakt er lik for begge.
+
+### 5. Jacobs er en butikk
+- Pulten med navneskiltet «JACOB» er fjernet. På samme sted står en liten dagligvarebutikk med:
+  - hyller med varer, et kjøleskap med drikke, en snacksdisk med kurv og en kasse;
+  - en stripete markise;
+  - et eget treskilt med «JACOBS» og en liten kurv. Skiltet er tegnet i spillets egen stil, ikke kjedens logo,
+    farger eller skrift.
+- Sirkelen ligger foran og inn i butikken.
+- Varselet er «Det er snacks på Jacobs!», og minikartet viser en liten butikk.
+- Bonusen er uendret.
+
+### 6. Utgåtte saker gir 70 % erfaring
+- En ny lapp gir full erfaring. En utgått lapp gir 70 % som et fast trinn (`tickets.staleXp`). Saksbunker består
+  bare av utgåtte lapper og gir 70 %.
+- Erfaringen regnes ut når lappen når spilleren, også med Sky-synk. Testet: ny lapp 100, utgått lapp 70,
+  saksbunke 70.
+- Post-it-blokk: «Lappene gir full erfaring og full poengverdi i 2 sekunder lenger.»
+
+### 7. Testrapport
+**Bot-test.** `node tools/bot-test.js 120` kjører den automatiske testspilleren (`js/bot.js`) uten tegning.
+- **Oppsett:**
+  - 120 runder per gruppe, med ulike rundeseeder og alle fire karakterene;
+  - to grupper: god spiller (ferdighet 0,9) og ekspert (1,0), altså 240 runder per måling.
+- **Hva boten gjør:**
+  - holder avstand til flokken;
+  - henter energidrikk, lapper og Sky-synk;
+  - tar punkt-hendelsene og går mot bossene;
+  - fyller våpenplassene, oppgraderer det svakeste våpenet først (balansert bygg) og velger passiven
+    kombinasjonene trenger.
+- **Måler:**
+  - varighet;
+  - første og andre kombinasjon;
+  - nivåopp per minutt;
+  - hjelp per sekund per våpen og kombinasjon;
+  - sparket per boss;
+  - punkt-hendelser;
+  - hvor ofte hvert kort tilbys.
+- Samme test finnes som knapp i debug-panelet («Bot-test», 20 runder i nettleseren).
+
+| Ekspert-bot (120 runder) | Før (7.1-regler, første kjøring) | Etter |
+| --- | --- | --- |
+| Varighet snitt / median | 11,4 / 14,2 min | 10,8 / 11,6 min |
+| Beste 10 % fra / lengste | 15,8 / 17,3 min | 14,8 / 16,2 min |
+| Første kombinasjon (median) | 4,9 min | 7,5 min |
+| Andre kombinasjon (median) | 6,7 min | 9,3 min |
+| Nivåopp per minutt, minutt 5–12 | 3,9–5,2 | 2,4–3,3 |
+| Sparket (Nørdic / Printer / Anonymous / Johan) | 2/117 · 0/86 · 0/80 · 0/111 | 0/120 · 2/105 · 0/69 · 0/65 |
+| Punkt-hendelser tatt | 89 % | 88 % |
+
+Den gode boten (0,9) etter justeringene:
+- varighet: snitt 10,4 min, median 10,7, beste 10 % fra 14,9;
+- første kombinasjon: 7,2 min;
+- sparket: 1 av ca. 100 møter per boss.
+
+**Våpen og kombinasjoner** (`tools/measure-weapons.js`, hjelp per sekund mot 150 faste advokater, nivå 9 og
+kombinasjon):
+
+| | Før | Etter |
+| --- | --- | --- |
+| Nivå 9, spenn | 55–178 % av snittet | 69–138 % |
+| Kombinasjon, spenn | 33–206 % | 44–136 % |
+
+Tre kombinasjoner skiller seg fortsatt ut på denne målingen:
+- **Allmøte på Teams** (44 %) og **Tofaktor** (66 %) er svake mot faste advokater, men blant de sterkeste i ekte
+  runder (ca. 1 000 hjelp/s), fordi de rekker advokater langt unna.
+- Det motsatte gjelder **Full omstart** og **Kabelkaos**: 135 % mot faste advokater, men lavere i rundene fordi
+  boten holder avstand.
+- Det er derfor bevisst at de ikke er presset helt likt på én av målingene.
+- **The Matrix** er to våpen i én plass og ligger på ca. 2 × en kombinasjon.
+
+**Mål som ikke er nådd helt:**
+- **Første kombinasjon** kommer ved 7,2–7,5 min for boten, ikke 9–11.
+  - Med brattere erfaringskurve kommer den senere, men da faller overlevelsen kraftig. Én test ga kombinasjon ved
+    7,0 min, men median overlevelse på 9,1 min.
+  - Årsaken er at boten bygger effektivt og plukker opp nesten alle lapper. En menneskelig spiller som mister en
+    del lapper og velger mindre målrettet, får kombinasjonen senere.
+  - Dette bør sjekkes med noen kolleger. Debug-overlegget viser nivåopp-tempoet.
+  - Spakene er `CONFIG.level` (`square`), `CONFIG.upgrades.equalOdds` og `CONFIG.botTest`.
+- **De beste 10 %** ligger på 14,8–14,9 min. Det er i øvre del av målet (12–15), og en veldig god spiller ryker
+  rundt 15.
+
+**Alle tall som er endret:**
+
+| Hvor | Før | Etter | Hvorfor |
+| --- | --- | --- | --- |
+| `limits.weaponLevel` | – | 9 | Seksjon 1 |
+| `upgrades.combinationAfter` | 10 | 8 (= nivå 9, regnes ut) | Seksjon 1 |
+| `upgrades.equalOdds`, `repeatRedraws` | – | true, 6 | Seksjon 4 |
+| `level` (erfaringskurven) | 20 + 10·n + 1,2·n² | 15 + 6·n + 2,2·n² | Raske nivåer tidlig, færre midt i: nivåopp ca. hvert 20. s ved minutt 8, senere kombinasjoner |
+| `scaling.frustrationPerMin` | 0,15 | 0,10 | Færre nivåer midt i runden må veies opp, ellers rakk ikke boten første boss |
+| `spawn.rate` ved 5 og 10 min | 5 / 13 per s | 4,2 / 10,5 per s | Samme grunn |
+| `capture.radius` | 40 | 70 | Seksjon 3 |
+| `tickets.staleXp` | – | 0,7 | Seksjon 6 |
+| Fjernstyring `help` | 20 | 28 | Nivå 9 var 55 % av snittet |
+| Teams-varsel `help` | 26 | 32 | 72 % |
+| Oppdateringsstrålen `help` | 10 | 13 | 70 % |
+| Ctrl+Z `help` | 14 | 12 | 178 % |
+| Toner-kast `help` | 15 | 13 | 161 % |
+| Ping-pong `help` | 30 | 38 | 66 % |
+| Livvakten `help` | 26 | 34 | 71 % |
+| Full omstart | radius 72, help 30 | radius 86, help 34 | Kombinasjonen tar ikke flere kort nå; svak i rundene |
+| Tofaktor `help` | 34 | 29 | Sterkest i rundene |
+| Kabelkaos | lengthPx 80, help 34 | 96, 40 | Svak i rundene |
+| Domene-admin | hits 7, help 60 | 8, 70 | 63 % |
+| Musematta | track 60, help 30 | 72, 38 | 80 % |
+| Ctrl+Alt+Del | radius 90, help 30 | 108, 45 | Knapt sterkere enn Ctrl+Z på nivå 9 |
+| Tvungen oppdatering | help 18, tick 0,45 | 48, 0,4 | 33 % |
+| Allmøte på Teams `help` | 50 | 58 | 40 % |
+| Neste generasjons brannmur | – | help 20, lengthPx 150, duration 5 | Ny |
+
+Hvorfor kombinasjonene og den andre utviklerens våpen er justert:
+- Kombinasjonene var laget som et utgangspunkt som skulle vokse med flere kort (versjon 6). Nå er de endelige, så
+  flere av dem var knapt sterkere enn våpenet på nivå 9.
+- Nivå 9-tallene til flere våpen skilte seg ut med mer enn ±30 %.
+- Ingen passiver er endret.
+
+**Ytelse:**
+- Debug-panelet har fått «Stresstest-serie». Den kjører alle 13 kombinasjonene (fire om gangen), The Matrix, hver
+  av de fire bossene og en punkt-hendelse med lunsjrush og partnermøte. Hvert scenario går 60 sekunder med maks
+  advokater, og hovedtesten med Matrix og Anonymous går i 5 minutter.
+- Serien måler FPS, frametid (snitt og verste), antall hakk over 16,7 ms og minne.
+- **Ikke kjørt i denne versjonen.** Stresstest-serien er bygget og hvert scenario er sjekket for å sette seg opp
+  uten feil, men selve målingen er hoppet over etter avtale med oppdragsgiver. Kjør den med `?debug&utenGPU` og
+  knappen «Stresstest-serie», med nettleservinduet synlig. Resultatet kommer i konsollen. Siste målte stresstest
+  (versjon 7.1, samme tunge bygg som hovedtesten) ga snitt 116 FPS, laveste 75 FPS og flat minnebruk.
+- Det nye i 7.2 legger ikke til nye partikler eller effekter som tegnes hver frame. Den blå brannmuren er ferdigtegnet
+  som de andre, og butikken er en del av det ferdigtegnede kartet. Forventet ytelse er derfor som i 7.1, men det er
+  ikke målt.
+
 ## Versjon 7.1 – 27. november 2026 (Kristensens endringsprompt 5)
 
 Bygget på versjon 7.0.1. Det den andre utvikleren har laget (versjon 5–6.1), er ikke endret, med det ene uttrykkelige

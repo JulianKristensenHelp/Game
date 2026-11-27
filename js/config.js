@@ -295,7 +295,7 @@ export const CONFIG = {
    */
   scaling: {
     /** Extra frustration per minute after the calm start (0.2 = +20 percentage points per minute, linear). */
-    frustrationPerMin: 0.15,
+    frustrationPerMin: 0.10,
     /** The increase in frustration starts after this many minutes (calm start). */
     startAfterMin: 3,
     /** Increased damage per minute (0.06 = +6 %, linear). */
@@ -314,7 +314,7 @@ export const CONFIG = {
 
   spawn: {
     /** Lawyers per second as [time in seconds, count per second]. Between the points the value glides smoothly. */
-    rate: [[0, 0.5], [30, 0.8], [90, 1.7], [300, 5], [600, 13], [900, 22]],
+    rate: [[0, 0.5], [30, 0.8], [90, 1.7], [300, 4.2], [600, 10.5], [900, 22]],
     /** Increase in lawyers per second for each minute after the last point. */
     overtimePerMin: 4,
     /** Max number of active lawyers (fixed and the same for everyone). */
@@ -395,9 +395,9 @@ export const CONFIG = {
     bossMargin: 60,
     /** Seconds the player has to take the point after the banner. */
     deadline: 45,
-    /** Radius of the circle on the floor (logical pixels). */
-    radius: 40,
-    /** Seconds of standing in the circle (with no lawyers in it) to take the point. */
+    /** Radius of the circle on the floor (logical pixels). Endringsprompt 6: 70 (was 40), room to dodge inside it. */
+    radius: 70,
+    /** Seconds of standing in the circle to take the point. Only the player counts (Endringsprompt 6). */
     holdTime: 8,
     /** How fast the progress sinks while the player is outside (seconds of progress lost per second). */
     drain: 0.5,
@@ -409,9 +409,9 @@ export const CONFIG = {
      */
     flock: { count: 6, perMin: 0.8, max: 18, directions: 3, distance: 300 },
     defs: {
-      /** «Snacks på Jacobs»: + maxEnergy max energy and fills «fill» energy right away. */
+      /** «Snacks på Jacobs» (Jacobs is a small grocery shop on the map): + maxEnergy max energy and fills «fill» energy right away. */
       snacks: {
-        name: 'Snacks på Jacobs', banner: 'Det er snacks på Jacobs pult!', reward: 'Snacks! +15 maks energi',
+        name: 'Snacks på Jacobs', banner: 'Det er snacks på Jacobs!', reward: 'Snacks! +15 maks energi',
         maxEnergy: 15, fill: 30,
       },
       /** «Spille pingpong»: + help on all weapons (0.08 = 8 %). */
@@ -427,7 +427,6 @@ export const CONFIG = {
     },
     /** Shown under the banner while the event runs, and when it is missed. */
     countdownText: 'Ta punktet',
-    busyText: 'Opptatt!',
     missedText: 'Du rakk det ikke …',
     levelText: '+1 nivå',
   },
@@ -453,6 +452,11 @@ export const CONFIG = {
     decayTime: 20,
     /** The lowest point value, as a fraction of full (0.25 = 25 %). */
     minValue: 0.25,
+    /**
+     * Endringsprompt 6: the experience from a stale ticket (and from a case pile, which only holds stale tickets) as a
+     * fraction of full – a fixed step, not gradual. Fresh tickets give full experience.
+     */
+    staleXp: 0.7,
     /** Max tickets and piles on the map at the same time. Above it, new tickets go into the nearest pile. */
     max: 250,
     /** At the cap: a pile (or stale ticket) this close is preferred; with none that close, the nearest ticket of any kind. */
@@ -487,7 +491,7 @@ export const CONFIG = {
   },
 
   /** Experience required for the next level = base + perLevel × level + square × level². */
-  level: { base: 20, perLevel: 10, square: 1.2 },
+  level: { base: 15, perLevel: 6, square: 3.0 },
   /** At every level-up (and package), tickets within this radius fly to the player, so the pause never costs them. */
   levelMagnet: 140,
 
@@ -503,14 +507,20 @@ export const CONFIG = {
   /** Points for the «Kaffepause-bonus» ("Coffee break bonus") when everything is maxed out. */
   coffeeBreakBonus: 500,
 
-  /** Max number of weapons and passives, and max passive level. Weapons have no level cap (see CONFIG.upgrades). */
-  limits: { weapons: 4, passives: 8, passiveLevel: 5 },
+  /**
+   * Max number of weapons and passives, and THE LEVEL CAPS (Endringsprompt 6: the one place they live).
+   * weaponLevel = max level of every weapon: a new weapon is level 1 and every upgrade card is +1 level, so a weapon
+   * takes weaponLevel − 1 cards. At that level plus its passive (any level) the combination is offered as «level 10»,
+   * and after it the weapon takes no more cards. passiveLevel = max level of every passive.
+   * In debug mode a check warns if any weapon or passive ever goes over these caps.
+   */
+  limits: { weapons: 4, passives: 8, passiveLevel: 5, weaponLevel: 9 },
 
   /**
-   * UPGRADES (version 6). A weapon has no levels: every card at level-up gives one specific increment
-   * (more help, shorter interval, one more projectile, an effect …) and a weapon can take any number of them.
-   * Cards have a tier (rarity) that scales the increment: steps = how many growth steps a numeric card gives.
-   * tierOdds = chance per tier; «Hesteskoen» (luck) multiplies the odds of everything above common.
+   * UPGRADES (version 6, with the level cap back in Endringsprompt 6). Every card at level-up gives one specific
+   * increment (more help, shorter interval, one more projectile, an effect …) and raises the weapon one level, up to
+   * CONFIG.limits.weaponLevel. Cards have a tier (rarity) that scales the increment: steps = how many growth steps a
+   * numeric card gives. tierOdds = chance per tier; «Hesteskoen» (luck) multiplies the odds of everything above common.
    */
   upgrades: {
     tiers: [
@@ -520,8 +530,11 @@ export const CONFIG = {
       { id: 'legendary', name: 'Legendarisk', color: '#ff9f43', steps: 5 },
     ],
     tierOdds: [0.68, 0.23, 0.07, 0.02],
-    /** How many increments a weapon needs before its combination can be chosen (plus the matching passive). */
-    combinationAfter: 10,
+    /**
+     * How many increments a weapon needs before its combination can be chosen (plus the matching passive). Not set
+     * here: it is always limits.weaponLevel − 1 (set at the bottom of this file), so the cap lives in one place.
+     */
+    combinationAfter: 0,
     /** Rerolls («Nytt utvalg») and banishes («Fjern kortet») per shift, and how many more each helped boss gives. */
     rerolls: 1, banishes: 1, perBoss: 1,
     /**
@@ -551,6 +564,14 @@ export const CONFIG = {
     weight: { ownedWeapon: 6, effect: 1.5, ownedPassive: 2, fresh: 1.2, freshPassive: 0.6, helpRule: 2.5, countRule: 1.5 },
     /** New weapons are offered this many times as often while the player has fewer than «earlySlots» weapons. */
     earlyWeaponBoost: 2.5, earlySlots: 2,
+    /**
+     * Endringsprompt 6: every valid card has the same chance (true). The weights above and the early weapon boost are
+     * then not used; set false to go back to the weighted draw of version 6. Either way an available combination is
+     * always shown, and the same set of cards is never offered twice in a row.
+     */
+    equalOdds: true,
+    /** How many times a new set is drawn when it is the same as the last one (the stream stays fixed per round). */
+    repeatRedraws: 6,
   },
 
   /**
@@ -586,9 +607,9 @@ export const CONFIG = {
   },
 
   /**
-   * WEAPONS (version 6). Each weapon has a "base" (its numbers before any upgrade) and "growth": the increments a
-   * level-up card can give. There are no levels: a weapon can take any number of increments, and the stats are
-   * computed from base + the increments taken (weaponStats() in js/weapons.js).
+   * WEAPONS (version 6, level cap from Endringsprompt 6). Each weapon has a "base" (its numbers at level 1) and
+   * "growth": the increments a level-up card can give. Each card is one level, up to CONFIG.limits.weaponLevel (9), and
+   * the stats are computed from base + the increments taken (weaponStats() in js/weapons.js).
    *
    * Growth rules per stat:  { add: n }   = +n per step,
    *                         { pct: f }   = +f × base per step (linear, never capped – this is how help grows),
@@ -596,8 +617,8 @@ export const CONFIG = {
    *                         { set: v, once: true } = a one-time change (e.g. back: true).
    *                         max/min = cap (the card is not offered past it). Count-like stats (count, hits, hops …)
    *                         must have a max: that cap is what keeps the game fast on an office PC.
-   * The combination (max increments + its passive) swaps "base" for "combination.stats"; the increments keep
-   * applying on top, and rules for stats the combination does not have are turned into help increments.
+   * The combination (level 9 + its passive = «level 10») swaps "base" for "combination.stats", and the weapon takes
+   * no more cards after it. Every weapon has exactly one combination.
    * tag = the weapon's class (projectile, chain, area, helper), used by the tag passives.
    * effects = which effect modifiers the weapon can take (see CONFIG.upgrades.effects).
    * countName = what "count" is called on the card («+1 mus»).
@@ -613,14 +634,14 @@ export const CONFIG = {
         passive: 'ram', name: 'Full omstart',
         text: 'Mye større puls som går raskere og skyver advokatene tilbake.',
         /** nudge = how far the lawyers are pushed per pulse. */
-        stats: { radius: 72, help: 30, interval: 0.62, nudge: 4 },
+        stats: { radius: 86, help: 34, interval: 0.62, nudge: 4 },
       },
     },
     toner: {
       name: 'Toner-kast', tag: 'projectile',
       description: 'Kaster tonerkassetter i en vifte mot nærmeste advokat. De sprekker og hjelper alle rundt.',
       countName: 'tonerkassett',
-      base: { count: 2, splash: 28, help: 15, interval: 1.2, speed: 190, range: 190, spread: 0.35 },
+      base: { count: 2, splash: 28, help: 13, interval: 1.2, speed: 190, range: 190, spread: 0.35 },
       growth: { help: { pct: 0.3 }, count: { add: 1, max: 10 }, splash: { add: 4, max: 70 }, interval: { mul: 0.9, min: 0.45 }, range: { add: 15, max: 320 } },
       effects: ['pierce', 'slow', 'crit', 'linger', 'knockback', 'mark', 'escalation', 'pull'],
       combination: {
@@ -643,7 +664,7 @@ export const CONFIG = {
       combination: {
         passive: 'ssd', name: 'Tofaktor',
         text: 'To kjeder samtidig i hver sin retning, med flere hopp og kortere intervall.',
-        stats: { hops: 8, chains: 2, help: 34, interval: 0.8, range: 96, hopTime: 0.06, reach: 230 },
+        stats: { hops: 8, chains: 2, help: 29, interval: 0.8, range: 96, hopTime: 0.06, reach: 230 },
       },
     },
     hdmi: {
@@ -656,7 +677,7 @@ export const CONFIG = {
       combination: {
         passive: 'extensionCord', name: 'Kabelkaos',
         text: 'Kabelen svinges i en full sirkel rundt deg.',
-        stats: { lengthPx: 80, help: 34, interval: 0.8, arc: 6.2832, back: true },
+        stats: { lengthPx: 96, help: 40, interval: 0.8, arc: 6.2832, back: true },
       },
     },
     remote: {
@@ -664,13 +685,13 @@ export const CONFIG = {
       description: 'De nærmeste advokatene får hjelp via et glimt ovenfra.',
       countName: 'treff',
       /** reach = how far away a lawyer can be picked. */
-      base: { hits: 1, help: 20, interval: 1.6, reach: 330 },
+      base: { hits: 1, help: 28, interval: 1.6, reach: 330 },
       growth: { help: { pct: 0.5 }, hits: { add: 1, max: 16 }, interval: { mul: 0.9, min: 0.4 }, reach: { add: 25, max: 520 } },
       effects: ['crit', 'linger', 'splash', 'slow', 'mark', 'escalation', 'pull'],
       combination: {
         passive: 'admin', name: 'Domene-admin',
         text: 'Treffer mange advokater samtidig, med kort intervall.',
-        stats: { hits: 7, help: 60, interval: 0.8, reach: 360 },
+        stats: { hits: 8, help: 70, interval: 0.8, reach: 360 },
       },
     },
     mouse: {
@@ -684,7 +705,7 @@ export const CONFIG = {
       combination: {
         passive: 'batteries', name: 'Musematta',
         text: 'Åtte mus suser rundt deg i en bredere og raskere ring.',
-        stats: { count: 8, track: 60, rotation: 5.5, help: 30, hitPause: 0.35 },
+        stats: { count: 8, track: 72, rotation: 5.5, help: 38, hitPause: 0.35 },
       },
     },
     ctrlz: {
@@ -692,27 +713,27 @@ export const CONFIG = {
       description: 'En stor Ctrl+Z-tast kastes mot nærmeste advokat og kommer tilbake.',
       countName: 'tast',
       /** range = how far the key flies before it turns around. The combination has radius/period/rotation instead. */
-      base: { count: 1, range: 110, help: 14, interval: 1.6, speed: 220 },
+      base: { count: 1, range: 110, help: 12, interval: 1.6, speed: 220 },
       growth: { help: { pct: 0.35 }, count: { add: 1, max: 8 }, range: { add: 12, max: 260 }, interval: { mul: 0.9, min: 0.5 }, speed: { add: 20, max: 400 }, radius: { add: 8, max: 170 }, rotation: { add: 0.3, max: 7 }, hitPause: { mul: 0.88, min: 0.15 } },
       effects: ['slow', 'knockback', 'crit', 'linger', 'mark', 'escalation', 'pull'],
       combination: {
         passive: 'shortcuts', name: 'Ctrl+Alt+Del',
         text: 'Flere taster går i en spiral ut og inn rundt deg.',
         /** radius = how far out the spiral goes, period = seconds out and in, rotation = radians per second. */
-        stats: { count: 5, radius: 90, period: 2.4, rotation: 3.0, help: 30, hitPause: 0.45 },
+        stats: { count: 5, radius: 108, period: 2.4, rotation: 3.0, help: 45, hitPause: 0.45 },
       },
     },
     beam: {
       name: 'Oppdateringsstrålen', tag: 'area',
       description: 'En lang fremdriftsindikator skyter ut som en stråle mot nærmeste advokat.',
       /** help is given every "tick" seconds while the beam lasts. pause = time between each beam. */
-      base: { lengthPx: 130, width: 10, duration: 1.0, pause: 2.6, help: 10, tick: 0.2 },
+      base: { lengthPx: 130, width: 10, duration: 1.0, pause: 2.6, help: 13, tick: 0.2 },
       growth: { help: { pct: 0.6 }, lengthPx: { add: 18, max: 320 }, width: { add: 2.5, max: 30 }, duration: { add: 0.2, max: 3 }, pause: { mul: 0.82, min: 0.6 }, tick: { mul: 0.9, min: 0.08 }, rotation: { add: 0.2, max: 3 } },
       effects: ['slow', 'crit', 'linger', 'mark', 'escalation', 'pull'],
       combination: {
         passive: 'certification', name: 'Tvungen oppdatering',
         text: 'To stråler sveiper sakte rundt deg hele tiden.',
-        stats: { lengthPx: 180, width: 16, rotation: 0.8, help: 18, tick: 0.45 },
+        stats: { lengthPx: 180, width: 16, rotation: 0.8, help: 48, tick: 0.4 },
       },
     },
     teams: {
@@ -720,14 +741,14 @@ export const CONFIG = {
       description: 'Teams-varsler skytes ut og svinger seg mot hver sin advokat, nærmeste først.',
       countName: 'varsel',
       /** count = alerts per volley (each picks its own lawyer), turn = how sharply they steer (radians per second). */
-      base: { count: 1, help: 26, interval: 1.4, speed: 200, turn: 7, reach: 240 },
+      base: { count: 1, help: 32, interval: 1.4, speed: 200, turn: 7, reach: 240 },
       growth: { help: { pct: 0.65 }, count: { add: 1, max: 10 }, interval: { mul: 0.9, min: 0.45 }, reach: { add: 12, max: 360 }, turn: { add: 0.6, max: 12 } },
       effects: ['pierce', 'crit', 'linger', 'splash', 'slow', 'mark', 'escalation'],
       combination: {
         passive: 'dualMonitor', name: 'Allmøte på Teams',
         text: 'Hvert varsel deler seg i to nye målsøkende varsler når det treffer.',
         /** split = new alerts on each hit (they do not split again). */
-        stats: { count: 4, help: 50, interval: 0.9, speed: 240, turn: 8, reach: 280, split: 2 },
+        stats: { count: 4, help: 58, interval: 0.9, speed: 240, turn: 8, reach: 280, split: 2 },
       },
     },
     angel: {
@@ -779,7 +800,7 @@ export const CONFIG = {
       name: 'Ping-pong', tag: 'projectile',
       description: 'En pingpongball spretter mellom skjermkantene og blir sterkere for hvert sprett.',
       countName: 'ball',
-      base: { count: 1, bounces: 4, help: 30, speed: 150, boostMax: 0.6, interval: 1.6 },
+      base: { count: 1, bounces: 4, help: 38, speed: 150, boostMax: 0.6, interval: 1.6 },
       growth: { help: { pct: 0.15 }, bounces: { add: 2, max: 16 }, count: { add: 1, max: 4 }, speed: { add: 12, max: 240 }, boostMax: { add: 0.2, max: 1.4 }, interval: { mul: 0.9, min: 0.6 } },
       effects: ['crit', 'linger', 'slow', 'knockback', 'mark', 'escalation'],
       /** Fixed for everyone: the extra speed and help per bounce, the top speed and the hit pause per lawyer. */
@@ -799,17 +820,28 @@ export const CONFIG = {
      * most lawyers are, so it stands between the player and the flock. Lawyers in it get help every «tick» seconds and
      * walk «slow» slower. It never blocks movement and never hurts the player.
      * walls = firewalls per activation (toward the densest flocks), lengthPx = length, duration = seconds it stands,
-     * interval = seconds between each time. No regular combination: he is part of The Matrix.
+     * interval = seconds between each time. He is part of The Matrix, and since Endringsprompt 6 he also has a regular
+     * combination («Neste generasjons brannmur»).
      */
     bodyguard: {
       name: 'Livvakten', tag: 'helper',
       description: 'En rolig livvakt følger deg og lager en brannmur av flammer mellom deg og flokken.',
       countName: 'brannmur',
-      base: { walls: 1, lengthPx: 60, help: 26, interval: 5.5, duration: 3, slow: 0.3 },
+      base: { walls: 1, lengthPx: 60, help: 34, interval: 5.5, duration: 3, slow: 0.3 },
       growth: { help: { pct: 0.15 }, lengthPx: { add: 12, max: 150 }, interval: { mul: 0.88, min: 2.5 }, duration: { add: 1, max: 6 }, walls: { add: 1, max: 3 }, slow: { add: 0.05, max: 0.5 } },
       effects: ['crit', 'linger', 'mark', 'escalation'],
       /** Fixed for everyone: distance from the player, flame band width, help tick, max firewalls at the same time. */
       distance: 30, width: 10, tick: 0.25, maxWalls: 3,
+      /**
+       * Endringsprompt 6: his regular combination (with the other developer's passive «Brannmur» from version 5, which no other combination uses).
+       * triangle = three walls in a triangle around the player (one side toward the densest flock), «distance» pixels out,
+       * blue-white «next generation» flames. The Matrix accepts him at level 9 or as this combination.
+       */
+      combination: {
+        passive: 'firewall', name: 'Neste generasjons brannmur',
+        text: 'Tre lengre brannmurer i en trekant rundt deg, som står lenger og bremser mer.',
+        stats: { walls: 3, lengthPx: 150, help: 20, interval: 4.2, duration: 5, slow: 0.4, distance: 46, triangle: true },
+      },
     },
     /**
      * THE MATRIX (Endringsprompt 4, section 7): the rarest combination. Skytsengelen (10 increments or combined) +
@@ -877,7 +909,7 @@ export const CONFIG = {
   itemPassives: {
     backup: { name: 'Sikkerhetskopi', value: 1, max: 3, restore: 0.5, grace: 2, text: 'Overlever ett dødelig treff per vakt (maks 3) og får halv energi tilbake.' },
     grateful: { name: 'Takknemlige advokater', value: 0.04, text: '+0,04 energi for hver advokat du hjelper.' },
-    postIt: { name: 'Post-it-blokk', value: 2, text: 'Lappene gir full poengverdi i 2 sekunder lenger.' },
+    postIt: { name: 'Post-it-blokk', value: 2, text: 'Lappene gir full erfaring og full poengverdi i 2 sekunder lenger.' },
     bonusScheme: { name: 'Bonusordning', value: 0.1, text: '+10 % poeng fra lapper, hastesaker og bosser.' },
     thermos: { name: 'Termos', fill: 10, kick: 2, text: 'Energidrikken gir +10 energi og sukkerkicket varer 2 sekunder lenger.' },
     janitor: { name: 'Vaktmester', value: 0.15, max: 0.75, text: '−15 % treghet fra papirbunker, blekk og ventemusikk.' },
@@ -944,6 +976,19 @@ export const CONFIG = {
     downAfter: 1.5, upAfter: 8,
   },
 
+  /**
+   * The automatic test player (Endringsprompt 6, js/bot.js): used by tools/bot-test.js and the «Bot-test» button in
+   * ?debug. Never used in a normal round. maxMinutes = a round is stopped after this, rounds = rounds in a test
+   * (tools: «node tools/bot-test.js [rounds]»), browserRounds = rounds for the debug button (it runs in the page),
+   * usefulPassives = the passives the bot likes after the ones its combinations need, best first.
+   */
+  botTest: {
+    maxMinutes: 25, rounds: 120, browserRounds: 20,
+    /** How much the bot prefers its lowest-level weapon when it picks an upgrade (a balanced build; 0 = no preference). */
+    spreadUpgrades: 1.5,
+    usefulPassives: ['overtime', 'admin', 'paperTray', 'coffeeMachine', 'backup', 'ergonomicChair', 'standingDesk', 'biggerCan', 'grateful', 'sneakers', 'firewall', 'mechKeyboard'],
+  },
+
   /** Limits the leaderboard server uses to reject unrealistic submissions. */
   leaderboard: {
     maxName: 20,
@@ -961,6 +1006,8 @@ export const CONFIG = {
 // The passives from version 3, 5, 6 and 6.1 are merged with the original ones, so the rest of the game sees 28 passives.
 Object.assign(CONFIG.weapons, CONFIG.newWeapons);
 Object.assign(CONFIG.passives, CONFIG.newPassives, CONFIG.statPassives, CONFIG.tagPassives, CONFIG.itemPassives);
+// The level cap lives in one place (CONFIG.limits.weaponLevel): a weapon at max level has taken weaponLevel − 1 cards.
+CONFIG.upgrades.combinationAfter = CONFIG.limits.weaponLevel - 1;
 
 /** The tag of each weapon id (for the tag passives). */
 export const WEAPON_TAG = /** @type {Record<string, string>} */ ({});

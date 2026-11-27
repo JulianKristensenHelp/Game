@@ -1,12 +1,12 @@
 // @ts-check
 // The game itself: all state and one update per fixed time step.
 // This file (and everything it imports) uses neither screen, sound nor Math.random(),
-// so the same date + the same key presses give exactly the same round on all machines.
+// so the same date + the same run seed + the same key presses give exactly the same round on all machines.
 // Graphics settings and automatic quality live in the rendering code and can never affect anything here.
 import { CONFIG, DT } from './config.js';
 import { Rng, Pool, Grid } from './utils.js';
 import { makePlayer, updatePlayer } from './player.js';
-import { makeEnemy, makePaper, updateDirector, updateEnemies, pruneEnemies, spawnEnemy } from './enemies.js';
+import { makeEnemy, makePaper, updateDirector, updateEnemies, pruneEnemies, spawnEnemy, fireEvent } from './enemies.js';
 import { makeShot, makePuddle, updateEnemyShots, spawnBoss, bossTypeAt, bossTimeAt } from './bosses.js';
 import { makeProjectile, updateWeapons, updateProjectiles } from './weapons.js';
 import { makeTicket, makePickup, updateTickets, dropPickup, updateDrinks } from './tickets.js';
@@ -22,44 +22,58 @@ export class Game {
   /**
    * @param {string} date today's date ("ÅÅÅÅ-MM-DD") (year-month-day) – used as the seed for «Dagens vakt» ("Today's shift")
    * @param {number} [character] which playable character (0–3), see CONFIG.characters
+   * @param {string} [runSeed] the run seed («rundeseed», Endringsprompt 6): makes everything that is not part of the
+   *   shift's structure new for every round. The game makes one with crypto.getRandomValues; the tools pass their own
+   *   (without one, the date is used, so a test is the same every time).
    */
-  constructor(date, character = 0) {
+  constructor(date, character = 0, runSeed = date) {
     this.date = date;
+    this.runSeed = String(runSeed);
     this.character = Math.max(0, Math.min(CONFIG.characters.length - 1, character | 0));
-    /** Separate random streams, so one does not affect another. */
+    // «Dagens vakt» (the same for everyone all day): the structure of the shift – when the bosses come (fixed in
+    // config), when and which events come, the difficulty curve (config), where the energy drink and «Sky-synk»
+    // appear, and when and where the urgent case comes.
+    const day = (name) => new Rng(date + '|' + name);
+    // New for every round: everything else.
+    const run = (name) => new Rng('runde|' + this.runSeed + '|' + name);
+    /** Separate random streams, so one does not affect another. Each has its own seed text and its own state. */
     this.rng = {
-      /** when the lawyers arrive, and which type */
-      spawn: new Rng(date + '|spawn'),
-      /** where they enter (depends on where the player is standing) */
-      spot: new Rng(date + '|plass'),
-      /** urgent case and boss */
-      special: new Rng(date + '|spesial'),
-      /** upgrade cards */
-      cards: new Rng(date + '|kort'),
-      /** New PC drops */
-      drops: new Rng(date + '|drops'),
-      /** where the energy drink appears */
-      drink: new Rng(date + '|drikk'),
-      /** Remote control */
-      weapons: new Rng(date + '|vaapen'),
-      /** «Dobbel skjerm» ("Dual monitor"): whether a weapon is activated twice in a row */
-      dual: new Rng(date + '|dobbel'),
-      /** critical hits («Kaffemaskin») */
-      crit: new Rng(date + '|krit'),
-      /** dodge («Brannmur») */
-      luck: new Rng(date + '|flaks'),
-      /** what is in a supplier package */
-      package: new Rng(date + '|pakke'),
-      /** the rare events and which direction the scheduled ones come from */
-      events: new Rng(date + '|hendelser'),
-      /** the direction of each new ping-pong ball (Endringsprompt 4) */
-      pingpong: new Rng(date + '|pingpong'),
-      /** where «Sky-synk» appears (Endringsprompt 5) */
-      cloud: new Rng(date + '|sky'),
-      /** when the capture-point events come, and which one (Endringsprompt 5) */
-      capture: new Rng(date + '|punkt'),
-      /** looks only – never affects anything else */
-      looks: new Rng(date + '|utseende'),
+      /** run: when ordinary lawyers arrive and which type, the partners, and the ring waves and flocks */
+      spawn: run('spawn'),
+      /** run: where they enter (depends on where the player is standing) */
+      spot: run('plass'),
+      /** day: when and where the urgent case comes (only that – the bosses' attacks have their own stream) */
+      special: day('spesial'),
+      /** run: the random parts of the bosses' attacks (aim offsets, herring spots, bait, gaps) */
+      bossAttacks: run('bossangrep'),
+      /** run: upgrade cards */
+      cards: run('kort'),
+      /** run: drops (tickets from partners, packages, Ny PC, cookies) */
+      drops: run('drops'),
+      /** day: where the energy drink appears */
+      drink: day('drikk'),
+      /** run: Remote control */
+      weapons: run('vaapen'),
+      /** run: «Dobbel skjerm» ("Dual monitor"): whether a weapon is activated twice in a row */
+      dual: run('dobbel'),
+      /** run: critical hits («Kaffemaskin») */
+      crit: run('krit'),
+      /** run: dodge («Brannmur») */
+      luck: run('flaks'),
+      /** run: what is in a supplier package */
+      package: run('pakke'),
+      /** day: when the rare events come, and which (one roll per minute) */
+      events: day('hendelser'),
+      /** run: the details of an event (the direction of its flock, the partners' traits, the free lunch tickets) */
+      eventDetails: run('hendelsesdetaljer'),
+      /** run: the direction of each new ping-pong ball (Endringsprompt 4) */
+      pingpong: run('pingpong'),
+      /** day: where «Sky-synk» appears (Endringsprompt 5) */
+      cloud: day('sky'),
+      /** day: when the capture-point events come, which one, and the direction of their extra flock */
+      capture: day('punkt'),
+      /** run: looks only – never affects anything else */
+      looks: run('utseende'),
     };
     /** 'running' | 'levelUp' | 'package' | 'done' */
     this.status = 'running';
@@ -151,6 +165,10 @@ export class Game {
     this.rerolls = CONFIG.upgrades.rerolls;
     this.banishes = CONFIG.upgrades.banishes;
     this.banished = new Set();
+    /** The last set of cards offered (Endringsprompt 6: the same set is never offered twice in a row). */
+    this.lastOffer = '';
+    /** Set to {} by the bot test to count how often each card is offered. @type {Record<string, number> | null} */
+    this.offerLog = null;
     /** What the last supplier package contained (shown while status is 'package'). @type {import('./upgrades.js').Card[] | null} */
     this.packageCards = null;
 
@@ -367,18 +385,17 @@ export class Game {
   }
 
   /**
-   * Four weapons with enough increments for their combinations (plus a few more), and the passives that go with them.
+   * Four weapons at max level (9), and the passives their combinations need (at max level 5).
    * @param {string[]} [weapons] which four (default: Skru av og på, Trådløse mus, Toner-kast, Fjernstyring)
    * @param {boolean} [combine] turn them into combinations right away
    * @param {number} [picks] increments per weapon
    */
-  debugMaxBuild(weapons = ['powerCycle', 'mouse', 'toner', 'remote'], combine = false, picks = CONFIG.upgrades.combinationAfter + 6) {
+  debugMaxBuild(weapons = ['powerCycle', 'mouse', 'toner', 'remote'], combine = false, picks = CONFIG.upgrades.combinationAfter) {
     this.debug.used = true;
     this.player.weapons.length = 0;
     for (const id of weapons.slice(0, CONFIG.limits.weapons)) {
       giveWeapon(this, id);
       giveEvenUpgrades(this, id, CONFIG.upgrades.combinationAfter);
-      // Livvakten has no regular combination (he is part of The Matrix)
       const k = /** @type {any} */ (CONFIG.weapons[id]).combination;
       if (k) for (let i = 0; i < CONFIG.limits.passiveLevel; i++) givePassive(this, k.passive);
       if (combine && k) giveCombination(this, id);
@@ -402,6 +419,19 @@ export class Game {
     givePassive(this, 'certification');
     giveMatrix(this);
     for (const w of keep) if (this.player.weapons.length < CONFIG.limits.weapons && w.id !== 'angel' && w.id !== 'bodyguard' && w.id !== 'matrix') this.player.weapons.push(w);
+  }
+
+  /** Puts out a given boss right away (stress test). @param {string} type */
+  debugBoss(type) {
+    this.debug.used = true;
+    if (this.boss && this.boss.active) return;
+    spawnBoss(this, type);
+  }
+
+  /** Fires one of the office events right away (stress test). @param {string} id */
+  debugFireEvent(id) {
+    this.debug.used = true;
+    fireEvent(this, id);
   }
 
   /** Gives one level of a passive (debug builds). */

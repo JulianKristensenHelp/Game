@@ -1,24 +1,23 @@
 // @ts-check
-// Measures how much help per second each weapon gives with a fixed number of increments and as a combination, under equal conditions.
-// Run:  node tools/measure-weapons.js   (or: powershell -File tools/node.ps1 tools/measure-weapons.js)
+// Measures how much help per second each weapon gives at max level (9) and as its combination (level 10), under
+// equal conditions, plus The Matrix.
+// Run:  node tools/measure-weapons.js [weapons,…]   (or: powershell -File tools/node.ps1 tools/measure-weapons.js)
 //
 // Setup: the player walks through the open office in a big, slow loop. 150 "dummy" lawyers with infinite
 // frustration are spread evenly 40–300 pixels around the player (those that end up too close or too far away are moved).
-// Every weapon gets PICKS increments spread evenly over its growth rules (help, interval, count …), no effects.
-// The combination is measured with the increments needed to unlock it, its matching passive at level 1, and the
-// rest of the PICKS on top (increments keep applying after the combination).
+// Level 9 = the weapon with its 8 cards spread evenly over its growth rules (help, interval, count …), no effects.
+// Level 10 = its combination (Endringsprompt 6: the combination is final, it takes no more cards).
 // The same numbers are also shown in debug mode in the game (help per second per weapon, last 10 seconds).
 import { Game } from '../js/game.js';
 import { CONFIG } from '../js/config.js';
 import { Rng } from '../js/utils.js';
 import { spawnEnemy } from '../js/enemies.js';
-import { giveWeapon, givePassive, giveCombination, giveEvenUpgrades } from '../js/upgrades.js';
+import { giveWeapon, givePassive, giveCombination, giveEvenUpgrades, giveMatrix } from '../js/upgrades.js';
 
 const SEC = 60;
-/** Increments per weapon in the measurement (a typical build has about this many on its main weapon by minute 12). */
-const PICKS = Number(process.argv[2] || 16);
 
-function target(id, evo) {
+/** @param {string} id @param {'max'|'evo'|'matrix'} what */
+function target(id, what) {
   const s = new Game('2026-11-25');
   s.debug.immortal = true;
   s.time = 600;
@@ -28,17 +27,21 @@ function target(id, evo) {
   // No level-ups during the measurement (the build must stay exactly as set up)
   s.xpNeeded = 1e12;
   s.player.weapons.length = 0;
-  giveWeapon(s, id);
-  const after = CONFIG.upgrades.combinationAfter;
-  if (id === 'matrix') {
-    // The Matrix is measured as it is when it is made: the increments needed, and the rest of PICKS on top
-    giveEvenUpgrades(s, id, Math.max(0, PICKS - after));
-    evo = false;
-  } else giveEvenUpgrades(s, id, evo ? after : PICKS);
-  if (evo) {
+  if (what === 'matrix') {
+    // The Matrix: Skytsengelen and Livvakten at level 9 and Shopkeeperen, merged (it takes no cards either)
+    for (const w of ['angel', 'bodyguard']) {
+      giveWeapon(s, w);
+      giveEvenUpgrades(s, w, CONFIG.upgrades.combinationAfter);
+    }
+    givePassive(s, 'certification');
+    giveMatrix(s);
+  } else {
+    giveWeapon(s, id);
+    giveEvenUpgrades(s, id, CONFIG.upgrades.combinationAfter);
+  }
+  if (what === 'evo') {
     givePassive(s, CONFIG.weapons[id].combination.passive);
     giveCombination(s, id);
-    giveEvenUpgrades(s, id, Math.max(0, PICKS - after));
   }
   const rng = new Rng('maal');
   const p = s.player;
@@ -74,19 +77,23 @@ function target(id, evo) {
 }
 
 const rows = [];
-const only = process.argv[3];
+const only = process.argv[2];
 for (const id of Object.keys(CONFIG.weapons)) {
   if (only && !only.split(',').includes(id)) continue;
   const def = /** @type {any} */ (CONFIG.weapons[id]);
   if (def.hidden) continue;
-  const n8 = target(id, false);
-  // Livvakten has no regular combination: The Matrix (with Skytsengelen and Shopkeeperen) takes its place in the table
-  const evo = def.combination ? target(id, true) : target('matrix', false);
-  rows.push({ id, name: def.name, n8: n8.hps, evoName: def.combination ? def.combination.name : 'The Matrix', evo: evo.hps });
+  rows.push({ id, name: def.name, max: target(id, 'max').hps, evoName: def.combination.name, evo: target(id, 'evo').hps });
 }
-const avgEvo = rows.filter((r) => r.id !== 'headset' && r.id !== 'bodyguard').reduce((a, r) => a + r.evo, 0) / Math.max(1, rows.filter((r) => r.id !== 'headset' && r.id !== 'bodyguard').length);
+if (!only || only.includes('matrix')) rows.push({ id: 'matrix', name: '(Engel + Livvakt)', max: 0, evoName: 'The Matrix', evo: target('angel', 'matrix').hps });
+// The average is over the regular weapons and combinations (not the defensive headset, and not The Matrix, which is
+// two weapons in one slot and is shown against the same average)
+const counted = rows.filter((r) => r.id !== 'headset' && r.id !== 'matrix');
+const avgMax = counted.reduce((a, r) => a + r.max, 0) / Math.max(1, counted.length);
+const avgEvo = counted.reduce((a, r) => a + r.evo, 0) / Math.max(1, counted.length);
 console.log('Hjelp per sekund (60 s, 150 advokater jevnt spredt 40–300 px rundt spilleren):\n');
-console.log('Våpen'.padEnd(22) + ('+' + PICKS).padStart(9) + '   ' + 'Kombinasjon'.padEnd(30) + 'Hjelp/s'.padStart(9) + '  i forhold til snitt');
+console.log('Våpen'.padEnd(22) + 'Nivå 9'.padStart(8) + '  snitt'.padStart(7) + '   ' + 'Kombinasjon (nivå 10)'.padEnd(30) + 'Hjelp/s'.padStart(9) + '  i forhold til snitt');
 for (const r of rows) {
-  console.log(r.name.padEnd(22) + r.n8.toFixed(0).padStart(9) + '   ' + r.evoName.padEnd(30) + r.evo.toFixed(0).padStart(9) + '  ' + (r.id === 'headset' ? '(forsvar – blokkerer treff)' : ((r.evo / avgEvo) * 100).toFixed(0) + ' %'));
+  const tail = r.id === 'headset' ? '(forsvar – blokkerer treff)' : ((r.evo / avgEvo) * 100).toFixed(0) + ' %';
+  const maxRel = r.id === 'headset' ? '' : ((r.max / avgMax) * 100).toFixed(0) + ' %';
+  console.log(r.name.padEnd(22) + r.max.toFixed(0).padStart(8) + maxRel.padStart(7) + '   ' + r.evoName.padEnd(30) + r.evo.toFixed(0).padStart(9) + '  ' + tail);
 }

@@ -14,6 +14,8 @@ import { spawnEnemy, spawnRate, frustrationFactor } from './enemies.js';
 import { icon, iconElement } from './icons.js';
 import { xpNeeded } from './score.js';
 import { MatrixIntro } from './matrixfx.js';
+import { capViolations } from './upgrades.js';
+import { playBotRound, botReport, testSeed } from './bot.js';
 import * as ui from './ui.js';
 
 const { el } = ui;
@@ -159,11 +161,27 @@ function selectCharacter(i, start) {
   if (start) startShift();
 }
 
-function startShift() {  // Today's date in Norwegian time is the seed: everyone gets the same shift on the same day.
+/**
+ * A new run seed («rundeseed», Endringsprompt 6) from the browser's crypto source. In debug mode «?debug&seed=…»
+ * replays a round: the same run seed on the same day with the same choices gives the same round.
+ */
+function newRunSeed() {
+  const forced = DEBUG ? new URLSearchParams(location.search).get('seed') : null;
+  if (forced && /^[0-9a-f]{1,32}$/i.test(forced)) return forced.toLowerCase();
+  const a = new Uint32Array(2);
+  crypto.getRandomValues(a);
+  return a[0].toString(16).padStart(8, '0') + a[1].toString(16).padStart(8, '0');
+}
+
+function startShift() {
+  // Today's date in Norwegian time seeds the structure of the shift (the same for everyone all day); the run seed
+  // makes the rest of the round new every time (see the Game constructor).
   date = dateOslo();
   // Finish the figures that are not made yet (normally already done while the start screen is shown).
   renderer.fig.makeSome(1e9);
-  game = new Game(date, selectedCharacter);
+  game = new Game(date, selectedCharacter, newRunSeed());
+  // A replayed round (forced run seed) is for debugging only and is never submitted to the leaderboard
+  if (DEBUG && new URLSearchParams(location.search).get('seed')) game.debug.used = true;
   hud.portrait = renderer.fig.portrait(selectedCharacter);
   hud.showFired('');
   hud.intro = null;
@@ -383,6 +401,7 @@ async function submit(e) {
       name, date: game.date, character: CONFIG.characters[game.character].id, score: game.score, time: Math.round(game.time), helped: game.helped,
       maxMult: CONFIG.multiplier.start + game.stat.maxMultStep * CONFIG.multiplier.step,
       fired: !!game.fired,
+      seed: game.runSeed,
     });
     sent = true;
     el('submitStatus').textContent = response.improved
@@ -562,6 +581,14 @@ function onFrame(ms) {
   const t2 = performance.now();
 
   measurePerf(dt, t1 - t0, t2 - t1);
+  if (stress) {
+    // the stress test's frame time: logic + drawing for this frame (not the time waiting for the screen)
+    const ms = t2 - t0;
+    stress.sumMs += ms;
+    stress.msFrames++;
+    if (ms > stress.maxMs) stress.maxMs = ms;
+    if (ms > 1000 / 60) stress.slowFrames++;
+  }
   requestAnimationFrame(onFrame);
 }
 
@@ -716,30 +743,100 @@ gameCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // ---------- Debug mode (?debug) ----------
 
-/** Stress test: minute 15, full build with combinations, max lawyers, 5 minutes without being able to die. */
-let stress = /** @type {null | {time: number, frames: number, minFps: number, sumFps: number, measurements: number, heapStart: number, heapMax: number, heapEnd: number, log: string[]}} */ (null);
+/**
+ * Stress test: minute 15, a build with combinations, max lawyers, without being able to die.
+ * sumMs/maxMs = the time per frame spent on logic + drawing (average and worst single frame), slowFrames = frames
+ * over 16.7 ms (a visible hitch).
+ */
+let stress = /** @type {null | {name: string, duration: number, time: number, frames: number, minFps: number, sumFps: number, measurements: number, heapStart: number, heapMax: number, heapEnd: number, sumMs: number, maxMs: number, msFrames: number, slowFrames: number, log: string[]}} */ (null);
 const heap = () => (/** @type {any} */ (performance).memory ? /** @type {any} */ (performance).memory.usedJSHeapSize / 1048576 : -1);
 
-function startStressTest() {
+/**
+ * The stress test scenarios (Endringsprompt 6, section 7): every combination (four at a time, the slots are four),
+ * The Matrix, each boss, and a capture-point event with the office events on top. «main» is the original 5-minute test.
+ * @type {Record<string, {text: string, combos?: string[], matrix?: boolean, boss?: string, event?: boolean}>}
+ */
+const STRESS = {
+  main: { text: 'Tofaktor, Kontorprinteren, Ping of Death, The Matrix + Anonymous', combos: ['password', 'toner', 'pingpong'], matrix: true, boss: 'frida' },
+  kombo1: { text: 'Full omstart, Kontorprinteren, Tofaktor, Kabelkaos', combos: ['powerCycle', 'toner', 'password', 'hdmi'] },
+  kombo2: { text: 'Domene-admin, Musematta, Ctrl+Alt+Del, Tvungen oppdatering', combos: ['remote', 'mouse', 'ctrlz', 'beam'] },
+  kombo3: { text: 'Allmøte på Teams, Himmelsk serviceavtale, Hjemmekontor, Ping of Death', combos: ['teams', 'angel', 'headset', 'pingpong'] },
+  kombo4: { text: 'Neste generasjons brannmur, Allmøte, Tofaktor, Musematta', combos: ['bodyguard', 'teams', 'password', 'mouse'] },
+  boss1: { text: 'Nørdic-konsulenten', combos: ['password', 'toner', 'pingpong'], matrix: true, boss: 'nordic' },
+  boss2: { text: 'Multifunksjonsmonsteret', combos: ['password', 'toner', 'pingpong'], matrix: true, boss: 'printerBoss' },
+  boss3: { text: 'Anonymous og venninnene', combos: ['password', 'toner', 'pingpong'], matrix: true, boss: 'frida' },
+  boss4: { text: 'Johan', combos: ['password', 'toner', 'pingpong'], matrix: true, boss: 'johan' },
+  hendelse: { text: 'Snacks på Jacobs + lunsjrush + partnermøte', combos: ['teams', 'angel', 'mouse', 'pingpong'], event: true },
+};
+/** The scenarios of «Stresstest-serie», each for «seriesSeconds». */
+const STRESS_SERIES = ['kombo1', 'kombo2', 'kombo3', 'kombo4', 'main', 'boss1', 'boss2', 'boss3', 'boss4', 'hendelse'];
+/** @type {string[]} */
+let stressQueue = [];
+/** @type {string[]} */
+const stressResults = [];
+
+function startStressTest(name = 'main', duration = 300) {
+  const sc = STRESS[name];
   startShift();
   if (!game) return;
   const s = game;
   s.debugSkip(15 * 60 - 1);
-  // The weapons that are heaviest on performance (all as combinations): chains, many projectiles, the bouncing
-  // balls of Ping of Death (12 at once), and The Matrix (mini printers, firewalls and the code rain with bullet time)
-  s.debugMaxBuild(['password', 'toner', 'pingpong'], true);
-  s.debugMatrixBuild();
+  // The heaviest weapons as combinations: chains, many projectiles, the bouncing balls of Ping of Death (12 at
+  // once), and The Matrix (mini printers, firewalls and the code rain with bullet time)
+  s.debugMaxBuild(sc.combos ?? [], true);
+  if (sc.matrix) s.debugMatrixBuild();
   s.debug.immortal = true;
-  // Fiske-Frida, her friends, the herring rain and the bait are out during the whole test (with immortality the
-  // countdown starts over instead of firing the player)
-  s.debugSpawn('frida');
-  // she must stay out for the whole test (at minute 15 the build would otherwise help her in seconds)
-  if (s.boss) s.boss.hp = s.boss.maxHp = 1e12;
+  if (sc.boss) {
+    // The boss is out during the whole test (with immortality its countdown starts over instead of firing the player)
+    s.debugBoss(sc.boss);
+    if (s.boss) s.boss.hp = s.boss.maxHp = 1e12;
+  }
+  if (sc.event) {
+    s.debugCapture('snacks');
+    s.debugFireEvent('lunchRush');
+    s.debugFireEvent('partnerMeeting');
+  }
   hud.iconsChanged();
   handleEvents();
   pendingMatrix = false;
-  stress = { time: 0, frames: 0, minFps: 999, sumFps: 0, measurements: 0, heapStart: heap(), heapMax: heap(), heapEnd: 0, log: [] };
-  console.log('[stresstest] start: minutt 15, 4 våpen med kombinasjoner (Tofaktor, Kontorprinteren, Ping of Death, The Matrix), Anonymous og venninnene, maks advokater, 5 minutter');
+  stress = { name, duration, time: 0, frames: 0, minFps: 999, sumFps: 0, measurements: 0, heapStart: heap(), heapMax: heap(), heapEnd: 0, sumMs: 0, maxMs: 0, msFrames: 0, slowFrames: 0, log: [] };
+  console.log(`[stresstest] start «${name}»: minutt 15, ${sc.text}, maks advokater, ${duration} s`);
+}
+
+/** «Stresstest-serie»: every scenario one after the other (about 10 minutes), then a summary in the console. */
+let inSeries = false;
+function startStressSeries() {
+  stressResults.length = 0;
+  stressQueue = STRESS_SERIES.slice();
+  inSeries = true;
+  nextInSeries();
+}
+function nextInSeries() {
+  const name = stressQueue.shift();
+  if (!name) {
+    inSeries = false;
+    console.log('[stresstest] SERIE FERDIG\n' + stressResults.join('\n'));
+    /** @type {any} */ (window).stressSeries = stressResults.slice();
+    return;
+  }
+  startStressTest(name, name === 'main' ? 300 : 60);
+}
+
+/**
+ * «Bot-test» in ?debug (Endringsprompt 6): the automatic test player plays CONFIG.botTest.browserRounds rounds in the
+ * page with no drawing (one round at a time, so the page stays responsive), then the report is printed to the console
+ * and shown in the overlay. For 100+ rounds, use «node tools/bot-test.js» (much faster).
+ */
+let botTestText = '';
+async function runBotTestInPage() {
+  const n = CONFIG.botTest.browserRounds, rounds = [];
+  for (let i = 0; i < n; i++) {
+    botTestText = `Bot-test: runde ${i + 1} av ${n} …`;
+    await new Promise((r) => setTimeout(r, 0));
+    rounds.push(playBotRound({ date: dateOslo(), character: i % CONFIG.characters.length, runSeed: testSeed(i), skill: 0.9 }));
+  }
+  botTestText = botReport(rounds, 'Bot-test i nettleseren (god spiller)');
+  console.log(botTestText);
 }
 
 /** The weapons each character builds toward in the boss test (starting weapon first). */
@@ -783,20 +880,42 @@ function stressTick(dt) {
       console.log('[stresstest] ' + line);
     }
   }
-  if (stress.time >= 300) {
+  if (stress.time >= stress.duration) {
     stress.heapEnd = heap();
-    const res = `Stresstest ferdig: snitt ${Math.round(stress.sumFps / Math.max(1, stress.measurements))} FPS, laveste ${stress.minFps} FPS, minne start ${stress.heapStart.toFixed(1)} MB → maks ${stress.heapMax.toFixed(1)} MB → slutt ${stress.heapEnd.toFixed(1)} MB`;
+    const res = `Stresstest «${stress.name}» ferdig: snitt ${Math.round(stress.sumFps / Math.max(1, stress.measurements))} FPS, laveste ${stress.minFps} FPS, ` +
+      `frametid snitt ${(stress.sumMs / Math.max(1, stress.msFrames)).toFixed(2)} ms, verste ${stress.maxMs.toFixed(1)} ms, hakk (>16,7 ms) ${stress.slowFrames}, ` +
+      `minne start ${stress.heapStart.toFixed(1)} MB → maks ${stress.heapMax.toFixed(1)} MB → slutt ${stress.heapEnd.toFixed(1)} MB, prosjektiler ${s.projectiles.n}, effekter ${s.effects.n}`;
     console.log('[stresstest] ' + res);
     console.log('[stresstest] e-poster nå: ' + s.enemyShots.n + ', avsendere: ' + s.senderCount);
     stress.log.push(res);
+    stressResults.push(res);
     /** @type {any} */ (window).stressResult = stress;
     s.status = 'done';
     stress = null;
+    if (inSeries) setTimeout(nextInSeries, 600);
   }
 }
 
 /** @type {{t: number, h: Record<string, number>}[]} */
 const helpLog = [];
+
+/** The cap warnings already shown (Endringsprompt 6: warn once per problem). */
+const capWarned = new Set();
+
+/**
+ * The automatic level cap check in debug mode: warns (console, banner and overlay) if any weapon goes over
+ * CONFIG.limits.weaponLevel or any passive over CONFIG.limits.passiveLevel, so the bug from version 6–7.1 cannot return.
+ */
+function checkCaps(s) {
+  const bad = capViolations(s);
+  for (const b of bad) {
+    if (capWarned.has(b)) continue;
+    capWarned.add(b);
+    console.error('[nivåtak] brutt: ' + b);
+    hud.showBanner('Nivåtaket er brutt: ' + b, 'boss', 5000);
+  }
+  return bad.length ? `NIVÅTAK BRUTT: ${bad.join(', ')}` : `nivåtak ok (våpen ${CONFIG.limits.weaponLevel}, passive ${CONFIG.limits.passiveLevel})`;
+}
 
 /** The level pace over the last two minutes of shift time (Endringsprompt 5: aim for about 20–30 s at minute 8). */
 function levelPace(s) {
@@ -820,7 +939,8 @@ function showDebug() {
       `inn/sek ${spawnRate(s.time).toFixed(1)}  frustrasjon ×${frustrationFactor(s.time).toFixed(2)}\n` +
       `mult x${multiplier(s).toFixed(1)}  hjulpne ${s.helped}  nivå ${s.level}\n` +
       `${levelPace(s)}  sky-synk ${s.stat.cloudSyncs}  punkt ${s.stat.captures}/${s.stat.captureEvents}\n` +
-      `udødelig: ${s.debug.immortal ? 'JA' : 'nei'}  seed: ${s.date}`;
+      `${checkCaps(s)}\n` +
+      `udødelig: ${s.debug.immortal ? 'JA' : 'nei'}  dagens vakt: ${s.date}\nrundeseed: ${s.runSeed}  (spill av på nytt: ?debug&seed=${s.runSeed})`;
   }
   if (game) {
     // Help per second per weapon (last ca. 10 seconds) – used to compare weapons and combinations
@@ -838,8 +958,9 @@ function showDebug() {
       }
     }
   }
-  if (stress) t += `\nSTRESSTEST ${mmss(stress.time)} / 05:00  laveste FPS ${stress.minFps === 999 ? '-' : stress.minFps}`;
+  if (stress) t += `\nSTRESSTEST «${stress.name}» ${mmss(stress.time)} / ${mmss(stress.duration)}  laveste FPS ${stress.minFps === 999 ? '-' : stress.minFps}  frametid ${(stress.sumMs / Math.max(1, stress.msFrames)).toFixed(2)} ms` + (inSeries ? `  (serie: ${stressQueue.length} igjen)` : '');
   else if (/** @type {any} */ (window).stressResult) t += '\n' + /** @type {any} */ (window).stressResult.log.slice(-1)[0];
+  if (botTestText) t += '\n' + botTestText;
   el('debuginfo').textContent = t;
 }
 
@@ -850,6 +971,14 @@ if (DEBUG) {
     if (!d) return;
     if (d === 'stress') {
       startStressTest();
+      return;
+    }
+    if (d === 'stressSeries') {
+      startStressSeries();
+      return;
+    }
+    if (d === 'botTest') {
+      runBotTestInPage();
       return;
     }
     if (/^boss[1-4]$/.test(d)) {

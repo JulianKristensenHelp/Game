@@ -16,6 +16,7 @@ const TIMEOUT_MS = 5000;
  * @property {string} [date] "YYYY-MM-DD" (Norwegian time)
  * @property {string} [character] id of the character (k1–k4)
  * @property {boolean} [fired] the round ended with «Du har fått sparken!» (a boss's countdown ran out)
+ * @property {string} [seed] the round's run seed («rundeseed», hex), so the round can be replayed with ?debug&seed=…
  * @property {number} [spot]
  */
 

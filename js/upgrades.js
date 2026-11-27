@@ -41,6 +41,30 @@ const WEIGHT = U.weight;
 /** Stats that are counts (projectiles, hits, hops …): they grow by whole numbers and need a max. */
 const COUNT_LIKE = new Set(['count', 'perThrow', 'hits', 'hops', 'chains', 'charges', 'max', 'bounces', 'walls']);
 
+/**
+ * A weapon's level (Endringsprompt 6): a new weapon is level 1, every card is +1, up to CONFIG.limits.weaponLevel.
+ * A combination (and The Matrix) is level weaponLevel + 1 («level 10»).
+ */
+export function weaponLevel(w) {
+  return w.evo || w.id === 'matrix' ? G.weaponLevel + 1 : 1 + w.picks;
+}
+
+/** True when the weapon takes no more upgrade cards (max level, a combination, or The Matrix). */
+export function weaponMaxed(w) {
+  return w.evo || w.id === 'matrix' || w.picks >= U.combinationAfter;
+}
+
+/**
+ * The debug check (Endringsprompt 6): every weapon and passive over its cap, as text. Empty when all is well.
+ * @returns {string[]}
+ */
+export function capViolations(s) {
+  const out = [];
+  for (const w of s.player.weapons) if (!w.evo && w.id !== 'matrix' && 1 + w.picks > G.weaponLevel) out.push(`${w.id} nivå ${1 + w.picks} > ${G.weaponLevel}`);
+  for (const p of s.player.passives) if (p.level > G.passiveLevel) out.push(`${p.id} nivå ${p.level} > ${G.passiveLevel}`);
+  return out;
+}
+
 const findWeapon = (s, id) => s.player.weapons.find((w) => w.id === id);
 const findPassive = (s, id) => s.player.passives.find((p) => p.id === id);
 const passiveLevel = (s, id) => findPassive(s, id)?.level ?? 0;
@@ -111,13 +135,28 @@ export function giveWeapon(s, id) {
 }
 
 /**
- * Gives a weapon the player has one increment: «steps» growth steps on a stat, or «levels» of an effect.
- * Increments past a cap are turned into help, so a card never gives nothing.
+ * Gives a weapon the player has one card: all its grants («steps» growth steps on a stat, or «levels» of an effect),
+ * and one level. Increments past a stat's cap are turned into help, so a card never gives nothing.
+ * Endringsprompt 6: one card is always one level (a card with two grants used to count as two), and a weapon at max
+ * level or a combination takes no more cards.
+ * @param {Grant[]} grants
  */
-export function giveUpgrade(s, id, grant) {
+export function giveCard(s, id, grants) {
   const w = findWeapon(s, id);
-  if (!w) return;
-  const def = V[id];
+  if (!w || weaponMaxed(w)) return;
+  for (const g of grants) applyGrant(w, g);
+  w.picks++;
+  refreshWeapon(w);
+  s.events.push('upgraded');
+}
+
+/** One increment on its own (one level). Kept for the tools and debug builds. */
+export function giveUpgrade(s, id, grant) {
+  giveCard(s, id, [grant]);
+}
+
+function applyGrant(w, grant) {
+  const def = V[w.id];
   if (grant.fx) {
     const k = FX[grant.fx];
     const have = w.fx[grant.fx] || 0;
@@ -131,9 +170,6 @@ export function giveUpgrade(s, id, grant) {
     if (give > 0) w.up[grant.stat] = (w.up[grant.stat] || 0) + give;
     if (give < (grant.steps ?? 1) && grant.stat !== 'help') w.up.help = (w.up.help || 0) + ((grant.steps ?? 1) - give);
   }
-  w.picks++;
-  refreshWeapon(w);
-  s.events.push('upgraded');
 }
 
 /** How many more steps a stat can take before its cap (Infinity when it has none). */
@@ -211,14 +247,14 @@ export function availableCombinations(s) {
 }
 
 /**
- * The Matrix (Endringsprompt 4): Skytsengelen with enough increments (or as Himmelsk serviceavtale), Livvakten with
- * enough increments, and Shopkeeperen at any level. «Enough» is the same as for the combinations (version 6 has no levels).
+ * The Matrix (Endringsprompt 4): Skytsengelen at level 9 (or as Himmelsk serviceavtale), Livvakten at level 9 (or as
+ * Neste generasjons brannmur, Endringsprompt 6), and Shopkeeperen at any level.
  */
 export function matrixReady(s) {
   const R = V.matrix.requires;
   if (findWeapon(s, 'matrix')) return false;
   const a = findWeapon(s, R.angel), g = findWeapon(s, R.bodyguard);
-  return !!a && (a.evo || a.picks >= U.combinationAfter) && !!g && g.picks >= U.combinationAfter && passiveLevel(s, R.passive) > 0;
+  return !!a && (a.evo || a.picks >= U.combinationAfter) && !!g && (g.evo || g.picks >= U.combinationAfter) && passiveLevel(s, R.passive) > 0;
 }
 
 /**
@@ -363,6 +399,8 @@ function candidates(s, exclude, onlyWeapons) {
   /** @type {any[]} */
   const list = [];
   for (const w of sp.weapons) {
+    // The level cap: a weapon at level 9, a combination and The Matrix are never offered as upgrades again
+    if (weaponMaxed(w)) continue;
     const def = V[w.id];
     const base = currentBase(w);
     const rules = Object.keys(def.growth).filter((stat) => base[stat] !== undefined && stepsLeft(w, stat, def.growth[stat]) > 0);
@@ -372,7 +410,13 @@ function candidates(s, exclude, onlyWeapons) {
       const key = w.id + ':' + stat;
       if (!exclude.has(key)) list.push({ kind: 'upgrade', id: w.id, stat, key, weight: (WEIGHT.ownedWeapon * ruleWeight(stat)) / total });
     }
-    const fxList = (def.effects ?? []).filter((fx) => (w.fx[fx] || 0) < FX[fx].max);
+    const fxList = (def.effects ?? []).filter((fx) => (w.fx[fx] || 0) < FX[fx].max && !exclude.has(w.id + ':fx:' + fx));
+    // Endringsprompt 6 (equal odds): the effects of a weapon are one card – which effect is drawn when it is offered –
+    // so a weapon's upgrades do not crowd out everything else just because it can take many effects
+    if (U.equalOdds) {
+      if (fxList.length > 0) list.push({ kind: 'upgrade', id: w.id, fxPool: fxList, key: w.id + ':fx', weight: WEIGHT.effect });
+      continue;
+    }
     for (const fx of fxList) {
       const key = w.id + ':fx:' + fx;
       if (!exclude.has(key)) list.push({ kind: 'upgrade', id: w.id, fx, key, weight: WEIGHT.effect / fxList.length });
@@ -416,9 +460,9 @@ function makeCard(s, c, tier) {
   }
   const w = /** @type {any} */ (findWeapon(s, c.id));
   const grants = c.fx ? effectGrants(w, c.fx, tier) : grantsFor(w, c.stat, tier);
-  const left = Math.max(0, U.combinationAfter - w.picks - 1);
-  const combo = w.evo || !V[c.id].combination ? '' : left === 0 ? ' · klar for kombinasjon' : ` · ${left} igjen til kombinasjon`;
-  return { kind: 'upgrade', id: c.id, icon: w.evo ? 'evo:' + c.id : c.id, name: weaponName(w), levelText: `${tierName} · Oppgradering ${w.picks + 1}${combo}`, text: grantsText(w, grants), tier, highlighted: false, key: c.key, grants, weight: c.weight };
+  const next = weaponLevel(w) + 1;
+  const combo = next >= G.weaponLevel ? ' · maks, klar for kombinasjon' : '';
+  return { kind: 'upgrade', id: c.id, icon: c.id, name: weaponName(w), levelText: `${tierName} · Nivå ${next} av ${G.weaponLevel}${combo}`, text: grantsText(w, grants), tier, highlighted: false, key: c.key, grants, weight: c.weight };
 }
 
 /** Weighted draw without replacement from a list of candidates. */
@@ -434,6 +478,43 @@ function draw(rng, list) {
     }
   }
   return list.splice(pick, 1)[0];
+}
+
+/** The set of cards as one text (sorted keys), to see if the same set comes up twice in a row. */
+function offerKey(cards) {
+  return cards.map((c) => c.key).sort().join('|');
+}
+
+/**
+ * Draws cards into «cards» until there are «count». Endringsprompt 6 (CONFIG.upgrades.equalOdds): every valid card has
+ * the same chance – the card is drawn first, then its tier is rolled within the tiers it can have (luck still makes
+ * the higher tiers more likely). With equalOdds off, the version 6 way: tier first, then a weighted draw.
+ */
+function drawInto(s, cards, count, pool, rng, opt) {
+  const sp = s.player;
+  while (cards.length < count && pool.length > 0) {
+    if (U.equalOdds) {
+      let c = pool.splice(rng.integer(pool.length), 1)[0];
+      if (c.fxPool) {
+        const fx = c.fxPool[rng.integer(c.fxPool.length)];
+        c = { kind: 'upgrade', id: c.id, fx, key: c.id + ':fx:' + fx, weight: c.weight };
+      }
+      const lo = Math.max(minTierOf(c), opt.minTier ?? 0), hi = maxTierOf(c);
+      const tier = Math.min(hi, Math.max(lo, rollTier(rng, sp.mod.luck, Math.min(lo, hi))));
+      cards.push(makeCard(s, c, tier));
+      continue;
+    }
+    let tier = rollTier(rng, sp.mod.luck, opt.minTier ?? 0);
+    let fits = pool.filter((c) => minTierOf(c) <= tier);
+    while (fits.length === 0 && tier > 0) {
+      tier--;
+      fits = pool.filter((c) => minTierOf(c) <= tier);
+    }
+    if (fits.length === 0) break;
+    const c = draw(rng, fits);
+    pool.splice(pool.indexOf(c), 1);
+    cards.push(makeCard(s, c, Math.max(minTierOf(c), Math.min(tier, maxTierOf(c)))));
+  }
 }
 
 /**
@@ -456,39 +537,41 @@ export function makeCards(s, count = 0, exclude = s.banished, rng = s.rng.cards,
     if (evo.length > 0) {
       const w = evo[rng.integer(evo.length)];
       const k = V[w.id].combination;
-      cards.push({ kind: 'combination', id: w.id, icon: 'evo:' + w.id, name: k.name, levelText: 'Kombinasjon!', text: k.text, tier: 3, highlighted: true, key: 'evo:' + w.id });
+      cards.push({ kind: 'combination', id: w.id, icon: 'evo:' + w.id, name: k.name, levelText: `Nivå ${G.weaponLevel + 1} · Kombinasjon!`, text: k.text, tier: 3, highlighted: true, key: 'evo:' + w.id });
     }
     // The Matrix is always shown as its own extra card when the requirements are met, also next to a combination
     if (matrixReady(s)) {
-      cards.push({ kind: 'matrix', id: 'matrix', icon: 'matrix', name: V.matrix.name, levelText: 'Spesialkombinasjon!', text: V.matrix.cardText, tier: 3, highlighted: true, key: 'matrix' });
+      cards.push({ kind: 'matrix', id: 'matrix', icon: 'matrix', name: V.matrix.name, levelText: `Nivå ${G.weaponLevel + 1} · Spesialkombinasjon!`, text: V.matrix.cardText, tier: 3, highlighted: true, key: 'matrix' });
     }
   }
   // «Hesteskoen»: a chance of a fourth card (the roll only happens when the player has the passive).
   if (!count) count = 3 + (sp.mod.fourthCard > 0 && rng.next() < sp.mod.fourthCard ? 1 : 0);
-  const pool = candidates(s, exclude, !!opt.onlyWeapons);
-  while (cards.length < count && pool.length > 0) {
-    let tier = rollTier(rng, sp.mod.luck, opt.minTier ?? 0);
-    let fits = pool.filter((c) => minTierOf(c) <= tier);
-    while (fits.length === 0 && tier > 0) {
-      tier--;
-      fits = pool.filter((c) => minTierOf(c) <= tier);
-    }
-    if (fits.length === 0) break;
-    const c = draw(rng, fits);
-    pool.splice(pool.indexOf(c), 1);
-    cards.push(makeCard(s, c, Math.max(minTierOf(c), Math.min(tier, maxTierOf(c)))));
+  const fixed = cards.length;
+  const all = candidates(s, exclude, !!opt.onlyWeapons);
+  // Endringsprompt 6: the same set of cards is never offered twice in a row (redrawn a few times if it comes up)
+  // (only for a full level-up offer – not for a package or the single card that replaces a banished one)
+  const track = !opt.onlyWeapons && opt.combination !== false;
+  const last = track ? s.lastOffer ?? '' : '';
+  for (let attempt = 0; attempt <= U.repeatRedraws; attempt++) {
+    cards.length = fixed;
+    drawInto(s, cards, count, all.slice(), rng, opt);
+    if (!track || cards.length < 2 || offerKey(cards) !== last) break;
   }
+  const ranOut = cards.length - fixed >= all.length;
   // All maxed out: only «Kaffepause-bonus» ("Coffee break bonus") is offered (not the energy drink – it has to be picked up on the map).
-  if (!opt.onlyWeapons && (cards.length === 0 || (cards.length < 3 && pool.length === 0 && !cards.some((k) => k.kind === 'coffee')))) {
+  if (!opt.onlyWeapons && (cards.length === 0 || (cards.length < 3 && ranOut && !cards.some((k) => k.kind === 'coffee')))) {
     cards.push({ kind: 'coffee', id: 'coffee', icon: 'coffee', name: 'Kaffepause-bonus', levelText: 'Bonus', text: `${CONFIG.coffeeBreakBonus} poeng ganget med multiplikatoren.`, tier: 0, highlighted: false, key: 'coffee' });
   }
+  if (track) s.lastOffer = offerKey(cards);
+  // Counted for the bot test (how often each card is offered); never read by the game
+  if (track && s.offerLog) for (const c of cards) s.offerLog[c.kind === 'upgrade' ? 'upgrade:' + c.id : c.kind + ':' + c.id] = (s.offerLog[c.kind === 'upgrade' ? 'upgrade:' + c.id : c.kind + ':' + c.id] || 0) + 1;
   return cards;
 }
 
 /** Carries out the card the player chose. */
 export function useCard(s, card) {
   if (card.kind === 'weapon') giveWeapon(s, card.id);
-  else if (card.kind === 'upgrade') for (const g of card.grants ?? []) giveUpgrade(s, card.id, g);
+  else if (card.kind === 'upgrade') giveCard(s, card.id, card.grants ?? []);
   else if (card.kind === 'passive') givePassive(s, card.id);
   else if (card.kind === 'combination') giveCombination(s, card.id);
   else if (card.kind === 'matrix') giveMatrix(s);

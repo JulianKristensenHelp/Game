@@ -514,22 +514,41 @@ function updateGuard(s, w, t, dt, matrix) {
   if (w[cd] > 0) return;
   w[cd] = dualMonitor(s) ? 0.4 : (matrix ? t.wallInterval : t.interval) * p.mod.cd;
   const dirs = flockDirections(s, t.walls);
-  for (let i = 0; i < dirs.length; i++) {
-    if (s.projCounter.wall >= BG.maxWalls) break;
-    placeWall(s, dirs[i], t, matrix);
+  if (t.triangle) {
+    // «Neste generasjons brannmur» (Endringsprompt 6): three walls in a triangle around the player, one side facing
+    // the densest flock. It replaces the walls still standing, so it is always one whole triangle.
+    removeWalls(s);
+    const a0 = dirs[0];
+    for (let i = 0; i < 3; i++) placeWall(s, a0 + (i * TAU) / 3, t, matrix, 1);
+  } else {
+    for (let i = 0; i < dirs.length; i++) {
+      if (s.projCounter.wall >= BG.maxWalls) break;
+      placeWall(s, dirs[i], t, matrix);
+    }
   }
   // he stands still for a moment while he «sets up» the firewall (looks only)
   w.pose = 0.5;
   w.aim = dirs[0];
 }
 
-function placeWall(s, a, t, matrix) {
+/** Ends every firewall that is standing (they fade out quickly). */
+function removeWalls(s) {
+  const f = s.projectiles;
+  for (let i = 0; i < f.n; i++) {
+    const pr = f.items[i];
+    if (pr.type === 'wall' && pr.life > 0.3) pr.life = 0.3;
+  }
+}
+
+/** @param {number} [evo] 1 = the blue «next generation» flames (the combination) */
+function placeWall(s, a, t, matrix, evo = 0) {
   const p = s.player;
   const pr = s.projectiles.acquire();
   s.projCounter.wall++;
   pr.type = 'wall';
-  pr.x = p.x + Math.cos(a) * BG.distance;
-  pr.y = p.y + Math.sin(a) * BG.distance;
+  const dist = t.distance ?? BG.distance;
+  pr.x = p.x + Math.cos(a) * dist;
+  pr.y = p.y + Math.sin(a) * dist;
   // angle = the direction toward the flock; the wall runs across it
   pr.angle = a;
   pr.range = (t.lengthPx * p.mod.area) / 2;
@@ -539,7 +558,7 @@ function placeWall(s, a, t, matrix) {
   pr.burst = 0;
   pr.every = BG.tick;
   pr.splash = t.slow;
-  pr.evo = matrix ? 2 : 0;
+  pr.evo = matrix ? 2 : evo;
   pr.nHit = 0;
   pr.fx = t.fx;
 }
