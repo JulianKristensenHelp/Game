@@ -25,6 +25,11 @@ if (process.argv.includes('--utenhendelser')) {
   for (const e of CONFIG.events.scheduled) e.at = 1e9;
   for (const e of CONFIG.events.rare) e.chance = 0;
 }
+// --utenpunkt: no capture-point events at all. --ikketa: the events come, but the bots never go for them.
+if (process.argv.includes('--utenpunkt')) CONFIG.capture.first = 1e9;
+const NO_CAPTURE = process.argv.includes('--ikketa');
+// --utensky: no «Sky-synk»
+if (process.argv.includes('--utensky')) CONFIG.cloudSync.first = 1e9;
 // --ikkejag: the bots ignore the bosses (and the bosses never fire anyone). --ingentreg: no slowdown from notes and ink.
 const NO_CHASE = process.argv.includes('--ikkejag');
 if (NO_CHASE) for (const t of ['nordic', 'printerBoss', 'frida', 'johan']) /** @type {any} */ (CONFIG.bosses)[t].deadline = 1e7;
@@ -98,8 +103,15 @@ function makeRobot(skill, smartBuild, seed, plan = ['powerCycle', 'mouse', 'tone
       }
       const l = s.tickets;
       for (let i = 0; i < l.n; i++) {
-        const d = Math.hypot(l.items[i].x - p.x, l.items[i].y - p.y) / Math.sqrt(l.items[i].value / 10);
+        const d = Math.hypot(l.items[i].x - p.x, l.items[i].y - p.y) / Math.sqrt(l.items[i].xp / 10);
         if (d < best) { best = d; tx = l.items[i].x - p.x; ty = l.items[i].y - p.y; }
+      }
+      // Capture-point events (Endringsprompt 5): the good bots go and take the point (unless they need a drink)
+      const cap = s.capture.active;
+      if (cap && skill >= 0.8 && !needsDrink && !NO_CAPTURE) {
+        tx = cap.x - p.x;
+        ty = cap.y - p.y;
+        best = 0;
       }
       if (best === 1e9) { tx = 1280 - p.x; ty = 740 - p.y; }
       // Like a human: when it is safe, walk toward the nearest lawyer, so that forward-pointing weapons (toner, cable,
@@ -204,8 +216,7 @@ function playRound(name, skill, smart, seed, log = false, plan = undefined, othe
     }
     s.events.length = 0;
     if (s.status === 'package') s.closePackage();
-    while (s.status === 'levelUp') s.chooseCard(robot.choose(s));
-    if (!firstEvo && s.stat.combinations.length) firstEvo = s.time;
+    while (s.status === 'levelUp') s.chooseCard(robot.choose(s));    if (!firstEvo && s.stat.combinations.length) firstEvo = s.time;
     if (s.enemies.n > maxEnemies) maxEnemies = s.enemies.n;
     const every = process.argv.includes('--tett') ? 15 : 120;
     if (log && t > 0 && t % (every * CONFIG.ticksPerSecond) === 0) {
@@ -219,7 +230,7 @@ function playRound(name, skill, smart, seed, log = false, plan = undefined, othe
     `${name.padEnd(24)} tid ${mmss(s.time)}${s.status === 'done' ? ' ' : '+'} | score ${String(s.score).padStart(8)} | nivå ${String(s.level).padStart(3)} | hjulpne ${String(s.helped).padStart(5)} | ` +
     `maks x${(CONFIG.multiplier.start + s.stat.maxMultStep * CONFIG.multiplier.step).toFixed(1)} | treff ${s.stat.hits} | drikker ${s.stat.drinks} | bosser ${s.stat.bossesHelped}/${s.stat.bossesTotal} | partnere ${s.stat.elitesHelped} | pakker ${s.stat.packages} | hendelser ${s.stat.events} | første komb. ${firstEvo ? mmss(firstEvo) : '-'} | maks fiender ${maxEnemies} | ${Date.now() - start} ms`
   );
-  console.log(`   slutt: ${end} | bosser hjulpet: ${bossesHelped || '-'} | bygg: ${build}`);
+  console.log(`   slutt: ${end} | bosser hjulpet: ${bossesHelped || '-'} | punkt tatt: ${s.stat.captures}/${s.stat.captureEvents} | sky-synk: ${s.stat.cloudSyncs} | lapper igjen: ${s.tickets.n} | bygg: ${build}`);
   if (process.argv.includes('--skade')) console.log(`   energi tapt: under boss ${Math.round(lost.boss)} (herav ca. ${Math.round(lost.bossShots)} fra prosjektiler), ellers ${Math.round(lost.other)}`);
   return s;
 }
@@ -232,6 +243,9 @@ if (process.argv.includes('--statistikk')) {
   /** @type {Record<string, number>} */
   const byBoss = {};
   const details = [];
+  /** Level pace for the expert bots: level-ups counted in each window, and the seconds survived in it. */
+  const WINDOWS = [[300, 420], [420, 540], [540, 720]];
+  const pace = WINDOWS.map(() => ({ ups: 0, secs: 0 }));
   console.log = () => {};
   for (let d = 0; d < 10; d++) {
     const day = `2026-12-${String(d + 1).padStart(2, '0')}`;
@@ -239,6 +253,10 @@ if (process.argv.includes('--statistikk')) {
       for (const [name, skill] of [['God, planlagt', 0.9], ['Ekspert', 1]]) {
         const s = playRoundOn(day, name, skill, true, 100 + d * 10 + k, k);
         rows[name].push(s.time / 60);
+        if (name === 'Ekspert') WINDOWS.forEach(([a, b], i) => {
+          pace[i].secs += Math.max(0, Math.min(b, s.time) - a);
+          pace[i].ups += s.levelLog.filter((t) => t >= a && t < b).length;
+        });
         if (s.fired) {
           fired[name]++;
           byBoss[s.fired.type] = (byBoss[s.fired.type] || 0) + 1;
@@ -256,6 +274,7 @@ if (process.argv.includes('--statistikk')) {
     if (process.argv.includes('--detaljer')) console.log('   alle: ' + list.map((v) => v.toFixed(1)).join(' '));
   }
   console.log('sparket av: ' + JSON.stringify(byBoss));
+  console.log('nivåopp (ekspert): ' + WINDOWS.map(([a, b], i) => `${mmss(a)}–${mmss(b)} hvert ${pace[i].ups ? (pace[i].secs / pace[i].ups).toFixed(0) : '-'}. s`).join(' | '));
   if (process.argv.includes('--detaljer')) console.log(details.join('\n'));
   process.exit(0);
 }

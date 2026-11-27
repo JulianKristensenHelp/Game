@@ -24,6 +24,7 @@ function target(id, evo) {
   s.time = 600;
   s.nextBoss = s.nextUrgent = s.nextWave = s.nextDrink = s.nextRareCheck = 1e9;
   s.eventTimes.fill(1e9);
+  s.nextCloud = s.capture.next = 1e9;
   // No level-ups during the measurement (the build must stay exactly as set up)
   s.xpNeeded = 1e12;
   s.player.weapons.length = 0;

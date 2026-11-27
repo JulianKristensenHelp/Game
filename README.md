@@ -28,6 +28,12 @@ long as you can, collect tickets, and climb the shared daily leaderboard.
   weapon's numbers at every level-up. Lawyers have frustration bars and every hit shows a number with the weapon's icon.
 - **Linear difficulty with events:** the curve is a straight line until overtime, with scheduled events on every
   shift (lunch rush, printer queue, partner meeting) and rare ones rolled per day (coffee break, free lunch, server crash).
+- **Capture-point events:** now and then you are called to a fixed spot on the map (snacks on Jacob's desk, a game
+  of ping-pong, a meeting) and have to hold a circle for 8 seconds with no lawyers in it. Taking it gives a permanent
+  bonus and a free level.
+- **Tickets never disappear:** experience is always paid in full, but the points go stale after 10 seconds (down to
+  25 %). Stale tickets turn yellow and merge into case piles, and the rare «Sky-synk» pickup pulls every ticket on
+  the map to you.
 - **Diverse, procedurally composed lawyers**, including a ranged type that sends «Haster!» emails, and rare
   **partners** (elites) with a crown, a big frustration bar and a trait: an aura that shields their neighbours,
   delegating to juniors when helped, or a telegraphed dash.
@@ -82,7 +88,9 @@ Example: `PORT=8080 DATA_DIR=/var/lib/hds node server/server.js`
 - **Move:** WASD or arrow keys, or drag a finger on touch screens. You never aim or attack; all weapons fire automatically.
 - **Level-up cards:** click, or press **1**, **2** or **3**.
 - **Pause:** Esc or P, or the pause button on touch screens.
-- Pick up the yellow tickets before they disappear. Look for **energy drinks** around the map (follow the green arrow).
+- Pick up the yellow tickets while they are fresh (they never disappear, but their points go stale). Look for
+  **energy drinks** and the **Sky-synk** cloud around the map (follow the green arrow), and follow the gold arrow when
+  you are called to a capture point.
 - **Bosses** show a big countdown at the top of the screen. Help them before it runs out, or you're fired. Every
   boss attack is warned (a pose, a light or a «!») just before it comes, so watch the boss and dodge.
 
@@ -124,7 +132,8 @@ js/bosses.js          The four bosses: order, countdown («fired»), attacks and
 js/weapons.js         Weapons and combinations
 js/upgrades.js        Level-up cards and passives
 js/tickets.js, js/score.js   Tickets / energy drinks / new PC, points and multiplier
-js/map.js             Office map layout (zones, decorations, doors)
+js/map.js             Office map layout (zones, decorations, doors, capture-point spots)
+js/capture.js         Capture-point events (take a spot on the map for a permanent bonus)
 js/renderer.js        World renderer (640 × 360 pixel art)
 js/hud.js             HUD and minimap
 js/figures.js         Characters and lawyers (palette-indexed pixel grids)
@@ -147,7 +156,8 @@ tools/                Balance simulator, weapon measurement, font generator
 On Windows without Node.js: `powershell -File tools/node.ps1 tools/simulate.js`.
 
 **Debug mode:** add `?debug` to the URL for a performance overlay (FPS, frame time, entity counts, memory,
-help per second per weapon) and buttons to skip time, level up, spawn bosses and run a 5-minute stress test.
+help per second per weapon, level-up pace) and buttons to skip time, level up, spawn bosses, start each capture-point
+event, drop a Sky-synk and run a 5-minute stress test.
 `?debug&utenGPU` forces software rendering (the worst case for an office PC). `?debug=karakterer` shows a
 preview of the four playable characters, the final boss and Anonymous. `?debug=boss1` … `?debug=boss4` jumps straight to
 that boss with a typical build for the time. Runs where debug buttons were used are never submitted to the leaderboard.

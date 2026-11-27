@@ -38,7 +38,7 @@ export function makePlayer() {
       /** Version 6: luck («Hesteskoen»: rarer cards), chance of a fourth card, and help per weapon class (tag passives). */
       luck: 0, fourthCard: 0, tag: { projectile: 1, chain: 1, area: 1, helper: 1 },
       /** Version 6.1 items: revives per shift, energy per helped lawyer, extra ticket seconds, points factor, drink bonus, slow resistance. */
-      revives: 0, lifesteal: 0, ticketLife: 0, points: 1, drinkFill: 0, kickTime: 0, slowRes: 0,
+      revives: 0, lifesteal: 0, ticketFresh: 0, points: 1, drinkFill: 0, kickTime: 0, slowRes: 0,
     },
     /** «Sikkerhetskopi»: how many lethal hits have been survived this shift. */
     revivesUsed: 0,

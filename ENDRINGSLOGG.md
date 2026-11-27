@@ -1,5 +1,111 @@
 # Endringslogg
 
+## Versjon 7.1 – 27. november 2026 (Kristensens endringsprompt 5)
+
+Bygget på versjon 7.0.1. Det den andre utvikleren har laget (versjon 5–6.1), er ikke endret, med det ene uttrykkelige
+unntaket for Post-it-blokk (se «Konflikter»).
+
+### Konflikter og avvik, og hvordan de er løst
+1. **Post-it-blokk** (versjon 6.1) fikk lappene til å ligge 2 sekunder lenger per nivå. Som endringsprompten sier, gir
+   den nå 2 sekunder lenger **full poengverdi** per nivå (samme tall). Hele forfallet, gulningen og sammenslåingen
+   flyttes med, og lapper som allerede ligger ute, får den nye perioden. Navn, ikon og utseende er uendret. Kortet
+   sier «Lappene gir full poengverdi i 2 sekunder lenger», og raden i «Dine tall» heter «Full poengverdi på lapper».
+2. **Andre ting som påvirket hvor lenge lappene lå:** `CONFIG.tickets.lifetime` og `blinkTime` er fjernet (lappene
+   forsvinner ikke og blinker ikke). Den gamle sammenslåingen over 400 lapper (versjon 4) er erstattet av saksbunkene
+   og taket på 250. Tellingen av tapte lapper (`ticketsLost`) er fjernet, og slutt-skjermen viser i stedet hvor mange
+   lapper du plukket og hvor stor andel som var nye. Lappemagneten ved nivåopp (6.1) og «Gratis lunsj!» (6) er
+   uendret. Ingen karakterbonus eller annen passiv påvirket levetiden.
+3. **Sky-synk og «drop-strømmen».** Endringsprompten sier at Sky-synk skal plasseres fra drop-strømmen. Den strømmen
+   bestemmer også Ny PC, helsekjeks og pakker fra partnere. Bruker Sky-synk den, ville alle disse fått nye tidspunkter.
+   Sky-synk har derfor sin egen strøm i «Dagens vakt» (`sky`). Den er like fast og lik for alle, og plasseres på samme
+   måte som energidrikken.
+4. **Hendelsene fra versjon 6** (lunsjrush, partnermøte, kaffepause …) er uendret. Punkt-hendelsene har sin egen
+   strøm (`punkt`), teller ikke med i minstegapet på 25 sekunder mellom de gamle hendelsene, og «hendelser på
+   kontoret» på slutt-skjermen teller fortsatt bare de gamle.
+5. **Kartet:** ingenting er flyttet eller fjernet. Jacobs pult og pingpongbordet er lagt til på tomme plasser, og
+   møterommet er det venstre av de to møterommene som fantes fra før.
+6. **Erfaringskurven er ikke endret.** Se «Balansering» under.
+
+### 1. Ticket-lappene går ut på dato i stedet for å forsvinne
+- Lappene blir liggende til de plukkes opp, og erfaringen er alltid full.
+- Poengene er fulle i 10 sekunder, synker jevnt til 25 % ved 30 sekunder og blir liggende der. Poengene regnes ut i
+  det lappen når spilleren.
+- Lapper eldre enn perioden er gulnet papir med et eselsøre. Blinkingen er fjernet.
+- **Saksbunker:** gamle lapper i samme rute på 40 × 40 piksler slås sammen to ganger i sekundet til én bunke med
+  samlet erfaring og samlet gjenværende poengverdi. Bunken er en stabel i tre størrelser (2, 6 og 15 lapper).
+- **Tak:** maks 250 lapper og bunker. Over taket går nye lapper inn i nærmeste bunke innen 160 piksler, ellers i
+  nærmeste lapp. Testet: 600 lapper gir 250 objekter, 6 000 av 6 000 erfaring er med, og poengene i bunkene etter 60
+  sekunder er nøyaktig 25 %.
+- **Sky-synk:** en ny pickup (sky med synk-pil), første gang ved 4:00, så hvert 90. sekund, maks én, minst 900
+  piksler unna. Den vises med eget sky-symbol på minikartet og en grønn pil i kanten. Alle lapper og bunker på
+  kartet kommer til spilleren på 1,5 sekunder (målt: 1,52 s).
+- **Post-it-blokk:** se «Konflikter», punkt 1.
+
+### 2. Nytt utseende på Livvakten og Shopkeeperen
+- **Livvakten:** lys hud, fullt, kort og velstelt skjegg (kinn, hake og overleppe), litt tynt hår på toppen og blå
+  genser med kort glidelås i halsen. Solbrillene og øreproppen med spiralledning er beholdt.
+- **Shopkeeperen:** svart hettegenser med den store hvite «A»-en. Hetta dekker mesteparten av ansiktet: bare nedre
+  del og det brune skjegget synes, aldri øynene, og litt brunt hår stikker fram under kanten. Alle rødlige farger er
+  byttet til brunt. Ikonet til passiven er tegnet på nytt.
+- I The Matrix har begge svarte frakker og svarte solbriller. Shopkeeperen beholder hetta, og brillene synes under
+  kanten. Det nye utseendet brukes overalt: i spillet, på ikonene, på kortene, på oppslagstavla, i The Matrix og i
+  animasjonen.
+- Effekter, størrelser, animasjoner og tall er uendret.
+
+### 3. Nye bilder for Johannes (karakter 3)
+`figur_person3.png` (32 × 32) og `portrett_person3.png` (64 × 64) er byttet med de nye bildene med ugle, og brukes
+piksel for piksel. Den nye figuren er identisk med den gamle bortsett fra ugla på skulderen (rad 12–18), og beina
+(rad 27–30) er uendret. Gangsyklusen lages fortsatt fra fila: bare beina og føttene endres, og ugla følger hoppet.
+Det er sjekket i nettleseren at hode, overkropp og ugle er identiske med originalen i alle fire gangbildene.
+Spritene bygges fra filene ved hver lasting, så det ligger ingen gamle versjoner igjen. Treffboksen er den samme som
+for de andre (`CONFIG.player.radius`).
+
+### 4. Tilfeldige hendelser: ta et punkt på kartet
+- **Hendelsene:** Snacks på Jacobs (+15 maks energi og 30 energi), Spille pingpong (+8 % hjelp på alle våpen) og
+  Møterommet (+7 % bevegelseshastighet). Alle gir +1 nivå med en gang, og hver kan skje maks 2 ganger per vakt.
+- **Stedene:** Jacobs pult med navneskilt og snacksskål (nederst, mellom resepsjonen og sofakroken), et pingpongbord
+  (sosialt hjørne under kantina) og det venstre møterommet. De ligger 950–1 800 piksler fra hverandre.
+- **Tidspunkt:** første rundt 1:30 (± 15 s), så ca. hvert 2. minutt, fra egen strøm (`punkt`). Aldri under en boss
+  eller mindre enn 60 sekunder før en, og aldri to samtidig.
+- **Gangen i en hendelse:** banner og lyd, sikte på minikartet og gul pil med ikon. Spilleren har 45 sekunder og en
+  liten nedtellingsboks under poengsummen. En sirkel på 40 piksler må holdes i 8 sekunder. Ute av sirkelen synker
+  fremdriften med 0,5 per sekund, og står en advokat i den, stopper fremdriften («Opptatt!», rødt). Første gang
+  spilleren går inn, kommer en ekstra flokk fra tre retninger.
+- **Belønning:** bonustekst og et gratis nivå. Bonusene vises som ikoner med antall (×2) etter våpnene nederst, og
+  slutt-skjermen viser hvor mange hendelser du klarte.
+- **Debug:** knappene «Snacks på Jacobs», «Spille pingpong», «Møterommet» og «Sky-synk».
+- Alle tall og tekster står i `CONFIG.capture`.
+
+### Balansering
+Simulatoren (`--statistikk`, 10 dager × 4 karakterer). Nivåopp-tempoet er målt for ekspertrobotene:
+
+| | Versjon 7.0.1 | 7.1 uten punkt-hendelser | 7.1 |
+| --- | --- | --- | --- |
+| God, planlagt (median) | 10,0 min | 11,1 min | 8,5 min |
+| Ekspert (median / 75 % / maks) | 10,8 / 14,7 / 16,7 min | 14,2 / 15,0 / 16,2 min | 14,0 / 14,9 / 17,7 min |
+| Sparket (ekspert) | 1 av 40 | 0 av 40 | 0 av 40 |
+| Nivåopp, ekspert 5–7 / 7–9 / 9–12 min | hvert 15. / 13. / 16. s | 13. / 12. / 13. s | 14. / 11. / 13. s |
+
+- At lappene ikke forsvinner, gir ekspertrobotene klart lenger runder (median 10,8 → 14,2 min). Det ligger rundt 15
+  minutter, så **erfaringskurven er ikke endret**.
+- Punkt-hendelsene er en reell risiko: robotene som går for dem, ryker litt tidligere i snitt (spesielt de nest beste,
+  som går gjennom flokkene). De som klarer alle seks, er tydelig sterkere (beste runde 15:50 med 6 av 6).
+- Robotene samler lapper mye bedre enn mennesker, så de går opp i nivå oftere (hvert 11.–14. sekund) enn målet for
+  en god spiller (hvert 20.–30. sekund ved 8 minutter). For å måle ekte spillere viser debug-overlegget nå
+  nivåopp-tempoet de siste 2 minuttene. Blir mennesker for raske eller trege, justeres `CONFIG.level`.
+- Våpnene er ikke endret (`measure-weapons` gir samme tall som i 7.0).
+
+### Ytelse
+Stresstesten (5 minutter, `?debug&utenGPU`, programvarerendering, 400 advokater, fire kombinasjoner med The
+Matrix og Anonymous ute hele tiden) ga snitt 116 FPS og laveste 75 FPS. Hver frame tok 0,2 ms oppdatering og
+2,2–3,2 ms tegning, på full kvalitet hele tiden. Minnet var flatt (5,1 MB ved start, mellom 5,9 og 8,6 MB underveis,
+8,2 MB ved slutt). Lappene holdt seg under taket: midt i testen lå 1 818 lapper som 240 objekter, 102 av dem bunker.
+Sammenslåingen kjører to ganger i sekundet, og sjekken av punktet går gjennom advokatene én gang per oppdatering,
+bare mens en hendelse pågår.
+
+Determinismesjekkene i simulatoren er grønne (to like runder, Dobbel skjerm og annet utseende), og typesjekken har
+de samme fire gamle advarslene i `js/input.js` som før.
+
 ## Versjon 7.0.1 – 26. november 2026
 - Boss 3 heter nå **Anonymous** i spillet («Anonymous og venninnene har ankommet!», «ANONYMOUS» på pila og
   klokka). Utseende, replikker og angrep er uendret. I koden heter hun fortsatt `frida` (`CONFIG.bosses.frida`,

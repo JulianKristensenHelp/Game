@@ -6,6 +6,7 @@
 import { CONFIG, STAT_LABEL, WEAPON_TAG } from './config.js';
 import { givePoints } from './score.js';
 import { refreshWeapon, weaponName } from './weapons.js';
+import { captureBonus } from './capture.js';
 
 const V = CONFIG.weapons;
 const P = CONFIG.passives;
@@ -87,11 +88,16 @@ export function computeBonuses(s) {
   const I = CONFIG.itemPassives;
   m.revives = Math.min(I.backup.max, I.backup.value * passiveLevel(s, 'backup'));
   m.lifesteal = I.grateful.value * passiveLevel(s, 'grateful');
-  m.ticketLife = I.postIt.value * passiveLevel(s, 'postIt');
+  // «Post-it-blokk» (Endringsprompt 5): the same seconds per level, now added to the tickets' fresh period
+  m.ticketFresh = I.postIt.value * passiveLevel(s, 'postIt');
   m.points = 1 + I.bonusScheme.value * passiveLevel(s, 'bonusScheme');
   m.drinkFill = I.thermos.fill * passiveLevel(s, 'thermos');
   m.kickTime = I.thermos.kick * passiveLevel(s, 'thermos');
   m.slowRes = Math.min(I.janitor.max, I.janitor.value * passiveLevel(s, 'janitor'));
+  // Endringsprompt 5: the permanent bonuses from the capture-point events, on top of the passives
+  const cb = captureBonus(s);
+  m.help *= 1 + cb.help;
+  m.speed += cb.speed;
 }
 
 /** Gives the player a new weapon (does nothing if the player already has it or the slots are full). */

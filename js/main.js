@@ -445,6 +445,9 @@ function handleEvents() {
         }
         break;
       case 'matrix': pendingMatrix = true; break;
+      // Endringsprompt 5
+      case 'cloudSpawned': if (game.stat.cloudSyncs === 0) hud.showBanner(CONFIG.cloudSync.spawnText, 'gold', 3500); break;
+      case 'cloudSync': sound.play('cloudSync'); hud.showBanner(CONFIG.cloudSync.pickText, 'gold', 2200); break;
       case 'done': sound.play('done'); break;
       default:
         if (name.startsWith('boss:')) {
@@ -466,6 +469,18 @@ function handleEvents() {
           const id = name.slice(12);
           sound.play('bonus');
           hud.showBanner(`Kombinasjon: ${CONFIG.weapons[id].combination.name}!`, 'gold', 3500);
+        } else if (name.startsWith('captureStart:')) {
+          // A capture-point event: the banner, a short sound, and the countdown box in the HUD (see hud.js)
+          const k = /** @type {any} */ (CONFIG.capture.defs)[name.slice(13)];
+          sound.play('capture');
+          hud.showBanner(k.banner, 'gold', 3500, k.name);
+        } else if (name.startsWith('captureDone:')) {
+          const k = /** @type {any} */ (CONFIG.capture.defs)[name.slice(12)];
+          sound.play('bonus');
+          hud.showBanner(k.reward, 'gold', 3000, CONFIG.capture.levelText);
+          hud.iconsChanged();
+        } else if (name.startsWith('captureMissed:')) {
+          hud.showBanner(CONFIG.capture.missedText, '', 2400, /** @type {any} */ (CONFIG.capture.defs)[name.slice(14)].name);
         } else if (name.startsWith('event:')) {
           // Lunch rush, partner meeting, coffee break … (see CONFIG.events)
           const id = name.slice(6);
@@ -783,6 +798,14 @@ function stressTick(dt) {
 /** @type {{t: number, h: Record<string, number>}[]} */
 const helpLog = [];
 
+/** The level pace over the last two minutes of shift time (Endringsprompt 5: aim for about 20–30 s at minute 8). */
+function levelPace(s) {
+  const from = Math.max(0, s.time - 120);
+  let n = 0;
+  for (const t of s.levelLog) if (t >= from) n++;
+  return n ? `nivåopp hvert ${Math.round((s.time - from) / n)}. s (siste 2 min)` : 'nivåopp: ingen siste 2 min';
+}
+
 function showDebug() {
   const y = perf;
   const memory = heap();
@@ -796,6 +819,7 @@ function showDebug() {
       `lapper ${s.tickets.n}  glade (animasjon) ${renderer.happyShown}  spart ${s.spared}\n` +
       `inn/sek ${spawnRate(s.time).toFixed(1)}  frustrasjon ×${frustrationFactor(s.time).toFixed(2)}\n` +
       `mult x${multiplier(s).toFixed(1)}  hjulpne ${s.helped}  nivå ${s.level}\n` +
+      `${levelPace(s)}  sky-synk ${s.stat.cloudSyncs}  punkt ${s.stat.captures}/${s.stat.captureEvents}\n` +
       `udødelig: ${s.debug.immortal ? 'JA' : 'nei'}  seed: ${s.date}`;
   }
   if (game) {
@@ -857,7 +881,8 @@ if (DEBUG) {
         const a = (i / 100) * Math.PI * 2;
         spawnEnemy(game, i % 7 === 0 ? 'senior' : 'junior', p.x + Math.cos(a) * (200 + (i % 5) * 20), p.y + Math.sin(a) * (200 + (i % 5) * 20));
       }
-    } else game.debugSpawn(d);
+    } else if (d.startsWith('capture:')) game.debugCapture(d.slice(8));
+    else game.debugSpawn(d);
     hud.iconsChanged();
     handleEvents();
     if (pendingMatrix && mode === 'game') startMatrixIntro();

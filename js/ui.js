@@ -183,7 +183,7 @@ export function drawStatSheet(s, holderId = 'levelStats') {
     ['Sikkerhetskopier igjen', `${Math.max(0, m.revives - p.revivesUsed)}`],
     ['Energi per hjulpet', dec(m.lifesteal)],
     ['Poeng', pct(m.points - 1)],
-    ['Lappene ligger', `+${m.ticketLife} s`],
+    ['Full poengverdi på lapper', `+${m.ticketFresh} s`],
     ['Mindre treghet', `${Math.round(m.slowRes * 100)} %`],
   ];
   const grid = make('div', 'statGrid');
@@ -420,8 +420,10 @@ export function drawStats(s) {
   } else {
     line(`Ingen kombinasjoner denne vakta – ${CONFIG.upgrades.combinationAfter} oppgraderinger på et våpen + riktig passiv gir én`);
   }
-  const total = st.ticketsPicked + st.ticketsLost;
-  if (total > 0) line(`Du rakk ${Math.round((st.ticketsPicked / total) * 100)} % av ticket-lappene (nivå ${s.level})`);
+  if (st.captures > 0) line(`Du klarte ${st.captures} av ${st.captureEvents} ${st.captureEvents === 1 ? 'hendelse' : 'hendelser'} med punkt på kartet`);
+  else if (st.captureEvents > 0) line(`Du klarte ingen av ${st.captureEvents} ${st.captureEvents === 1 ? 'hendelse' : 'hendelser'} med punkt på kartet`);
+  if (st.cloudSyncs > 0) line(`Sky-synk hentet lappene dine ${st.cloudSyncs} ${st.cloudSyncs === 1 ? 'gang' : 'ganger'}`);
+  if (st.ticketsPicked > 0) line(`Du plukket ${formatNumber(st.ticketsPicked)} ticket-lapper, ${Math.round((st.ticketsFresh / st.ticketsPicked) * 100)} % av dem mens de var nye (nivå ${s.level})`);
   // The build, as chips under the statistics
   const holder = el('endBuild');
   holder.replaceChildren(drawBuild(s));

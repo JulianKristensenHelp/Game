@@ -10,6 +10,8 @@ const COLORS = [
   '#c2a57b', '#8a6f4c', '#6b4a2f', '#4c9a5a', '#7cc47f', '#2f6b3a', '#c0703f', '#8a4a2a', '#19b5c9', '#e0409a',
   '#14b8a6', '#0f766e', '#f5cf3a', '#c9941a', '#fff6c8', '#7a5cc9', '#efe9dc', '#c9bfa8', '#2b2f38', '#5a6b7d',
   '#6b7a8a', '#4a5562', '#eef1f5', '#b9c3cd', '#9b2d3a', '#d65f6a', '#3d4a5c', '#f6f0e2', '#8fd3ff', '#ffd1dc',
+  // Endringsprompt 5: light skin, brown hair and beard, and the bodyguard's blue quarter-zip sweater
+  '#f2cdb0', '#d9a688', '#5a3b24', '#7d5536', '#2a64b0', '#1b467e',
 ];
 const PAL = COLORS.map((f) => (f ? hex(f) : null));
 /** Names of color indexes (for readable code). */
@@ -20,6 +22,7 @@ const C = {
   CYAN: 28, MAGENTA: 29, TEAL: 30, TEAL_M: 31, GOLD: 32, GOLD_M: 33, GOLD_L: 34, PURPLE: 35, CREAM: 36, BEIGE: 37,
   NEAR_BLACK: 38, SLATE: 39, CHAIR: 40, CHAIR_M: 41, NEAR_WHITE: 42, LIGHT_GRAY2: 43, WINE: 44, WINE_L: 45, DARK_SLATE: 46,
   PAPER: 47, ICE_BLUE: 48, PINK: 49,
+  SKIN: 50, SKIN_M: 51, BEARD: 52, BEARD_L: 53, ZIP: 54, ZIP_M: 55,
 };
 
 /**
@@ -135,6 +138,49 @@ function makeObjects() {
     r.rect(3, 8, 7, 1, C.OCHRE);
     r.rect(3, 10, 7, 1, C.OCHRE);
     r.rect(3, 12, 5, 1, C.OCHRE);
+  });
+  /**
+   * Endringsprompt 5: a stale ticket – yellowed paper with a dog-ear in the top right corner, calmer colours than a
+   * fresh one, so the player can see at a glance which tickets are still worth a lot.
+   */
+  const staleDraw = (w, h, x0, y0) => (r) => {
+    r.rect(x0, y0 + 1, w, h, C.WOOD);
+    r.rect(x0, y0, w, h, C.WOOD_L);
+    r.rect(x0 + 2, y0 + 3, w - 4, 1, C.BEIGE);
+    r.rect(x0 + 2, y0 + 5, w - 4, 1, C.BEIGE);
+    r.rect(x0 + 2, y0 + 7, w - 6, 1, C.BEIGE);
+    // the dog-ear: the corner folded down
+    r.rect(x0 + w - 3, y0, 3, 3, 0);
+    r.px(x0 + w - 3, y0 + 1, C.WOOD);
+    r.rect(x0 + w - 3, y0 + 2, 2, 1, C.WOOD);
+    r.px(x0 + w - 2, y0 + 1, C.WOOD_M);
+  };
+  const ticketStale = make(12, 12, 6, 6, staleDraw(10, 9, 1, 1));
+  const ticketStaleLarge = make(16, 16, 8, 8, (r) => {
+    r.rect(3, 2, 11, 10, C.WOOD_M);
+    staleDraw(11, 10, 1, 4)(r);
+  });
+  /** A case pile («saksbunke»): a stack of yellowed tickets, bigger the more it holds (small, medium, large). */
+  const pileDraw = (layers, w) => (r) => {
+    for (let i = 0; i < layers; i++) {
+      const y = 2 + (layers - 1 - i) * 2 + 4, x = 1 + ((i * 3) % 4);
+      r.rect(x, y + 1, w, 6, C.WOOD_M);
+      r.rect(x, y, w, 6, i === layers - 1 ? C.WOOD_L : C.BEIGE);
+      r.rect(x + 1, y + 2, w - 3, 1, i === layers - 1 ? C.BEIGE : C.WOOD);
+    }
+    // the dog-eared ticket on top
+    staleDraw(w - 2, 7, 3, 1)(r);
+  };
+  const piles = [make(16, 16, 8, 9, pileDraw(2, 11)), make(18, 19, 9, 11, pileDraw(3, 13)), make(22, 24, 11, 14, pileDraw(5, 16))];
+  /** «Sky-synk»: a small cloud with a sync arrow. */
+  const cloud = make(20, 15, 10, 8, (r) => {
+    r.ellipse(6, 9, 5, 4, C.LIGHT_GRAY2);
+    r.ellipse(13, 9, 6, 4, C.LIGHT_GRAY2);
+    r.ellipse(10, 6, 5.5, 5, C.WHITE);
+    r.ellipse(5, 8, 4, 3.5, C.WHITE);
+    r.ellipse(14, 8, 4.5, 3.5, C.WHITE);
+    r.rect(3, 11, 14, 2, C.LIGHT_GRAY2);
+    r.stamp('..###.. .#...## #....## #.....# ##....# ##...#. ..###..', 6, 4, { '#': C.BLUE });
   });
   const drink = make(12, 18, 6, 10, (r) => {
     r.rect(3, 1, 6, 1, C.GRAY);
@@ -379,48 +425,65 @@ function makeObjects() {
   const zeroGreen = make(3, 5, 1, 2, (r) => r.stamp('### #.# #.# #.# ###', 0, 0, { '#': C.LIGHT_GREEN }), false);
 
   /**
-   * Livvakten: a big, calm bodyguard (about 24 × 28) in a black suit, white shirt, sunglasses and an earpiece with a
-   * spiral cord. Kind face (a small smile). frame: 0/1 = walk bob, matrix = a long black coat instead of the jacket.
+   * Livvakten: a big, calm bodyguard (about 24 × 28). Endringsprompt 5: light skin, a full but short, well-kept beard
+   * (cheeks, chin and upper lip), just a little short, thin hair on top, and a blue quarter-zip sweater. He keeps the
+   * sunglasses and the earpiece with the spiral cord. frame: 0/1 = walk bob, matrix = a long black coat over the
+   * sweater and green-glinting black sunglasses.
    */
   const guardDraw = (bob, matrix) => (r) => {
     const y = bob;
     // legs and shoes
-    r.rect(8, 22 + y, 3, 4 - y, C.NEAR_BLACK);
-    r.rect(13, 22 + y, 3, 4 - y, C.NEAR_BLACK);
+    r.rect(8, 22 + y, 3, 4 - y, C.DARK_SLATE);
+    r.rect(13, 22 + y, 3, 4 - y, C.DARK_SLATE);
     r.rect(7, 26, 4, 2, C.DARKER);
     r.rect(13, 26, 4, 2, C.DARKER);
-    // body: broad shoulders, black suit (or the long coat), white shirt, black tie
-    r.rect(5, 12 + y, 14, 11, C.NEAR_BLACK);
-    r.rect(4, 13 + y, 16, 9, C.NEAR_BLACK);
-    r.rect(5, 12 + y, 1, 10, C.DARKER);
+    // body: broad shoulders in the blue quarter-zip (in The Matrix: a long black coat over it)
+    const body = matrix ? C.NEAR_BLACK : C.ZIP;
+    r.rect(5, 12 + y, 14, 11, body);
+    r.rect(4, 13 + y, 16, 9, body);
     if (matrix) {
+      r.rect(5, 12 + y, 1, 10, C.DARKER);
       r.rect(4, 21 + y, 16, 5 - y, C.NEAR_BLACK);
       r.rect(11, 21 + y, 2, 5 - y, C.DARKER);
+      // the sweater shows between the coat's lapels
+      r.rect(10, 12 + y, 4, 5, C.ZIP);
+    } else {
+      r.rect(18, 13 + y, 2, 9, C.ZIP_M);
+      r.rect(4, 20 + y, 16, 2, C.ZIP_M);
+      r.rect(5, 12 + y, 1, 8, C.BLUE);
     }
-    r.rect(10, 12 + y, 4, 6, C.WHITE);
-    r.rect(11, 13 + y, 2, 5, C.NEAR_BLACK);
+    // the raised collar and the short zip with its pull
+    r.rect(9, 11 + y, 6, 2, C.ZIP_M);
+    r.rect(12, 11 + y, 1, 5, C.LIGHT_GRAY);
+    r.px(12, 16 + y, C.WHITE);
     // hands
-    r.rect(3, 20 + y, 2, 2, C.POT_M);
-    r.rect(19, 20 + y, 2, 2, C.POT_M);
-    // head: short dark hair, sunglasses, a calm small smile
-    r.ellipse(12, 7 + y, 5, 5.2, C.POT_M);
-    r.rect(7, 2 + y, 10, 3, C.NEAR_BLACK);
-    r.rect(7, 4 + y, 1, 2, C.NEAR_BLACK);
-    r.rect(16, 4 + y, 1, 2, C.NEAR_BLACK);
-    r.rect(8, 6 + y, 8, 2, C.NEAR_BLACK);
+    r.rect(3, 20 + y, 2, 2, C.SKIN);
+    r.rect(19, 20 + y, 2, 2, C.SKIN);
+    // head: light skin, a little thin hair on top
+    r.ellipse(12, 7 + y, 5, 5.2, C.SKIN);
+    r.rect(15, 5 + y, 2, 5, C.SKIN_M);
+    for (const x of [9, 10, 12, 13, 14]) r.px(x, 2 + y, C.BEARD_L);
+    for (const x of [8, 11, 15]) r.px(x, 3 + y, C.BEARD_L);
+    // sunglasses
+    r.rect(7, 6 + y, 10, 2, C.NEAR_BLACK);
     r.rect(8, 6 + y, 3, 1, matrix ? C.GREEN : C.DARK_GRAY);
     r.rect(13, 6 + y, 3, 1, matrix ? C.GREEN : C.DARK_GRAY);
+    // the full, short, well-kept beard: sideburns and cheeks, the upper lip and the chin, with a small smile
+    r.stamp('##......## ##.####.## ###....### .########. ..######..', 7, 8 + y, { '#': C.BEARD });
     r.rect(10, 10 + y, 4, 1, C.POT);
+    r.px(8, 11 + y, C.BEARD_L);
+    r.px(11, 12 + y, C.BEARD_L);
     // earpiece and the spiral cord down to the collar
-    r.px(16, 8 + y, C.LIGHT_GRAY);
-    for (let k = 0; k < 4; k++) r.px(17 - (k & 1), 9 + y + k, C.LIGHT_GRAY);
+    r.px(17, 7 + y, C.LIGHT_GRAY);
+    for (let k = 0; k < 4; k++) r.px(18 - (k & 1), 8 + y + k, C.LIGHT_GRAY);
   };
   const guard = [0, 1].map((f) => make(24, 30, 12, 22, guardDraw(f, false)));
   const guardMatrix = [0, 1].map((f) => make(24, 30, 12, 22, guardDraw(f, true)));
 
   /**
-   * Shopkeeperen: a friendly shop assistant (about 20 × 24) in a black sweater with a big white «A» on the chest.
-   * matrix = a black coat and sunglasses.
+   * Shopkeeperen (about 20 × 24). Endringsprompt 5: anonymous – the hood of his black hoodie covers most of the face,
+   * so only the lower face and the brown beard show (never the eyes), with a little brown hair under the rim. The big
+   * white «A» on the chest stays. matrix = a long black coat, and black sunglasses just under the rim of the hood.
    */
   const shopDraw = (bob, matrix) => (r) => {
     const y = bob;
@@ -428,29 +491,39 @@ function makeObjects() {
     r.rect(11, 19 + y, 3, 3 - y, C.DARK_SLATE);
     r.rect(5, 22, 4, 1, C.DARKER);
     r.rect(11, 22, 4, 1, C.DARKER);
-    // the black sweater (a coat in The Matrix) with the big white «A»
+    // the black hoodie (a coat in The Matrix) with the big white «A»
     r.rect(4, 11 + y, 12, 9, C.NEAR_BLACK);
     r.rect(3, 12 + y, 14, 6, C.NEAR_BLACK);
     if (matrix) r.rect(3, 18 + y, 14, 4 - y, C.NEAR_BLACK);
-    r.stamp('.##. #..# #..# #### #..#', 8, 12 + y, { '#': C.WHITE });
-    r.rect(2, 16 + y, 2, 2, C.WOOD_L);
-    r.rect(16, 16 + y, 2, 2, C.WOOD_L);
-    // head: curly auburn hair, a big smile
-    r.ellipse(10, 6 + y, 4.6, 4.8, C.WOOD_L);
-    r.ellipse(10, 2.5 + y, 5, 2.6, C.POT);
-    r.px(5, 5 + y, C.POT);
-    r.px(15, 5 + y, C.POT);
-    if (matrix) {
-      r.rect(6, 5 + y, 8, 2, C.NEAR_BLACK);
-      r.rect(7, 5 + y, 2, 1, C.GREEN);
-      r.rect(11, 5 + y, 2, 1, C.GREEN);
-    } else {
-      r.px(8, 6 + y, C.NEAR_BLACK);
-      r.px(12, 6 + y, C.NEAR_BLACK);
+    else {
+      // the hoodie's drawstrings and front pocket
+      r.px(8, 11 + y, C.LIGHT_GRAY);
+      r.px(12, 11 + y, C.LIGHT_GRAY);
+      r.rect(6, 17 + y, 8, 1, C.DARKER);
     }
-    r.rect(8, 9 + y, 5, 1, C.DARK_RED);
-    r.px(7, 8 + y, C.DARK_RED);
-    r.px(13, 8 + y, C.DARK_RED);
+    r.stamp('.##. #..# #..# #### #..#', 8, 12 + y, { '#': C.WHITE });
+    r.rect(2, 16 + y, 2, 2, C.SKIN);
+    r.rect(16, 16 + y, 2, 2, C.SKIN);
+    // the hood, pulled far down over the face
+    r.ellipse(10, 5.5 + y, 5.6, 5.8, C.NEAR_BLACK);
+    r.rect(5, 6 + y, 1, 5, C.DARKER);
+    r.rect(14, 6 + y, 1, 5, C.DARKER);
+    // under the rim: deep shadow (no eyes) and a little brown hair – or the black sunglasses in The Matrix
+    r.rect(6, 6 + y, 8, 1, matrix ? C.NEAR_BLACK : C.DARKER);
+    if (matrix) {
+      r.rect(7, 6 + y, 2, 1, C.GREEN);
+      r.rect(11, 6 + y, 2, 1, C.GREEN);
+      r.px(6, 7 + y, C.BEARD_L);
+      r.px(13, 7 + y, C.BEARD_L);
+    } else {
+      for (const x of [6, 7, 12, 13]) r.px(x, 6 + y, C.BEARD_L);
+    }
+    // the lower face: nose and cheeks, then the brown beard with a smile
+    r.rect(7, 7 + y, 6, 3, C.SKIN);
+    r.px(10, 7 + y, C.SKIN_M);
+    r.stamp('#.####.# ###..### .######. ..####..', 6, 8 + y, { '#': C.BEARD });
+    r.rect(9, 9 + y, 2, 1, C.DARK_RED);
+    r.px(8, 10 + y, C.BEARD_L);
   };
   const shop = [0, 1].map((f) => make(20, 24, 10, 17, shopDraw(f, false)));
   const shopMatrix = [0, 1].map((f) => make(20, 24, 10, 17, shopDraw(f, true)));
@@ -562,6 +635,9 @@ function makeObjects() {
       r.ellipse(9.5, 2.5, 2, 2, C.RED);
     }),
     ticket, ticketLarge, drink, pc, paper,
+    // Endringsprompt 5
+    ticketStale, ticketStaleLarge, piles, cloud,
+    cloudGlow: glow(16, '#8fd3ff', 0.6),
     drinkGlow: glow(16, '#5cf08a', 0.6),
     pcGlow: glow(18, '#8fd3ff', 0.7),
     urgentGlow: glow(28, '#ffd240', 0.9),
@@ -628,6 +704,52 @@ function makeDecor() {
   };
   p.desk = make(40, 24, 20, 12, desk(false));
   p.deskUp = make(40, 24, 20, 12, desk(true));
+  /**
+   * Endringsprompt 5: Jacob's desk (the «Snacks på Jacobs» spot) – an ordinary desk with a big bowl of snacks where
+   * the coffee cup usually is, and a name plate «JACOB» on the front edge.
+   */
+  p.jacobDesk = make(44, 32, 22, 12, (r) => {
+    const plain = new Raster(40, 24);
+    desk(false)(plain);
+    r.lim(plain, 2, 0);
+    // the snack bowl: red bowl, crisps, a few sweets
+    r.ellipse(34, 15, 6, 3.5, C.DARK_RED);
+    r.ellipse(34, 14, 6, 2.5, C.RED);
+    r.ellipse(34, 12.5, 4.5, 2.4, C.YELLOW);
+    for (const [x, y, c] of [[31, 12, C.ORANGE], [34, 11, C.GOLD_L], [36, 12, C.ORANGE], [33, 13, C.PINK], [37, 13, C.LIGHT_GREEN], [32, 13, C.GOLD]]) r.px(x, y, c);
+    // the name plate
+    r.rect(10, 23, 25, 8, C.DARKER);
+    r.rect(11, 24, 23, 6, C.GOLD_L);
+    r.stamp('### ..# ..# #.# .##', 13, 24, { '#': C.NEAR_BLACK });
+    r.stamp('.#. #.# ### #.# #.#', 17, 24, { '#': C.NEAR_BLACK });
+    r.stamp('.## #.. #.. #.. .##', 21, 24, { '#': C.NEAR_BLACK });
+    r.stamp('.#. #.# #.# #.# .#.', 25, 24, { '#': C.NEAR_BLACK });
+    r.stamp('##. #.# ##. #.# ##.', 29, 24, { '#': C.NEAR_BLACK });
+  });
+  /** Endringsprompt 5: the ping-pong table (the «Spille pingpong» spot), seen from above, with a net, a bat and a ball. */
+  p.pingpongTable = make(70, 42, 35, 21, (r) => {
+    // legs and the shadow edge
+    r.rect(4, 34, 3, 6, C.DARK_GRAY);
+    r.rect(63, 34, 3, 6, C.DARK_GRAY);
+    r.rect(2, 30, 66, 5, C.DARK_BLUE);
+    // the top: blue with white edges and a white centre line
+    r.rect(2, 2, 66, 30, C.BLUE);
+    r.rect(2, 2, 66, 1, C.WHITE);
+    r.rect(2, 31, 66, 1, C.WHITE);
+    r.rect(2, 2, 1, 30, C.WHITE);
+    r.rect(67, 2, 1, 30, C.WHITE);
+    r.rect(3, 16, 64, 1, C.LIGHT_BLUE);
+    // the net across the middle (a little taller than the table, with posts)
+    r.rect(34, 0, 2, 34, C.NEAR_WHITE);
+    for (let y = 1; y < 33; y += 2) r.px(34, y, C.LIGHT_GRAY);
+    r.rect(33, 0, 4, 2, C.DARKER);
+    r.rect(33, 32, 4, 2, C.DARKER);
+    // a red bat and a white ball
+    r.ellipse(15, 10, 4, 4, C.RED);
+    r.rect(18, 13, 2, 2, C.WOOD);
+    r.rect(19, 14, 3, 2, C.WOOD_M);
+    r.ellipse(52, 22, 1.6, 1.6, C.WHITE);
+  });
   p.chair = make(14, 14, 7, 7, (r) => {
     r.rect(2, 1, 10, 4, C.CHAIR_M);
     r.ball(7, 8, 5, 4, C.CHAIR, C.CHAIR_M, C.LIGHT_GRAY2);

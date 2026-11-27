@@ -383,6 +383,55 @@ export const CONFIG = {
     },
   },
 
+  /**
+   * CAPTURE-POINT EVENTS (Endringsprompt 5): now and then the player is called to a fixed spot on the map and has to
+   * hold it for a while. Taking it gives a permanent bonus for the rest of the shift and one free level. When they come
+   * and which one it is are drawn from their own stream in «Dagens vakt». The spots are in js/map.js (HOTSPOTS).
+   */
+  capture: {
+    /** The first event comes at «first» seconds, then every «interval» seconds; each time ± up to «jitter» seconds. */
+    first: 90, interval: 120, jitter: 15,
+    /** Never while a boss is out, and never with less than this many seconds to the next boss (it waits instead). */
+    bossMargin: 60,
+    /** Seconds the player has to take the point after the banner. */
+    deadline: 45,
+    /** Radius of the circle on the floor (logical pixels). */
+    radius: 40,
+    /** Seconds of standing in the circle (with no lawyers in it) to take the point. */
+    holdTime: 8,
+    /** How fast the progress sinks while the player is outside (seconds of progress lost per second). */
+    drain: 0.5,
+    /** Each event happens at most this many times per shift. */
+    maxPerEvent: 2,
+    /**
+     * When the player first steps into the circle, an extra flock heads for the spot from «directions» directions:
+     * count + perMin × minutes lawyers in total (capped at max), starting «distance» pixels from the spot.
+     */
+    flock: { count: 6, perMin: 0.8, max: 18, directions: 3, distance: 300 },
+    defs: {
+      /** «Snacks på Jacobs»: + maxEnergy max energy and fills «fill» energy right away. */
+      snacks: {
+        name: 'Snacks på Jacobs', banner: 'Det er snacks på Jacobs pult!', reward: 'Snacks! +15 maks energi',
+        maxEnergy: 15, fill: 30,
+      },
+      /** «Spille pingpong»: + help on all weapons (0.08 = 8 %). */
+      pingpongTable: {
+        name: 'Spille pingpong', banner: 'Noen vil spille pingpong!', reward: 'Pingpong! +8 % hjelp på alle våpen',
+        help: 0.08,
+      },
+      /** «Møterommet»: + movement speed (0.07 = 7 %). */
+      meeting: {
+        name: 'Møterommet', banner: 'Du er innkalt til møte!', reward: 'Godt møte! +7 % bevegelseshastighet',
+        speed: 0.07,
+      },
+    },
+    /** Shown under the banner while the event runs, and when it is missed. */
+    countdownText: 'Ta punktet',
+    busyText: 'Opptatt!',
+    missedText: 'Du rakk det ikke …',
+    levelText: '+1 nivå',
+  },
+
   /** The phases are shown as text when they change. */
   phases: [
     { from: 0, name: 'Morgenkaffe' },
@@ -392,15 +441,49 @@ export const CONFIG = {
     { from: 780, name: 'Overtid' },
   ],
 
+  /**
+   * TICKETS (Endringsprompt 5): a ticket never disappears and always gives its full experience. Its points «go stale»:
+   * full value for «freshTime» seconds (plus «Post-it-blokk»), then falling evenly to «minValue» over «decayTime»
+   * seconds, where it stays. Stale tickets look yellowed and are merged into case piles («saksbunker»).
+   */
   tickets: {
-    /** Seconds a ticket stays on the floor. */
-    lifetime: 10,
-    /** The ticket blinks during the last seconds. */
-    blinkTime: 3,
-    /** Above this count, nearby tickets are merged. */
-    max: 400,
-    /** Grid cell size when merging. */
-    mergeCell: 35,
+    /** Seconds a ticket gives full points (and looks new). «Post-it-blokk» adds to this. */
+    freshTime: 10,
+    /** Seconds from the end of the fresh period until the points are down at «minValue». */
+    decayTime: 20,
+    /** The lowest point value, as a fraction of full (0.25 = 25 %). */
+    minValue: 0.25,
+    /** Max tickets and piles on the map at the same time. Above it, new tickets go into the nearest pile. */
+    max: 250,
+    /** At the cap: a pile (or stale ticket) this close is preferred; with none that close, the nearest ticket of any kind. */
+    capJoinRadius: 160,
+    /** Seconds between each merge of stale tickets into piles (not every frame). */
+    mergeInterval: 0.5,
+    /** Grid cell size when merging: stale tickets in the same cell become one pile. */
+    mergeCell: 40,
+    /** A pile is drawn small / medium / large from these ticket counts. */
+    pileSizes: [2, 6, 15],
+  },
+
+  /**
+   * «Sky-synk» (Endringsprompt 5): a rare pickup that pulls every ticket and pile on the map to the player. It appears
+   * like the energy drink: on fixed spots from its own stream in «Dagens vakt», far from the player.
+   */
+  cloudSync: {
+    /** When the first one appears, and the time between each new one. */
+    first: 240,
+    interval: 90,
+    /** Max on the map at the same time. */
+    max: 1,
+    /** Seconds it takes for every ticket on the map to reach the player. */
+    pullTime: 1.5,
+    /** Appears at least this far from the player, from this many candidate spots, this far from the walls. */
+    minDistance: 900,
+    candidates: 12,
+    wallMargin: 48,
+    /** Banners: when the first one appears, and when one is picked up. */
+    spawnText: 'Sky-synk på kartet – følg pilen!',
+    pickText: 'Sky-synk! Alle lappene kommer til deg',
   },
 
   /** Experience required for the next level = base + perLevel × level + square × level². */
@@ -787,13 +870,14 @@ export const CONFIG = {
 
   /**
    * The passives added in version 6.1 (items, Brotato-style). revives = lethal hits survived per shift,
-   * lifesteal = energy per helped lawyer, ticketLife = extra seconds a ticket stays, points = more points from
+   * lifesteal = energy per helped lawyer, ticketFresh = extra seconds a ticket gives full points (Endringsprompt 5,
+   * was: extra seconds a ticket stays on the floor – same number per level), points = more points from
    * everything, drinkFill/kickTime = bigger energy drinks, slowRes = less slowdown from paper piles, ink and hold music.
    */
   itemPassives: {
     backup: { name: 'Sikkerhetskopi', value: 1, max: 3, restore: 0.5, grace: 2, text: 'Overlever ett dødelig treff per vakt (maks 3) og får halv energi tilbake.' },
     grateful: { name: 'Takknemlige advokater', value: 0.04, text: '+0,04 energi for hver advokat du hjelper.' },
-    postIt: { name: 'Post-it-blokk', value: 2, text: 'Ticket-lappene ligger 2 sekunder lenger på gulvet.' },
+    postIt: { name: 'Post-it-blokk', value: 2, text: 'Lappene gir full poengverdi i 2 sekunder lenger.' },
     bonusScheme: { name: 'Bonusordning', value: 0.1, text: '+10 % poeng fra lapper, hastesaker og bosser.' },
     thermos: { name: 'Termos', fill: 10, kick: 2, text: 'Energidrikken gir +10 energi og sukkerkicket varer 2 sekunder lenger.' },
     janitor: { name: 'Vaktmester', value: 0.15, max: 0.75, text: '−15 % treghet fra papirbunker, blekk og ventemusikk.' },

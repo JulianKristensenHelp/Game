@@ -13,6 +13,7 @@ import { makeTicket, makePickup, updateTickets, dropPickup, updateDrinks } from 
 import { makeEffect, updateEffects } from './effects.js';
 import { giveWeapon, givePassive, giveCombination, giveEvenUpgrades, makeCards, useCard, computeBonuses, openPackage, giveMatrix } from './upgrades.js';
 import { xpNeeded } from './score.js';
+import { makeCaptureState, updateCapture, startCapture } from './capture.js';
 
 const VB = CONFIG.view.width, VH = CONFIG.view.height;
 const KB = CONFIG.map.width, KH = CONFIG.map.height;
@@ -53,6 +54,10 @@ export class Game {
       events: new Rng(date + '|hendelser'),
       /** the direction of each new ping-pong ball (Endringsprompt 4) */
       pingpong: new Rng(date + '|pingpong'),
+      /** where «Sky-synk» appears (Endringsprompt 5) */
+      cloud: new Rng(date + '|sky'),
+      /** when the capture-point events come, and which one (Endringsprompt 5) */
+      capture: new Rng(date + '|punkt'),
       /** looks only – never affects anything else */
       looks: new Rng(date + '|utseende'),
     };
@@ -112,6 +117,12 @@ export class Game {
     /** Set when the player got fired (a boss's countdown ran out). @type {null | {type: string, name: string, time: number}} */
     this.fired = null;
     this.nextDrink = CONFIG.energyDrink.first;
+    /** Endringsprompt 5: when the next «Sky-synk» appears, seconds left of a pull in progress, and the ticket merge timer. */
+    this.nextCloud = CONFIG.cloudSync.first;
+    this.syncLeft = 0;
+    this.mergeT = CONFIG.tickets.mergeInterval;
+    /** The capture-point events (js/capture.js). */
+    this.capture = makeCaptureState(this.rng.capture);
     /** Events (version 6): when each scheduled event fires next, the last event, and the mood they set. */
     this.eventTimes = CONFIG.events.scheduled.map((e) => e.at);
     this.lastEvent = -1e9;
@@ -130,6 +141,10 @@ export class Game {
     this.level = 1;
     this.xp = 0;
     this.xpNeeded = xpNeeded(1);
+    /** Levels given for free (Endringsprompt 5: each capture-point event taken gives one), waiting to be shown. */
+    this.freeLevels = 0;
+    /** The shift time of every level-up (read by the debug overlay to measure the level pace; never by the game). @type {number[]} */
+    this.levelLog = [];
     /** The cards shown at level-up. @type {import('./upgrades.js').Card[] | null} */
     this.cards = null;
     /** Rerolls and banishes left, and the banished card keys (never offered again this shift). */
@@ -143,10 +158,12 @@ export class Game {
       perType: /** @type {Record<string, number>} */ ({}),
       helpPerWeapon: /** @type {Record<string, number>} */ ({}),
       bossesTotal: 0, bossesHelped: 0, maxMultStep: 0, hits: 0,
-      ticketsPicked: 0, ticketsLost: 0, drinks: 0, blocked: 0, dodged: 0, elitesHelped: 0, emails: 0,
+      ticketsPicked: 0, ticketsFresh: 0, drinks: 0, blocked: 0, dodged: 0, elitesHelped: 0, emails: 0,
       packages: 0, rerolls: 0, banishes: 0, events: 0, upgrades: 0, revives: 0,
       /** Endringsprompt 4: cookies eaten, and how many times the player took Fiske-Frida's bait. */
       cookies: 0, baited: 0,
+      /** Endringsprompt 5: «Sky-synk» picked up, capture-point events taken and started, and taken per event id. */
+      cloudSyncs: 0, captures: 0, captureEvents: 0, capturedBy: /** @type {Record<string, number>} */ ({}),
       combinations: /** @type {string[]} */ ([]),
       /** Every boss the player met, and whether it was helped. @type {{type: string, helped: boolean, time: number, helpedAt: number, returnNo: number}[]} */
       bossLog: [],
@@ -205,6 +222,7 @@ export class Game {
       updateProjectiles(this, DT);
       updateEnemyShots(this, DT);
       updateTickets(this, DT);
+      updateCapture(this, DT);
     }
     pruneEnemies(this);
     updateEffects(this, DT);
@@ -213,9 +231,13 @@ export class Game {
 
   /** Enough experience? Then the game pauses and the cards are shown. */
   checkLevel() {
-    if (this.status !== 'running' || this.xp < this.xpNeeded) return;
-    this.xp -= this.xpNeeded;
+    if (this.status !== 'running') return;
+    // A free level (a capture-point event was taken) costs no experience
+    if (this.freeLevels > 0) this.freeLevels--;
+    else if (this.xp >= this.xpNeeded) this.xp -= this.xpNeeded;
+    else return;
     this.level++;
+    this.levelLog.push(this.time);
     this.xpNeeded = xpNeeded(this.level);
     this.cards = makeCards(this);
     this.status = 'levelUp';
@@ -234,7 +256,7 @@ export class Game {
 
   /** How many more level-ups are already paid for by the experience collected (shown on the level-up screen). */
   get queuedLevels() {
-    let x = this.xp, lvl = this.level, n = 0;
+    let x = this.xp, lvl = this.level + this.freeLevels, n = this.freeLevels;
     while (x >= xpNeeded(lvl) && n < 99) {
       x -= xpNeeded(lvl);
       lvl++;
@@ -324,6 +346,18 @@ export class Game {
       if (this.eventTimes[i] < this.time) this.eventTimes[i] = 1e9;
     });
     while (this.nextRareCheck <= this.time) this.nextRareCheck += 60;
+    while (this.nextCloud <= this.time - CONFIG.cloudSync.interval) this.nextCloud += CONFIG.cloudSync.interval;
+    if (this.capture.next < this.time) this.capture.next = this.time + 10;
+  }
+
+  /**
+   * Starts a capture-point event right away (?debug buttons). It counts toward the max per shift like a real one.
+   * @param {string} id 'snacks' | 'pingpongTable' | 'meeting'
+   */
+  debugCapture(id) {
+    this.debug.used = true;
+    if (this.capture.active) this.capture.active = null;
+    startCapture(this, id);
   }
 
   debugLevelUp() {
@@ -385,6 +419,7 @@ export class Game {
     } else if (type === 'elite') spawnEnemy(this, 'senior', p.x + 190, p.y - 50, 1 + (this.eliteCount % 3));
     else if (type === 'package') dropPickup(this, 'package', p.x + 40, p.y + 20, CONFIG.package.bossCount);
     else if (type === 'cookie') dropPickup(this, 'cookie', p.x + 40, p.y - 10);
+    else if (type === 'cloud') dropPickup(this, 'cloud', p.x + 60, p.y + 10);
     else if (type === 'frida') {
       if (!this.boss || !this.boss.active) spawnBoss(this, 'frida');
     }
@@ -406,6 +441,8 @@ export class Game {
     this.phaseIndex = -1;
     while (this.phaseIndex + 1 < CONFIG.phases.length && this.time >= CONFIG.phases[this.phaseIndex + 1].from) this.phaseIndex++;
     while (this.nextDrink <= this.time - CONFIG.energyDrink.interval) this.nextDrink += CONFIG.energyDrink.interval;
+    while (this.nextCloud <= this.time - CONFIG.cloudSync.interval) this.nextCloud += CONFIG.cloudSync.interval;
+    if (this.capture.next < this.time) this.capture.next = this.time + 60;
     this.nextWave = this.time + 15;
     this.nextUrgent = this.time + 20;
     // A build that is typical for the time: more weapons and increments the later it is

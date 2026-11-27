@@ -83,6 +83,11 @@ hvert innslag i topplisten (portrett ved navnet). Topplisten er felles for alle 
   Johannes, person1 = Jin, person2 = Julian). Gangsyklusen (4 bilder) flytter bare beina og føttene og gir et hopp
   på én piksel; hode og overkropp er identiske med originalen. Venstre er speilet, og blink, sukkerkick og skjold
   legges oppå bildet. Topplisten bruker 32 × 32-figuren.
+- **Johannes (person3) har en liten ugle på skulderen** (nye bilder i endringsprompt 5). Ugla er en del av bildet og
+  er med overalt, også i gangsyklusen (den følger hoppet). Ugla er bare pynt: treffboksen er den samme som for de
+  andre karakterene (`CONFIG.player.radius`). Bytter du bildene igjen, holder det å legge nye filer med samme navn i
+  `assets/karakterer/`: spritene bygges fra filene hver gang spillet lastes, og serveren sender filene med
+  `no-cache`, så nettleseren henter de nye.
 - **Forhåndsvisning til godkjenning:** <http://localhost:3000/?debug=karakterer> viser alle fire med portrett,
   stående figur, animert gangsyklus og gangbilde 2 og 4, og dessuten Johan og Anonymous med venninnene.
 - Bildene av personene er bare brukt som forelegg. De ligger ikke i prosjektet og publiseres ikke.
@@ -167,7 +172,9 @@ to (maks 12 baller), og ballene etterlater et kort glødende spor. Tallene står
 
 ### Livvakten (endringsprompt 4)
 
-En stor, rolig livvakt i svart dress, solbriller og ørepropp med spiralledning går ved siden av spilleren. Med jevne
+En stor, rolig livvakt går ved siden av spilleren: lys hud, fullt, kort og velstelt skjegg, litt tynt hår på toppen,
+blå genser med kort glidelås i halsen, solbriller og ørepropp med spiralledning (nytt utseende i endringsprompt 5;
+i The Matrix har han svart frakk over genseren). Med jevne
 mellomrom stiller han seg opp og lager en **brannmur**: en rett linje av animerte flammer 30 piksler fra spilleren,
 på tvers av retningen der flest advokater er (de tetteste flokkene telles i åtte sektorer). Brannmuren står i ca.
 3 sekunder. Advokater i den får hjelp hvert kvarte sekund og går 30 % saktere. Den blokkerer ingenting og skader
@@ -178,8 +185,11 @@ Livvakten har ingen vanlig kombinasjon. Tallene står i `CONFIG.weapons.bodyguar
 ### Shopkeeperen (tidligere Sertifisering)
 
 Samme effekt som før (+8 % erfaring fra ticket-lapper per nivå, maks nivå 5), men nytt navn og nytt ikon: en
-hyggelig butikkmedarbeider i svart genser med en stor hvit «A». Når du har ham, står han som en liten figur ved
-siden av deg og følger etter (bare pynt). Tvungen oppdatering krever nå Oppdateringsstrålen + Shopkeeperen.
+anonym figur i svart hettegenser med en stor hvit «A». Hetta dekker mesteparten av ansiktet, så bare nedre del av
+ansiktet og det brune skjegget synes (aldri øynene), og litt brunt hår stikker fram under kanten (endringsprompt 5).
+I The Matrix har han svart frakk og svarte solbriller rett under kanten av hetta. Når du har ham, står han som en
+liten figur ved siden av deg og følger etter (bare pynt). Tvungen oppdatering krever nå Oppdateringsstrålen +
+Shopkeeperen.
 
 ### The Matrix (spesialkombinasjon)
 
@@ -221,7 +231,7 @@ kartet er uendret og fortsatt den viktigste kilden til energi.
 | --- | --- |
 | Sikkerhetskopi | Overlever ett dødelig treff per vakt (maks 3), får halv energi tilbake og 2 sekunder usårbarhet |
 | Takknemlige advokater | +0,04 energi for hver advokat du hjelper |
-| Post-it-blokk | Ticket-lappene ligger 2 sekunder lenger |
+| Post-it-blokk | Lappene gir full poengverdi i 2 sekunder lenger (endringsprompt 5, var: ligger 2 sekunder lenger) |
 | Bonusordning | +10 % poeng fra lapper, hastesaker og bosser |
 | Termos | Energidrikken gir +10 energi, og sukkerkicket varer 2 sekunder lenger |
 | Vaktmester | −15 % treghet fra papirbunker, blekk og ventemusikk (maks 75 %) |
@@ -300,6 +310,56 @@ Tallene står i CONFIG.sender og CONFIG.enemyShots.
 - **Bygget ditt** står som brikker på slutt-skjermen, og pausemenyen viser hele «Dine tall».
 - **Innstillinger** for trefftall og frustrasjonsbarer (av/på).
 
+## Ticket-lappene, saksbunker og Sky-synk (endringsprompt 5)
+
+- **Lappene forsvinner aldri**, og **erfaringen fra en lapp er alltid full**, uansett hvor gammel den er.
+- **Poengene «går ut på dato»:** full verdi de første 10 sekundene, deretter jevnt ned til 25 % ved 30 sekunder, og
+  der blir den liggende. Poengene regnes ut i det lappen når deg (med multiplikatoren akkurat da).
+- **Utseende:** nye lapper er knallgule. Lapper som har passert den nye perioden, er gulnet papir med et eselsøre.
+  Ingen lapper blinker lenger.
+- **Saksbunker:** gamle lapper som ligger nær hverandre (i samme rute på 40 × 40 piksler), slås sammen til én
+  saksbunke med samlet erfaring og samlet gjenværende poengverdi. Bunken er en stabel med lapper i tre størrelser
+  (fra 2, 6 og 15 lapper). Sammenslåingen kjører to ganger i sekundet, ikke hver frame, og er lik for alle.
+- **Tak:** maks 250 lapper og bunker på kartet. Når taket er nådd, legges nye lapper inn i nærmeste bunke (innen 160
+  piksler), ellers i nærmeste lapp.
+- **Post-it-blokk** forlenger perioden med full poengverdi med 2 sekunder per nivå. Hele forfallet flyttes: med 16
+  sekunder full verdi er lappen nede på 25 % ved 36 sekunder. Gulning og sammenslåing starter også først etter den
+  lengre perioden, og lapper som allerede ligger ute, får den nye perioden med en gang.
+- **Sky-synk:** en sjelden pickup formet som en liten sky med en synk-pil. Første gang ved 4:00, deretter hvert 90.
+  sekund, maks én om gangen, et godt stykke unna deg (minst 900 piksler), på faste steder fra sin egen strøm i
+  «Dagens vakt». Den vises på minikartet som en hvit sky, og en grønn pil i skjermkanten viser veien. Plukker du den
+  opp, flyr alle lapper og bunker på hele kartet til deg i løpet av 1,5 sekunder.
+
+Tallene står i `CONFIG.tickets` og `CONFIG.cloudSync`. Lappemagneten ved nivåopp (140 piksler) er uendret.
+
+## Ta et punkt på kartet (endringsprompt 5)
+
+Tre hendelser der spilleren må gå til et fast sted og holde et punkt:
+
+| Hendelse | Sted | Permanent bonus | I tillegg |
+| --- | --- | --- | --- |
+| Snacks på Jacobs | Jacobs pult (navneskilt «JACOB» og en skål snacks), nederst mellom resepsjonen og sofakroken | +15 maks energi, og fyller 30 energi med en gang | +1 nivå |
+| Spille pingpong | Pingpongbordet i det sosiale hjørnet rett under kantina | +8 % hjelp på alle våpen | +1 nivå |
+| Møterommet | Det venstre møterommet med glassvegger (øverst til høyre) | +7 % bevegelseshastighet | +1 nivå |
+
+- **Når:** første rundt 1:30, deretter ca. hvert 2. minutt (± 15 sekunder). Tidspunkt og hvilken hendelse det blir,
+  trekkes fra en egen strøm i «Dagens vakt» (`punkt`). Aldri mens en boss er ute, og aldri med mindre enn 60
+  sekunder til neste boss. Da venter den til bossen er ferdig. Aldri mer enn én om gangen, og hver kan skje maks 2
+  ganger per vakt.
+- **Varsel:** banner («Det er snacks på Jacobs pult!», «Noen vil spille pingpong!», «Du er innkalt til møte!») og en
+  kort lyd når lyden er på. Stedet får et sikte på minikartet, og en gul pil med hendelsens ikon viser veien.
+- **Frist:** 45 sekunder. En liten boks under poengsummen viser «Ta punktet 0:32» og fremdriften.
+- **Ta punktet:** stå i sirkelen på gulvet (40 piksler radius) i 8 sekunder. Går du ut, synker fremdriften sakte
+  (0,5 sekunder per sekund). Står det en advokat i sirkelen, stopper fremdriften helt: sirkelen og boksen blir røde
+  med «Opptatt!». Første gang du går inn, kommer en ekstra flokk (6 + 0,8 per minutt, maks 18) fra tre retninger.
+- **Belønning:** når ringen er full, kommer bonusteksten («Snacks! +15 maks energi», «+1 nivå») og du går opp et
+  nivå med en gang (uten å bruke erfaring). Bonusene legges oppå passivene og vises som ikoner med antall (×2) til
+  høyre for våpnene nederst. Bommer du, forsvinner hendelsen uten annen straff.
+- Slutt-skjermen viser hvor mange av hendelsene du klarte.
+
+Alle tallene, tekstene og bonusene står i `CONFIG.capture`. Stedene står i `HOTSPOTS` i `js/map.js`, og logikken i
+`js/capture.js`. Ingen av de gamle hendelsene under er endret, og de to typene påvirker ikke hverandre.
+
 ## Hendelser (versjon 6)
 
 Vanskeligheten stiger **lineært**: frustrasjonen er 1 + 0,15 × (minutter − 3) fram til overtid (12:30), der den
@@ -376,6 +436,9 @@ siden på nytt. De viktigste:
 | endre hendelsene (lunsjrush, partnermøte, kaffepause …) | `events` (når, hvor ofte, sjanse, størrelse) |
 | endre kortnivåene, effektene, nytt utvalg og pakkene | `upgrades`, `package`, `eliteDrops` |
 | gi raskere/tregere nivåopp | `level` (`base`, `perLevel`, `square`) |
+| endre lappenes poengforfall, bunkene og taket | `tickets` (`freshTime`, `decayTime`, `minValue`, `max`, `mergeCell`) |
+| endre Sky-synk | `cloudSync` (first, interval, pullTime, minDistance) |
+| endre hendelsene med punkt på kartet | `capture` (når, frist, sirkel, holdetid, ekstraflokk, bonuser) |
 | endre et våpen | `weapons.<id>.base` (start), `weapons.<id>.growth` (ett kort = ett steg av én regel), `effects` og `combination.stats` |
 | endre partnerne (eliter) | `elites` (fra når, sjanse, maks samtidig, styrke, egenskaper) |
 | endre de nye passive | `statPassives`, `tagPassives` og `critMult` |
@@ -392,10 +455,12 @@ og om runden endte med sparken. Den sjekker også at to like runder gir nøyakti
 «Dobbel skjerm»), og at utseendet på advokatene ikke påvirker spillet.
 
 `node tools/simulate.js x 25 --statistikk` kjører 10 dager × 4 karakterer for de gode robotene og skriver ut median,
-spredning og hvor mange som fikk sparken (`--detaljer` lister alle tidene). Med tallene som ligger inne nå (versjon 7,
-se ENDRINGSLOGG.md for tabellen) har ekspertrobotene median rundt 11 minutter, en fjerdedel ryker før 7 minutter, og
-veggen i overtid tar de beste mellom 15 og 17 minutter. `--utennye` holder Ping-pong og Livvakten utenfor kortene
-(da er medianen rundt 14 – robotene får sjeldnere de våpnene de planlegger rundt), og `--utenkjeks` slår av kjeksen. Det er med vilje: fra Johan og
+spredning og hvor mange som fikk sparken (`--detaljer` lister alle tidene), og hvor ofte ekspertrobotene går opp i
+nivå mellom 5 og 12 minutter. Med tallene som ligger inne nå (versjon 7.1, se ENDRINGSLOGG.md for tabellen) har
+ekspertrobotene median rundt 14 minutter, en fjerdedel ryker før 8 minutter, og veggen i overtid tar de beste
+mellom 15 og 18 minutter. `--utennye` holder Ping-pong og Livvakten utenfor kortene, og `--utenkjeks` slår av
+kjeksen. `--utenpunkt` slår av hendelsene med punkt på kartet, `--ikketa` lar dem komme uten at robotene går dit, og
+`--utensky` slår av Sky-synk. Det er med vilje: fra Johan og
 utover er det byggen og flaksen med kortene som avgjør. `--utenpartnere`, `--utenbosser` og `--utenhendelser` viser
 hvor mye partnerne, bossene og hendelsene bidrar. Robotene ser ikke varslene slik et menneske gjør, så de får mer
 skade enn en oppmerksom spiller, men de bygger også dårligere. Prøvespill gjerne med noen kolleger.
@@ -408,11 +473,13 @@ våpen (The Matrix står på Livvaktens rad) med 16 oppgraderinger jevnt fordelt
 
 Kartet er én kontoretasje på 2560 × 1440 piksler med yttervegger, og oppsettet er likt for alle.
 
-- **Soner** (kontorlandskap, kantine, heiser, møterom, printerrom, resepsjon, sofakrok) står i `SONER` i
+- **Soner** (kontorlandskap, kantine, heiser, møterom, printerrom, resepsjon, sofakrok) står i `ZONES` i
   `js/map.js`: navn, gulvtype, plassering og farge på minikartet.
-- **Pynt** (pulter, stoler, planter, printere, vannkjølere …) står i `lagPynt()` i samme fil, som en liste
+- **Pynt** (pulter, stoler, planter, printere, vannkjølere …) står i `makeDecor()` i samme fil, som en liste
   med navn og koordinater. Pynt blokkerer aldri bevegelse – bare ytterveggene gjør det.
-- **Dører og heiser** der advokater kommer inn når det er trangt, står i `DOERER`.
+- **Stedene for punkt-hendelsene** (Jacobs pult, pingpongbordet, møterommet) står i `HOTSPOTS`. Flytter du et sted,
+  følger pynten (pulten og bordet) med.
+- **Dører og heiser** der advokater kommer inn når det er trangt, står i `DOORS`.
 - **Glassvegger** (bare pynt) står i `GLASS`.
 - Kartets størrelse og veggtykkelse står i `CONFIG.map`.
 
@@ -440,11 +507,16 @@ Legg til `?debug` i adressen: <http://localhost:3000/?debug>. (`?debug=karaktere
 - antall advokater, prosjektiler, effekter, ticket-lapper og glade advokater under animasjon
 - minnebruk (i Chrome/Edge), automatisk kvalitetsnivå, inn per sekund og frustrasjonsfaktor
 - hjelp per sekund for hvert våpen spilleren har (siste 10 sekunder)
+- **nivåopp-tempoet** de siste 2 minuttene av vakta («nivåopp hvert 24. s»), og hvor mange Sky-synk og punkter du
+  har tatt. Bruk det til å måle hvor ofte en god spiller går opp i nivå mellom 5 og 12 minutter (målet er omtrent
+  hvert 20.–30. sekund ved minutt 8).
 
 Knappene lar deg hoppe 1 eller 3 minutter frem, gå opp ett eller ti nivåer, få fire våpen med 16 oppgraderinger
 («Maks bygg») og gjøre dem om til kombinasjoner, slå på udødelighet, og sette ut boss, hastesak, Ny PC,
-energidrikk, en partner, en pakke fra leverandøren, en helsekjeks eller 100 ekstra advokater. «The Matrix-bygg»
+energidrikk, en partner, en pakke fra leverandøren, en helsekjeks, en Sky-synk eller 100 ekstra advokater. «The Matrix-bygg»
 gir The Matrix med en gang (med animasjonen), og «Ping-pong + Livvakt» gir begge med 10 oppgraderinger og Joggesko.
+«Snacks på Jacobs», «Spille pingpong» og «Møterommet» starter den hendelsen med en gang (den teller med i maks 2 per
+vakt).
 
 **Stresstest (5 min):** starter på minutt 15 med fire våpen som kombinasjoner (Tofaktor, Kontorprinteren fra
 helvete, Ping of Death og The Matrix), med Anonymous og venninnene ute hele tiden, holder antall advokater på
@@ -464,7 +536,8 @@ Runder der debug-knappene er brukt, kan ikke sendes inn til topplisten.
 | `js/player.js`, `js/enemies.js`, `js/weapons.js` | Spilleren, advokatene (inkl. spawning på kartet) og IT-løsningene |
 | `js/bosses.js` | Bossene: rekkefølgen, nedtellingen («sparken»), angrepene og fiendeprosjektilene |
 | `js/upgrades.js`, `js/tickets.js`, `js/score.js` | Nivåopp-kort, lapper/energidrikk/Ny PC, poeng og multiplikator |
-| `js/map.js` | Kartets soner, pynt, dører og vegger |
+| `js/map.js` | Kartets soner, pynt, dører, vegger og stedene for punkt-hendelsene (`HOTSPOTS`) |
+| `js/capture.js` | Hendelsene med punkt på kartet (Snacks på Jacobs, Spille pingpong, Møterommet) |
 | `js/renderer.js` | Spillverdenen i pixel art (640 × 360) |
 | `js/hud.js` | HUD og minikart |
 | `js/figures.js`, `js/sprites.js`, `js/icons.js`, `js/pixel.js`, `js/pixelfont.js` | Grafikken |

@@ -13,6 +13,7 @@ import { Rng, TAU, mmss } from './utils.js';
 import { makeCanvas, ctx2d } from './pixel.js';
 import { icon } from './icons.js';
 import { ELITE_TRAIT } from './enemies.js';
+import { freshTime } from './tickets.js';
 
 const VB = CONFIG.view.width, VH = CONFIG.view.height;
 const KB = CONFIG.map.width, KH = CONFIG.map.height;
@@ -49,6 +50,8 @@ export class Renderer {
     this.bubbleCache = new Map();
     /** @type {Map<string, HTMLCanvasElement>} */
     this.textCache = new Map();
+    /** The capture-point icons as sprites. @type {Map<string, any>} */
+    this.capIcons = new Map();
     this.shake = 0;
     /** @type {any[]} */
     this.sorted = [];
@@ -258,17 +261,21 @@ export class Renderer {
     }
     ctx.globalAlpha = 1;
 
-    // Tickets (blink in the last seconds)
-    const L = CONFIG.tickets;
+    // The capture-point event's circle on the floor (under the tickets and the figures)
+    if (s.capture.active) this.drawCapture(s, s.capture.active, now);
+
+    // Tickets (Endringsprompt 5): they never disappear and never blink. Fresh ones are bright yellow; stale ones are
+    // yellowed with a dog-ear; case piles are a stack that grows with what it holds.
+    const fresh = freshTime(s);
+    const PS = CONFIG.tickets.pileSizes;
     for (let i = 0; i < s.tickets.n; i++) {
       const l = s.tickets.items[i];
       if (l.x < x0 || l.x > x1 || l.y < y0 || l.y > y1) continue;
-      if (!l.dragged && l.age > L.lifetime - L.blinkTime) {
-        if (fewerFlashes) ctx.globalAlpha = 0.5;
-        else if (Math.floor(l.age * 7) % 2 === 0) continue;
-      }
-      drawSprite(ctx, l.value > 60 ? item.ticketLarge : item.ticket, l.x, l.y);
-      ctx.globalAlpha = 1;
+      let spr;
+      if (l.count >= PS[0]) spr = item.piles[l.count >= PS[2] ? 2 : l.count >= PS[1] ? 1 : 0];
+      else if (l.age > fresh) spr = l.xp > 60 ? item.ticketStaleLarge : item.ticketStale;
+      else spr = l.xp > 60 ? item.ticketLarge : item.ticket;
+      drawSprite(ctx, spr, l.x, l.y);
     }
 
     // Energy drink, Ny PC and the supplier package (glow and a small bounce)
@@ -303,9 +310,10 @@ export class Renderer {
       }
       const bounce = fewerFlashes ? 0 : Math.round(Math.abs(Math.sin(now * 3 + i)) * -3);
       ctx.globalAlpha = fewerFlashes ? 0.7 : 0.55 + Math.sin(now * 4 + i) * 0.25;
-      drawSprite(ctx, pk.type === 'drink' ? item.drinkGlow : pk.type === 'package' ? item.packageGlow : item.pcGlow, pk.x, pk.y);
+      const glowSpr = pk.type === 'drink' ? item.drinkGlow : pk.type === 'package' ? item.packageGlow : pk.type === 'cloud' ? item.cloudGlow : item.pcGlow;
+      drawSprite(ctx, glowSpr, pk.x, pk.y);
       ctx.globalAlpha = 1;
-      drawSprite(ctx, pk.type === 'drink' ? item.drink : pk.type === 'package' ? item.package : item.pc, pk.x, pk.y + bounce);
+      drawSprite(ctx, pk.type === 'drink' ? item.drink : pk.type === 'package' ? item.package : pk.type === 'cloud' ? item.cloud : item.pc, pk.x, pk.y + bounce);
       if (!fewerFlashes && this.quality < 2 && Math.floor(now * 2 + i) % 3 === 0) {
         drawSprite(ctx, item.glitter[1], pk.x + 7, pk.y - 9 + bounce);
       }
@@ -430,6 +438,7 @@ export class Renderer {
     this.drawWeapons(s, now);
     this.drawHelpers(s, now);
     this.drawPlayer(s, now);
+    if (s.capture.active) this.drawCaptureMarker(s.capture.active, now);
     this.drawEffectsOver(s, now);
     if (s.rain > 0) this.drawCodeRain(s, dt, kx, ky);
     if (this.quality < 2) this.drawBubbles(s, dt, n);
@@ -437,6 +446,44 @@ export class Renderer {
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.drawArrows(s, kx, ky, now);
+  }
+
+  /**
+   * The capture point (Endringsprompt 5): a circle on the floor with a progress ring that fills while the player holds
+   * it. Teal when free, red while a lawyer stands in it («Opptatt!»). Calm (no pulse) with reduced flashing.
+   * @param {import('./capture.js').ActiveCapture} a
+   */
+  drawCapture(s, a, now) {
+    const ctx = this.ctx, C = CONFIG.capture;
+    const R = C.radius;
+    const color = a.busy ? '#e5484d' : a.inside ? '#f5cf3a' : '#14b8a6';
+    ctx.globalAlpha = this.settings.fewerFlashes ? 0.85 : 0.7 + Math.sin(now * 4) * 0.15;
+    drawSprite(ctx, ring(R, color, 2, a.busy ? 0.14 : 0.1, 6), a.x, a.y);
+    ctx.globalAlpha = 1;
+    // the progress ring just inside the circle, clockwise from the top
+    const fraction = Math.min(1, a.progress / C.holdTime);
+    ctx.fillStyle = a.busy ? '#ff9f9f' : '#fff6c8';
+    const r = R - 5;
+    for (let t = 0; t < fraction * TAU; t += 0.07) ctx.fillRect(Math.round(a.x + Math.sin(t) * r) - 1, Math.round(a.y - Math.cos(t) * r) - 1, 2, 2);
+  }
+
+  /** The event's 16 × 16 icon as a sprite (for the arrow at the screen edge), made once. */
+  captureIcon(id) {
+    let sp = this.capIcons.get(id);
+    if (!sp) {
+      sp = { canvas: icon('capture:' + id), w: 16, h: 16, ax: 8, ay: 8 };
+      this.capIcons.set(id, sp);
+    }
+    return sp;
+  }
+
+  /** The icon over the capture point (bobbing gently), with «Opptatt!» while a lawyer blocks it. */
+  drawCaptureMarker(a, now) {
+    const ctx = this.ctx;
+    const bob = this.settings.fewerFlashes ? 0 : Math.round(Math.sin(now * 3) * 2);
+    const ic = icon('capture:' + a.id);
+    ctx.drawImage(ic, Math.round(a.x - 8), Math.round(a.y - CONFIG.capture.radius - 20 + bob));
+    if (a.busy && a.inside) this.font.draw(ctx, CONFIG.capture.busyText, a.x, a.y - CONFIG.capture.radius - 30 + bob, '#ff9f9f', 1, '#1d1626', 'center');
   }
 
   /** Happy animation: smile and thumbs up with a small hop and sparkles, then a small pixel cloud. */
@@ -1207,7 +1254,7 @@ export class Renderer {
       const label = e.type === 'boss' ? CONFIG.bosses[e.bossType]?.short ?? 'BOSS' : 'HASTESAK';
       this.arrow(e.x - kx, e.y - ky, e.type === 'boss' ? this.spr.arrows.boss : this.spr.arrows.urgentSprite, label, now, null);
     }
-    let best = null, bestD = 1e12, pkg = null, pkgD = 1e12;
+    let best = null, bestD = 1e12, pkg = null, pkgD = 1e12, cloud = null;
     for (let i = 0; i < s.pickups.n; i++) {
       const pk = s.pickups.items[i];
       const d = (pk.x - s.player.x) ** 2 + (pk.y - s.player.y) ** 2;
@@ -1217,11 +1264,15 @@ export class Renderer {
       } else if (pk.type === 'package' && d < pkgD) {
         pkgD = d;
         pkg = pk;
-      }
+      } else if (pk.type === 'cloud') cloud = pk;
     }
     if (best) this.arrow(best.x - kx, best.y - ky, this.spr.arrows.drink, '', now, this.spr.item.drink);
     // The nearest supplier package too (gold arrow with the box)
     if (pkg) this.arrow(pkg.x - kx, pkg.y - ky, this.spr.arrows.urgentSprite, '', now, this.spr.item.package);
+    // Endringsprompt 5: «Sky-synk» (the same green arrow as the energy drink, with the cloud), and the capture point
+    if (cloud) this.arrow(cloud.x - kx, cloud.y - ky, this.spr.arrows.drink, '', now, this.spr.item.cloud);
+    const cap = s.capture.active;
+    if (cap) this.arrow(cap.x - kx, cap.y - ky, this.spr.arrows.urgentSprite, '', now, this.captureIcon(cap.id));
   }
 
   arrow(sx, sy, set, text, now, iconSprite) {

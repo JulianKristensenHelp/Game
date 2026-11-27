@@ -9,6 +9,7 @@ import { ZONES, GLASS } from './map.js';
 import { mmss, formatNumber } from './utils.js';
 import { multiplier, multText } from './score.js';
 import { makeCanvas, ctx2d } from './pixel.js';
+import { CAPTURE_IDS } from './capture.js';
 
 const KB = CONFIG.map.width, KH = CONFIG.map.height;
 const GR = CONFIG.display;
@@ -19,6 +20,9 @@ const SYMBOL = {
   star: ['..#..', '..#..', '#####', '.###.', '##.##'],
   boss: ['..###..', '.#####.', '#######', '#######', '#######', '.#####.', '..###..'],
   drink: ['.##.', '####', '####', '####', '####'],
+  /** Endringsprompt 5: «Sky-synk» (a small cloud) and the capture point (a target). */
+  cloud: ['..##..', '.####.', '######'],
+  target: ['.###.', '#...#', '#.#.#', '#...#', '.###.'],
 };
 
 export class Hud {
@@ -37,7 +41,7 @@ export class Hud {
     this.dirty = true;
     this.lastDraw = 0;
     this.signature = '';
-    this.values = new Float64Array(9);
+    this.values = new Float64Array(10);
     this.multAnim = 0;
     this.multDirection = 1;
     this.banner = { text: '', style: '', end: 0, start: 0, sub: '' };
@@ -177,7 +181,10 @@ export class Hud {
     for (let i = 0; i < s.pickups.n; i++) {
       const p = s.pickups.items[i];
       if (p.type === 'drink') this.stamp(ctx, SYMBOL.drink, p.x * k, p.y * k, sk, '#2fd06a', '#0b3d1c');
+      else if (p.type === 'cloud') this.stamp(ctx, SYMBOL.cloud, p.x * k, p.y * k, sk, '#ffffff', '#1f6fbf');
     }
+    const cap = s.capture.active;
+    if (cap) this.stamp(ctx, SYMBOL.target, cap.x * k, cap.y * k, sk, cap.busy ? '#ff6b6b' : '#ffd240', '#4a3600');
     for (let i = 0; i < s.enemies.n; i++) {
       const e = s.enemies.items[i];
       if (!e.active || e.leaving) continue;
@@ -223,14 +230,17 @@ export class Hud {
     const red = boss && boss.timer <= CONFIG.bosses.warnRed;
     const new7 = boss ? Math.ceil(boss.timer) * 4 + (red && !settings.fewerFlashes ? Math.floor(now / 250) % 2 : 0) : -1;
     const new8 = (this.firedText ? 1 : 0) + (this.intro && now < this.intro.end + 400 ? 2 : 0);
-    const changed = this.signature !== 'game' || v[0] !== new0 || v[1] !== new1 || v[2] !== new2 || v[3] !== new3 || v[4] !== new4 || v[5] !== new5 || v[6] !== new6 || v[7] !== new7 || v[8] !== new8;
+    // The capture-point countdown: whole seconds, the progress in tenths, and whether it is blocked
+    const cap = s.capture.active;
+    const new9 = cap ? Math.ceil(cap.left) * 10000 + Math.round(cap.progress * 10) * 10 + (cap.busy ? 1 : 0) : -1;
+    const changed = this.signature !== 'game' || v[0] !== new0 || v[1] !== new1 || v[2] !== new2 || v[3] !== new3 || v[4] !== new4 || v[5] !== new5 || v[6] !== new6 || v[7] !== new7 || v[8] !== new8 || v[9] !== new9;
     const sig = 'game';
     const animating = bannerActive || joystick.active || !!this.firedText || (!!this.intro && now < this.intro.end + 400);
     const limit = animating ? 1000 / 60 : 1000 / 20;
     if (!forced && !this.dirty && !changed && !animating) return;
     if (!forced && now - this.lastDraw < limit - 1) return;
     this.signature = sig;
-    v[0] = new0; v[1] = new1; v[2] = new2; v[3] = new3; v[4] = new4; v[5] = new5; v[6] = new6; v[7] = new7; v[8] = new8;
+    v[0] = new0; v[1] = new1; v[2] = new2; v[3] = new3; v[4] = new4; v[5] = new5; v[6] = new6; v[7] = new7; v[8] = new8; v[9] = new9;
     this.dirty = false;
     this.lastDraw = now;
     this.draw(s, now, blinkPhase, settings, joystick);
@@ -325,6 +335,11 @@ export class Hud {
     const boss = s.boss && s.boss.active ? s.boss : null;
     if (boss) this.drawBossClock(ctx, now, mid, ey + FH * (s3 + 1) + FH * (s3 + 2) + 3 * s3, boss, settings);
 
+    // The capture-point event's countdown and progress (Endringsprompt 5), where the boss clock sits (an event never
+    // runs while a boss is out)
+    const cap = s.capture.active;
+    if (cap && !boss) this.drawCaptureClock(ctx, mid, ey + FH * (s3 + 1) + FH * (s3 + 2) + 3 * s3, cap);
+
     // Banner
     if (now < this.banner.end + 400) this.drawBanner(ctx, now, mid, ry + Math.round(rh * 0.3));
 
@@ -399,7 +414,7 @@ export class Hud {
     const c = makeCanvas(w, h);
     const ctx = ctx2d(c);
     const fs = Math.max(1, st - 1);
-    const drawSlot = (x, y, id, level, evo, empty) => {
+    const drawSlot = (x, y, id, level, evo, empty, label = '') => {
       ctx.fillStyle = '#1d1626';
       ctx.fillRect(x, y, slot, slot);
       ctx.fillStyle = empty ? '#1d1626' : evo ? '#f5cf3a' : '#5d6b7a';
@@ -419,7 +434,7 @@ export class Hud {
         return;
       }
       ctx.drawImage(icon(id), x + st, y + st, 16 * st, 16 * st);
-      const t = evo ? '★' : String(level);
+      const t = label || (evo ? '★' : String(level));
       this.font.draw(ctx, t, x + slot - st, y + slot - FH * fs + fs, evo ? '#ffe066' : '#ffffff', fs, '#1d1626', 'right');
     };
     const pRow = 0, vRow = slot + gap;
@@ -431,6 +446,14 @@ export class Hud {
       const vw = s.player.weapons[i];
       if (vw) drawSlot(i * (slot + gap), vRow, weaponIconId(vw), vw.picks, vw.evo, false);
       else drawSlot(i * (slot + gap), vRow, '', 0, false, true);
+    }
+    // Endringsprompt 5: the permanent bonuses from the capture-point events, after the weapons («×2»)
+    let bx = CONFIG.limits.weapons * (slot + gap) + 2 * gap;
+    for (const id of CAPTURE_IDS) {
+      const n = s.capture.bonus[id];
+      if (!n) continue;
+      drawSlot(bx, vRow, 'capture:' + id, n, false, false, '×' + n);
+      bx += slot + gap;
     }
     this.iconRow = c;
   }
@@ -455,6 +478,33 @@ export class Hud {
     this.font.draw(ctx, b.text, x, by + 2 * s, b.style === 'gold' ? '#1d1626' : '#ffffff', fs, b.style === 'gold' ? null : '#1d1626', 'center');
     if (b.sub) this.font.draw(ctx, b.sub, x, by + 2 * s + FH * fs + 2 * s, b.style === 'gold' ? '#3a2a00' : '#ffe9c8', fsSub, b.style === 'gold' ? null : '#1d1626', 'center');
     ctx.globalAlpha = 1;
+  }
+
+  /**
+   * The capture-point event: a small box with the event's icon, «Ta punktet 0:32» and a progress bar
+   * (red with «Opptatt!» while a lawyer stands in the circle).
+   * @param {import('./capture.js').ActiveCapture} cap
+   */
+  drawCaptureClock(ctx, x, y, cap) {
+    const s = this.s, K = CONFIG.capture;
+    const fs = Math.max(1, s - 1);
+    const text = `${cap.busy ? K.busyText : K.countdownText} ${mmss(Math.max(0, Math.ceil(cap.left)))}`;
+    const tw = textWidth(text) * fs;
+    const iconS = 10 * s;
+    const bw = tw + iconS + 8 * s, bh = Math.max(iconS, FH * fs) + 7 * s;
+    const bx = Math.round(x - bw / 2);
+    ctx.fillStyle = '#1d1626';
+    ctx.fillRect(bx, y, bw, bh);
+    ctx.fillStyle = cap.busy ? '#7a1f24' : '#2a3140';
+    ctx.fillRect(bx + s, y + s, bw - 2 * s, bh - 2 * s);
+    ctx.drawImage(icon('capture:' + cap.id), bx + 2 * s, y + 2 * s, iconS, iconS);
+    this.font.draw(ctx, text, bx + 4 * s + iconS, y + 2 * s + Math.round((iconS - FH * fs) / 2), '#ffffff', fs, '#1d1626');
+    // the progress bar along the bottom
+    const pw = bw - 4 * s, py = y + bh - 3 * s;
+    ctx.fillStyle = '#16202b';
+    ctx.fillRect(bx + 2 * s, py, pw, s * 2);
+    ctx.fillStyle = cap.busy ? '#e5484d' : '#f5cf3a';
+    ctx.fillRect(bx + 2 * s, py, Math.round(pw * Math.min(1, cap.progress / K.holdTime)), s * 2);
   }
 
   /** The big countdown under the score: white, yellow at 30 seconds, red and blinking at 10 (calm with reduced flashes). */

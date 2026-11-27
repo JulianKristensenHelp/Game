@@ -300,15 +300,19 @@ const DRAW = {
     r.px(12, 14, C.NEAR_BLACK);
   },
   certification: (r) => {
-    // Shopkeeperen (Endringsprompt 4): a friendly shop assistant in a black sweater with a big white «A»
+    // Shopkeeperen (Endringsprompt 5): the black hoodie with the big white «A», the hood pulled down over the eyes,
+    // only the lower face and the brown beard showing
     r.rect(2, 9, 12, 7, C.NEAR_BLACK);
     r.rect(1, 11, 14, 5, C.NEAR_BLACK);
     r.stamp('.#. #.# ### #.#', 6, 11, { '#': C.WHITE });
-    r.ellipse(8, 5, 3.6, 3.8, C.WOOD_L);
-    r.ellipse(8, 2.2, 4, 2, C.POT);
-    r.px(6, 5, C.NEAR_BLACK);
-    r.px(10, 5, C.NEAR_BLACK);
-    r.rect(7, 7, 3, 1, C.DARK_RED);
+    r.ellipse(8, 5, 4.8, 5, C.NEAR_BLACK);
+    r.rect(5, 5, 6, 1, C.DARKER);
+    r.px(5, 5, C.BEARD_L);
+    r.px(10, 5, C.BEARD_L);
+    r.rect(5, 6, 6, 2, C.SKIN);
+    r.stamp('#.##.# ##..## .####.', 5, 7, { '#': C.BEARD });
+    r.px(7, 8, C.DARK_RED);
+    r.px(8, 8, C.DARK_RED);
   },
   // ----- Endringsprompt 4 -----
   pingpong: (r) => {
@@ -333,19 +337,61 @@ const DRAW = {
     r.px(12, 2, C.YELLOW);
   },
   bodyguard: (r) => {
-    // Livvakten: head with sunglasses and an earpiece, black suit, and a small flame
-    r.rect(2, 11, 12, 5, C.NEAR_BLACK);
-    r.rect(7, 11, 2, 3, C.WHITE);
-    r.ellipse(8, 6, 4, 4.3, C.POT_M);
-    r.rect(4, 2, 8, 2, C.NEAR_BLACK);
-    r.rect(5, 5, 6, 2, C.NEAR_BLACK);
+    // Livvakten (Endringsprompt 5): light skin, a short full beard, a little thin hair, sunglasses, the earpiece and
+    // the blue quarter-zip sweater – and a small flame
+    r.rect(2, 11, 12, 5, C.ZIP);
+    r.rect(2, 14, 12, 2, C.ZIP_M);
+    r.rect(6, 10, 4, 2, C.ZIP_M);
+    r.rect(8, 11, 1, 3, C.LIGHT_GRAY);
+    r.ellipse(8, 6, 4, 4.3, C.SKIN);
+    r.px(6, 2, C.BEARD_L);
+    r.px(8, 2, C.BEARD_L);
+    r.px(10, 2, C.BEARD_L);
+    r.rect(4, 5, 8, 2, C.NEAR_BLACK);
     r.px(5, 5, C.DARK_GRAY);
     r.px(9, 5, C.DARK_GRAY);
-    r.px(12, 7, C.LIGHT_GRAY);
-    r.px(13, 8, C.LIGHT_GRAY);
-    r.px(12, 9, C.LIGHT_GRAY);
+    r.stamp('#.####.# ##....## .######. ..####..', 4, 7, { '#': C.BEARD });
+    r.rect(7, 8, 2, 1, C.POT);
+    r.px(12, 6, C.LIGHT_GRAY);
+    r.px(13, 7, C.LIGHT_GRAY);
+    r.px(12, 8, C.LIGHT_GRAY);
     r.ellipse(13, 13, 2, 2.6, C.ORANGE);
     r.px(13, 13, C.YELLOW);
+  },
+  // ----- Endringsprompt 5: the capture-point events (HUD bonus row and minimap/arrow markers) -----
+  'capture:snacks': (r) => {
+    // a red bowl full of crisps and sweets
+    r.ellipse(8, 7, 6.5, 3.5, C.GOLD_L);
+    for (const [x, y, c] of [[4, 6, C.ORANGE], [7, 5, C.YELLOW], [10, 6, C.ORANGE], [6, 7, C.PINK], [11, 8, C.LIGHT_GREEN], [9, 4, C.GOLD], [5, 8, C.YELLOW]]) r.px(x, y, c);
+    r.rect(1, 9, 14, 2, C.RED);
+    r.ellipse(8, 11, 6.5, 3.5, C.RED);
+    r.rect(3, 9, 10, 1, C.WINE_L);
+    r.rect(5, 14, 6, 1, C.DARK_RED);
+  },
+  'capture:pingpongTable': (r) => {
+    // a blue ping-pong table in perspective (narrower at the back), the net across it, a red bat and a ball
+    for (let i = 0; i < 6; i++) r.rect(3 - Math.floor(i / 2), 7 + i, 10 + 2 * Math.floor(i / 2), 1, C.BLUE);
+    r.rect(3, 7, 10, 1, C.WHITE);
+    r.rect(1, 12, 14, 1, C.WHITE);
+    r.rect(7, 7, 1, 6, C.LIGHT_BLUE);
+    r.rect(1, 9, 14, 2, C.NEAR_WHITE);
+    r.rect(1, 9, 14, 1, C.LIGHT_GRAY);
+    r.rect(2, 13, 1, 2, C.DARK_GRAY);
+    r.rect(13, 13, 1, 2, C.DARK_GRAY);
+    r.ellipse(3.5, 3.5, 2.6, 2.6, C.RED);
+    r.rect(5, 5, 2, 2, C.WOOD);
+    r.ellipse(12.5, 3, 1.6, 1.6, C.WHITE);
+  },
+  'capture:meeting': (r) => {
+    // a meeting invitation: a calendar page with a clock
+    r.rect(1, 3, 12, 12, C.WHITE);
+    r.rect(1, 3, 12, 3, C.RED);
+    r.rect(3, 1, 1, 3, C.DARK_GRAY);
+    r.rect(10, 1, 1, 3, C.DARK_GRAY);
+    for (let y = 8; y < 14; y += 2) for (let x = 3; x < 11; x += 3) r.rect(x, y, 2, 1, C.LIGHT_GRAY2);
+    r.ellipse(12, 11.5, 3.5, 3.5, C.YELLOW);
+    r.rect(12, 9, 1, 3, C.NEAR_BLACK);
+    r.rect(12, 11, 2, 1, C.NEAR_BLACK);
   },
   matrix: (r) => {
     // The Matrix: green falling code with a pair of black sunglasses

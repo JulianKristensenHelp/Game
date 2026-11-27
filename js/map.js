@@ -45,6 +45,19 @@ export const DOORS = [
   { x: 600, y: 1410 }, { x: 2000, y: 58 }, { x: 30, y: 300 }, { x: 2530, y: 1250 }, // stairs
 ];
 
+/**
+ * The spots for the capture-point events (Endringsprompt 5, CONFIG.capture): the centre of the circle on the floor.
+ * Spread out over the map so it always takes a trip to get there. The decor for each is added in makeDecor().
+ *  snacks = Jacob's desk (bottom, between the reception and the sofa corner), pingpongTable = the ping-pong table
+ *  (a social corner just below the canteen), meeting = the left meeting room (around its table).
+ * @type {Record<string, {x: number, y: number}>}
+ */
+export const HOTSPOTS = {
+  snacks: { x: 1700, y: 1262 },
+  pingpongTable: { x: 300, y: 648 },
+  meeting: { x: 2004, y: 262 },
+};
+
 /** Keeps a point inside the outer walls. */
 export function clampIn(x, y, r, out) {
   out.x = Math.min(INSIDE.x1 - r, Math.max(INSIDE.x0 + r, x));
@@ -154,6 +167,10 @@ export function makeDecor() {
   for (const x of [1980, 2140, 2300, 2460]) add('shelf', x, 1060);
   add('plant', 2510, 1400);
   add('plant', 1950, 1400);
+
+  // Endringsprompt 5: the spots for the capture-point events (nothing above is moved)
+  add('jacobDesk', HOTSPOTS.snacks.x, HOTSPOTS.snacks.y - 12);
+  add('pingpongTable', HOTSPOTS.pingpongTable.x, HOTSPOTS.pingpongTable.y);
 
   // Along the walls
   for (const x of [800, 900, 1600, 1700]) add('plant', x, 62);
