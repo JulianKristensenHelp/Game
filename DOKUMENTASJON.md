@@ -73,7 +73,12 @@ hvert innslag i topplisten (portrett ved navnet). Topplisten er felles for alle 
 | 1 | Skru av og på | +20 maks energi |
 | 2 | Toner-kast | +10 % hjelp |
 | 3 | HDMI-kabelen | +10 % bevegelseshastighet |
-| 4 | Trådløse mus | +25 % radius for å plukke opp ticket-lapper |
+| 4 | Trådløse mus | +6 % erfaring fra ticket-lapper (endringsprompt 7, var +25 % plukkeradius) |
+
+**Julians bonus (endringsprompt 7):** +6 % erfaring fra alle ticket-lapper og saksbunker, også de som kommer med
+Sky-synk. Den gir bare erfaring, aldri poeng, så topplisten er rettferdig mellom karakterene. Den legges sammen med
+de andre erfaringsbonusene (Shopkeeperen) under et felles tak på +50 % (`CONFIG.level.xpBonusCap`). Den gamle
+plukkeradiusen var nesten verdiløs etter at lappene aldri forsvinner og Sky-synk henter alle.
 
 - **Navn og tittel** står i js/config.js under CONFIG.characters (Odyssefs, Johannes, Jin og Julian, alle med
   tittelen «IT-avdelingen»). Der står også startvåpen og bonus.
@@ -85,9 +90,13 @@ hvert innslag i topplisten (portrett ved navnet). Topplisten er felles for alle 
   legges oppå bildet. Topplisten bruker 32 × 32-figuren.
 - **Johannes (person3) har en liten ugle på skulderen** (nye bilder i endringsprompt 5). Ugla er en del av bildet og
   er med overalt, også i gangsyklusen (den følger hoppet). Ugla er bare pynt: treffboksen er den samme som for de
-  andre karakterene (`CONFIG.player.radius`). Bytter du bildene igjen, holder det å legge nye filer med samme navn i
-  `assets/karakterer/`: spritene bygges fra filene hver gang spillet lastes, og serveren sender filene med
-  `no-cache`, så nettleseren henter de nye.
+  andre karakterene (`CONFIG.player.radius`).
+- **Johannes har grønne øyne** (endringsprompt 7). Oppdragsgivers nye bilder er lagt inn byte for byte. Bare de 4
+  øyepikslene i figuren og de 16 i portrettet er endret. Gangsyklusen bygges fra den nye figuren, og det finnes ingen
+  lagrede kopier med blå øyne.
+- **Bytter du bildene igjen**, legger du nye filer med samme navn i `assets/karakterer/` og øker
+  `CONFIG.characterArtVersion` med én. Spritene bygges fra filene hver gang spillet lastes. Versjonsnummeret legges
+  på adressen (`?v=3`), så ingen nettleser eller proxy viser en gammel kopi.
 - **Forhåndsvisning til godkjenning:** <http://localhost:3000/?debug=karakterer> viser alle fire med portrett,
   stående figur, animert gangsyklus og gangbilde 2 og 4, og dessuten Johan og Anonymous med venninnene.
 - Bildene av personene er bare brukt som forelegg. De ligger ikke i prosjektet og publiseres ikke.
@@ -111,8 +120,9 @@ mulige effekter ikke fortrenger alt annet. En tilgjengelig kombinasjon vises all
 aldri to ganger på rad. Vektene fra versjon 6 (`CONFIG.upgrades.weight`) brukes bare om `equalOdds` settes til
 `false`.
 
-**Kortene har fire nivåer (sjeldenhet):** grå = vanlig (1 steg), grønn = uvanlig (2 steg), blå = sjelden (3 steg,
-og det er her effektene kommer), oransje = legendarisk (5 steg, eller to effektnivåer). Sjansene er 68/23/7/2 %, og
+**Kortene har fire nivåer (sjeldenhet):** grå = vanlig (2 steg), grønn = uvanlig (4 steg), blå = sjelden (6 steg,
+og det er her effektene kommer), oransje = legendarisk (10 steg, eller to effektnivåer). Stegene ble doblet i
+endringsprompt 7 (var 1/2/3/5), fordi en vakt nå har omtrent 2,5 ganger færre nivåopp. Sjansene er 68/23/7/2 %, og
 «Hesteskoen» ganger alt over vanlig med 1 + flaks. Nye våpen er alltid uvanlige, passive alltid vanlige.
 
 **Effektene** (sjeldne kort, maks 3–5 nivåer per våpen, `CONFIG.upgrades.effects`): Gjennomtrengende (prosjektilet
@@ -132,7 +142,7 @@ ganger, se `CONFIG.upgrades.weight`.)
 **Nytt utvalg og Fjern kortet:** du starter med ett av hvert, og hver hjulpet boss gir ett til. «Nytt utvalg» (R)
 gir tre nye kort. «✕» på et kort (eller B og tallet) fjerner det for resten av vakta, og et nytt kort tar plassen.
 
-**Pakke fra leverandøren:** hver hjulpet boss legger igjen en pakke (3 oppgraderinger, Johan 5), og en hjulpet
+**Pakke fra leverandøren:** hver hjulpet boss legger igjen en pakke (6 oppgraderinger fra endringsprompt 7, var 3; Johan 5), og en hjulpet
 partner gjør det i 2,5 % av tilfellene (1 oppgradering). Pakkene inneholder bare våpenoppgraderinger, minst
 uvanlige, og trekkes fra sin egen tilfeldighetsstrøm. Partnerne legger dessuten igjen 1–5 ticket-lapper.
 
@@ -142,7 +152,8 @@ Oppdateringsstrålen og Fjernstyring gikk tidligere etter gangretningen eller ti
 **Kombinasjon (nivå 10):** når et våpen er på nivå 9 og du har den tilhørende passive (uansett nivå), tilbys
 kombinasjonen som et fremhevet kort ved neste nivåopp, merket «Nivå 10». Kortet og HUD-ikonet viser 10. Etter
 kombinasjonen tar våpenet ikke flere kort. Effektene beholdes. Har du ikke passiven, blir våpenet stående på nivå 9
-til du får den. **Hvert våpen har nøyaktig én kombinasjon** (den komplette tabellen står i README.md). Disse er nye
+til du får den. **Ingen kombinasjon (og ikke The Matrix) tilbys før 7:00** (endringsprompt 7,
+`upgrades.combinationEarliest`). Er kravene oppfylt før det, kommer kombinasjonen ved første nivåopp etter 7:00. **Hvert våpen har nøyaktig én kombinasjon** (den komplette tabellen står i README.md). Disse er nye
 eller endret i versjon 3–7.2:
 
 | Våpen | + Passiv | = Kombinasjon |
@@ -197,7 +208,8 @@ blå-hvite flammer. The Matrix godtar Livvakten på nivå 9 eller som denne komb
 
 ### Shopkeeperen (tidligere Sertifisering)
 
-Samme effekt som før (+8 % erfaring fra ticket-lapper per nivå, maks nivå 5), men nytt navn og nytt ikon: en
+Samme effekt som før (+8 % erfaring fra ticket-lapper per nivå, maks nivå 5; fra endringsprompt 7 lagt sammen med
+Julians bonus under taket på +50 %), men nytt navn og nytt ikon: en
 anonym figur i svart hettegenser med en stor hvit «A». Hetta dekker mesteparten av ansiktet, så bare nedre del av
 ansiktet og det brune skjegget synes (aldri øynene), og litt brunt hår stikker fram under kanten (endringsprompt 5).
 I The Matrix har han svart frakk og svarte solbriller rett under kanten av hetta. Når du har ham, står han som en
@@ -307,14 +319,16 @@ over baren):
 Tallene står i `CONFIG.elites`. Knappen «Partner» i debug-panelet setter ut én.
 
 **«Haster!»-avsenderen** (fra 2:30) holder seg 150–200 piksler unna og sender e-poster mot der spilleren
-står. Laptopen lyser og et «!» vises 0,5 sekunder før hvert skudd. Maks 15 % av advokatene og maks 30 samtidig,
-og maks 60 fiendeprosjektiler på kartet (e-poster og alle bossangrep til sammen).
+står. Laptopen lyser og et «!» vises 0,5 sekunder før hvert skudd (4,5 sekunder mellom e-postene ved start).
+Maks 5 % av advokatene og maks 8 samtidig (endringsprompt 7, var 15 % og 30), og maks 60 fiendeprosjektiler på
+kartet (e-poster og alle bossangrep til sammen).
 Tallene står i CONFIG.sender og CONFIG.enemyShots.
 
 ## Småting som gjør vakta bedre (versjon 6.1)
 
 - **Nivåkø:** når flere nivåer kommer på én gang (pakke, gratis lunsj), står det «(2 nivåer til etter dette)» i
-  overskriften, så du vet at flere kort kommer.
+  overskriften, så du vet at flere kort kommer. Fra endringsprompt 7 gir erfaringen aldri mer enn ett nivå om gangen:
+  resten lagres og gir neste nivå først når du har valgt kort, og hvert nivåopp gir nøyaktig ett kort.
 - **Boss-varsel:** 10 sekunder før hver boss kommer et banner («Nørdic-konsulenten kommer om 10 sekunder»), så
   du kan plassere deg (`bosses.warnBefore`).
 - **Lappemagnet:** ved nivåopp og når en pakke åpnes, flyr alle lapper innen 140 piksler til deg, så pausen aldri
@@ -346,7 +360,59 @@ Tallene står i CONFIG.sender og CONFIG.enemyShots.
 
 Tallene står i `CONFIG.tickets` og `CONFIG.cloudSync`. Lappemagneten ved nivåopp (140 piksler) er uendret.
 
-## Ta et punkt på kartet (endringsprompt 5 og 6)
+## Erfaring og nivåer (endringsprompt 7)
+
+Nivåopp går mye saktere enn før. Målet er at en god spiller får første kombinasjon rundt 9–11 minutter, og at det
+ikke går an å få alt i løpet av en runde.
+
+- **Kurven:** erfaring til neste nivå = 50 + 20 × nivå + 19 × nivå² (`CONFIG.level`, var 15 + 6 × nivå + 3 × nivå²).
+  Nivå 1 → 2 koster 89, nivå 9 → 10 koster 1 769 og nivå 20 → 21 koster 8 050.
+- **Ett nivå om gangen:** erfaring utover det neste nivået koster, lagres og gir neste nivå først når du har valgt
+  kort. Hvert nivåopp gir nøyaktig ett kort.
+- **Erfaringsbonuser legges sammen** (Shopkeeperen +8 % per nivå og Julian +6 % blir én sum), med et samlet tak på
+  +50 % (`level.xpBonusCap`).
+- **Punkt-hendelsene gir fortsatt +1 nivå.** Det gratisnivået flytter deg videre på kurven som et vanlig nivå, og det
+  er regnet med i målene under.
+- **Sikkerhetsnett:** ingen kombinasjon før 7:00 (`upgrades.combinationEarliest`).
+
+Hvert kort gir dobbelt så mange steg som før, og bosspakkene har 6 oppgraderinger. Fordi spilleren har færre kort,
+kommer det også færre advokater:
+
+| Hva | Nå | Før |
+| --- | --- | --- |
+| Innrykk (`spawn.rate`) | halvert | – |
+| Bølger og lunsjrush | 60 % | – |
+| «Haster!»-avsendere | maks 8 | maks 30 |
+| Frustrasjon, vanlige advokater (`scaling.frustrationScale`) | 0,8 | – |
+| Frustrasjon, bosser (`bosses.frustrationScale`) | 0,7 | – |
+
+Spillernivå for en god spiller (bot-testen, 120 runder). Prompten ba om tabellen i midtkolonnen og åpnet for å
+justere den hvis kombinasjonene og rundelengden krevde det. Nivåene ligger omtrent ett nivå over, fordi
+kombinasjonene ellers kom først etter 11,5–12,5 minutter:
+
+| Tid | Mål i prompten | Målt (god spiller) |
+| --- | --- | --- |
+| 1:00 | 2–3 | 2,4 |
+| 3:00 | 5–6 | 6,9 |
+| 5:00 | 8–9 | 10,3 |
+| 8:00 | 12–14 | 14,7 |
+| 10:00 | 15–17 | 17,6 |
+| 14:00–15:00 | 21–24 | 23,4–25 |
+
+**Hvor erfaringen kommer fra:** debug-overlegget viser det for runden du spiller. Erfaring per kilde:
+- ferske lapper;
+- gamle lapper;
+- saksbunker;
+- Sky-synk;
+- partnerlapper;
+- Gratis lunsj;
+- erfaringsbonus;
+- debug.
+
+Nivåopp telles fra erfaring og fra punkt-hendelser. Oppgraderinger telles fra kort og fra pakker. Bot-testen
+skriver det samme for alle rundene.
+
+## Ta et punkt på kartet (endringsprompt 5–7)
 
 Tre hendelser der spilleren må gå til et fast sted og holde et punkt:
 
@@ -364,10 +430,23 @@ Tre hendelser der spilleren må gå til et fast sted og holde et punkt:
   kort lyd når lyden er på. Stedet får et symbol på minikartet (en liten butikk for Jacobs, et sikte for de andre),
   og en gul pil med hendelsens ikon viser veien.
 - **Frist:** 45 sekunder. En liten boks under poengsummen viser «Ta punktet 0:32» og fremdriften.
-- **Ta punktet:** stå i sirkelen på gulvet (70 piksler radius, endringsprompt 6) i 8 sekunder. Bare du teller:
-  advokater i sirkelen påvirker ikke punktet, og sirkelen er stor nok til at du kan bevege deg og unngå dem. Sirkelen
-  og boksen blir gule mens du står i den. Går du ut, synker fremdriften sakte (0,5 sekunder per sekund). Første gang
-  du går inn, kommer en ekstra flokk (6 + 0,8 per minutt, maks 18) fra tre retninger.
+- **Ta punktet (endringsprompt 7):** stå i sirkelen på gulvet i 15 sekunder. Bare du teller: advokater i sirkelen
+  påvirker ikke punktet.
+  - **Sirkelen krymper** jevnt fra 55 til 30 piksler radius etter hvert som fremdriften går mot full. Startstørrelsen
+    vises som en svak prikket ring og sluttstørrelsen som en liten gul prikket ring, så du ser hvor mye den har
+    krympet.
+  - Sirkelen og boksen blir gule mens du står i den.
+  - **Går du ut, synker fremdriften dobbelt så fort** som den fylles (2 sekunder per sekund). Fremdriftsringen og
+    streken i boksen blir oransje mens den synker.
+  - **Er du ute i mer enn 4 sekunder, nullstilles den.**
+- **Press mens du tar punktet:**
+  - Første gang du går inn, kommer en ekstra flokk (6 + 0,8 per minutt, maks 18) fra tre retninger.
+  - Hvert 4. sekund du står inne, kommer en ring av juniorer (8 + 1 per minutt, maks 22) som lukker seg rundt
+    punktet, med en tydelig åpning.
+  - Fra 5:00 kommer 2 «Haster!»-avsendere rundt punktet (3 fra 10:00) og sender e-poster mot deg.
+- **Hvorfor 15 og ikke 12 sekunder:** prompten ba om 12 sekunder. Da tok den gode boten 72–76 % av punktene, over
+  målet på halvparten til to tredeler. Mer press rundt punktet endret ikke det, fordi våpnene rydder unna. Med 15
+  sekunder tar den gode boten 69 % og eksperten 75 % (120 runder).
 - **Belønning:** når ringen er full, kommer bonusteksten («Snacks! +15 maks energi», «+1 nivå») og du går opp et
   nivå med en gang (uten å bruke erfaring). Bonusene legges oppå passivene og vises som ikoner med antall (×2) til
   høyre for våpnene nederst. Bommer du, forsvinner hendelsen uten annen straff.
@@ -378,7 +457,7 @@ Alle tallene, tekstene og bonusene står i `CONFIG.capture`. Stedene står i `HO
 
 ## Hendelser (versjon 6)
 
-Vanskeligheten stiger **lineært**: frustrasjonen er 1 + 0,15 × (minutter − 3) fram til overtid (12:30), der den
+Vanskeligheten stiger **lineært**: frustrasjonen er 0,8 × (1 + 0,10 × (minutter − 3)) fram til overtid (12:30), der den
 stiger bratt. Variasjonen fra vakt til vakt kommer fra hendelsene, som vises som banner:
 
 | Hendelse | Når | Hva |
@@ -447,11 +526,13 @@ siden på nytt. De viktigste:
 | Vil du … | Endre |
 | --- | --- |
 | gjøre starten lettere/vanskeligere | `spawn.rate` (de første punktene), `scaling.startAfterMin` |
-| gjøre midtspillet lettere/vanskeligere | `scaling.frustrationPerMin` (lineær, +15 prosentpoeng per minutt), `spawn.rate` |
+| gjøre midtspillet lettere/vanskeligere | `scaling.frustrationPerMin` (lineær, +10 prosentpoeng per minutt), `scaling.frustrationScale`, `spawn.rate` |
+| gjøre bossene lettere/vanskeligere | `bosses.frustrationScale` (alle), eller hver boss sin `frustration` |
 | flytte «veggen» for de beste (nå ca. 15–17 min) | `scaling.overtimeFromMin` (12,5), `overtimeGrowthPerMin`, `overtimeSpeedPerMin` |
 | endre hendelsene (lunsjrush, partnermøte, kaffepause …) | `events` (når, hvor ofte, sjanse, størrelse) |
 | endre kortnivåene, effektene, nytt utvalg og pakkene | `upgrades`, `package`, `eliteDrops` |
-| gi raskere/tregere nivåopp | `level` (`base`, `perLevel`, `square`) |
+| gi raskere/tregere nivåopp | `level` (`base`, `perLevel`, `square`), taket på erfaringsbonus `level.xpBonusCap` |
+| flytte tidligste kombinasjon | `upgrades.combinationEarliest` (sekunder, nå 420 = 7:00) |
 | endre lappenes poengforfall, bunkene og taket | `tickets` (`freshTime`, `decayTime`, `minValue`, `max`, `mergeCell`) |
 | endre Sky-synk | `cloudSync` (first, interval, pullTime, minDistance) |
 | endre hendelsene med punkt på kartet | `capture` (når, frist, sirkel, holdetid, ekstraflokk, bonuser) |
@@ -474,13 +555,26 @@ og om runden endte med sparken. Den sjekker også at to like runder gir nøyakti
 spredning og hvor mange som fikk sparken (`--detaljer` lister alle tidene), og hvor ofte ekspertrobotene går opp i
 nivå mellom 5 og 12 minutter (bruker robotene fra versjon 6, med faste planer per karakter).
 
-**Balansetesten med den automatiske testspilleren (endringsprompt 6):** `node tools/bot-test.js [runder] [dato]`
-spiller 120 runder med god spiller og 120 med ekspert, med ulike rundeseeder og alle fire karakterene. Den skriver
-ut varighet (snitt, median, beste 10 %), når første og andre kombinasjon kommer, nivåopp per minutt, hjelp per
-sekund per våpen og kombinasjon, hvor ofte hver boss gir sparken, hvor mange punkt-hendelser som tas, og hvor ofte
-hvert kort tilbys. Knappen «Bot-test» i debug-panelet gjør det samme for 20 runder i nettleseren. Med tallene som
-ligger inne nå (versjon 7.2, tabellene står i ENDRINGSLOGG.md) varer ekspertrundene 11–12 minutter i median, de
-beste 10 % ryker rundt 15 minutter, og første kombinasjon kommer rundt 7,5 minutter. `--utennye` holder Ping-pong og Livvakten utenfor kortene, og `--utenkjeks` slår av
+**Balansetesten med den automatiske testspilleren (endringsprompt 6 og 7):** `node tools/bot-test.js [runder] [dato]`
+spiller 120 runder med god spiller og 120 med ekspert, med ulike rundeseeder og alle fire karakterene.
+`--nybegynner` (ferdighet 0,5) og `--fokus` (alt på startvåpenets kombinasjon, for å finne det tidligste mulige)
+kjører de to andre gruppene, og `--alle` kjører alle fire. Rapporten skriver ut:
+- varighet (snitt, median, beste 10 %);
+- første kombinasjon (tidligst, snitt, median) og andre kombinasjon;
+- spillernivå ved hvert minutt og nivåopp per minutt;
+- hvor erfaringen kom fra;
+- median per karakter;
+- hjelp per sekund per våpen og kombinasjon;
+- hvor ofte hver boss gir sparken;
+- hvor mange punkt-hendelser som tas;
+- hvor ofte hvert kort tilbys.
+
+Boten bygger opp ett hovedvåpen først, slik en god spiller gjør. Den bruker «Nytt utvalg» når ingen kort passer.
+Knappen «Bot-test» i debug-panelet gjør det samme for 20 runder i nettleseren. Med tallene som ligger inne nå
+(versjon 7.3, tabellene står i ENDRINGSLOGG.md):
+- ekspertrundene varer 14 minutter i median, og de beste 10 % ryker rundt 15 minutter;
+- første kombinasjon kommer rundt 10–11 minutter (median 9,9 for eksperten og 10,8 for den gode spilleren);
+- en spiller som satser alt på én kombinasjon, får den ved 7:00. `--utennye` holder Ping-pong og Livvakten utenfor kortene, og `--utenkjeks` slår av
 kjeksen. `--utenpunkt` slår av hendelsene med punkt på kartet, `--ikketa` lar dem komme uten at robotene går dit, og
 `--utensky` slår av Sky-synk. Det er med vilje: fra Johan og
 utover er det byggen og flaksen med kortene som avgjør. `--utenpartnere`, `--utenbosser` og `--utenhendelser` viser
@@ -530,8 +624,12 @@ Legg til `?debug` i adressen: <http://localhost:3000/?debug>. (`?debug=karaktere
 - minnebruk (i Chrome/Edge), automatisk kvalitetsnivå, inn per sekund og frustrasjonsfaktor
 - hjelp per sekund for hvert våpen spilleren har (siste 10 sekunder)
 - **nivåopp-tempoet** de siste 2 minuttene av vakta («nivåopp hvert 24. s»), og hvor mange Sky-synk og punkter du
-  har tatt. Bruk det til å måle hvor ofte en god spiller går opp i nivå mellom 5 og 12 minutter (målet er omtrent
-  hvert 20.–30. sekund ved minutt 8).
+  har tatt. Bruk det til å måle hvor ofte en god spiller går opp i nivå. Målet fra endringsprompt 7 er omtrent
+  hvert 40. sekund, se tabellen under «Erfaring og nivåer».
+- **hvor erfaringen kommer fra** (endringsprompt 7): erfaring per kilde med andel og omtrent hvor mange nivåer den
+  ga. Kildene er ferske og gamle lapper, saksbunker, Sky-synk, partnerlapper, Gratis lunsj, erfaringsbonus og debug.
+  Den samlede bonusen og taket vises også, i tillegg til nivåopp fra erfaring og fra punkt-hendelser og
+  oppgraderinger fra kort og fra pakker.
 
 Knappene lar deg hoppe 1 eller 3 minutter frem, gå opp ett eller ti nivåer, få fire våpen med 16 oppgraderinger
 («Maks bygg») og gjøre dem om til kombinasjoner, slå på udødelighet, og sette ut boss, hastesak, Ny PC,

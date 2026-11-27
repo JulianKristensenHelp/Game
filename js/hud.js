@@ -507,7 +507,8 @@ export class Hud {
     const pw = bw - 4 * s, py = y + bh - 3 * s;
     ctx.fillStyle = '#16202b';
     ctx.fillRect(bx + 2 * s, py, pw, s * 2);
-    ctx.fillStyle = '#f5cf3a';
+    // gold while it fills, orange-red while it sinks (Endringsprompt 7)
+    ctx.fillStyle = cap.draining ? '#ff7a3a' : '#f5cf3a';
     ctx.fillRect(bx + 2 * s, py, Math.round(pw * Math.min(1, cap.progress / K.holdTime)), s * 2);
   }
 

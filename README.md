@@ -31,9 +31,14 @@ long as you can, collect tickets, and climb the shared daily leaderboard.
   weapon's numbers at every level-up. Lawyers have frustration bars and every hit shows a number with the weapon's icon.
 - **Linear difficulty with events:** the curve is a straight line until overtime, with scheduled events on every
   shift (lunch rush, printer queue, partner meeting) and rare ones rolled per day (coffee break, free lunch, server crash).
-- **Capture-point events:** now and then you are called to a fixed spot on the map (snacks on Jacob's desk, a game
-  of ping-pong, a meeting) and have to hold a circle for 8 seconds with no lawyers in it. Taking it gives a permanent
-  bonus and a free level.
+- **Capture-point events:** now and then you are called to a fixed spot on the map (snacks at Jacobs, a game
+  of ping-pong, a meeting). To take it you hold a circle for 15 seconds. Only you count: lawyers in the circle do
+  not block it. The circle shrinks from 55 to 30 px as the progress fills. Progress drains twice as fast when you step
+  out and resets after 4 seconds outside. Closing rings of lawyers come while you hold it, and from 5:00 there are
+  also «Haster!» senders. Taking it gives a permanent bonus and a free level.
+- **Slow, deliberate levelling (v7.3):** a steep experience curve, one level at a time (exactly one card per level),
+  experience bonuses summed under a +50 % cap, and no combination before 7:00. A good player gets the first
+  combination around 10 minutes, and you cannot get everything in one round.
 - **Tickets never disappear:** experience is always paid in full, but the points go stale after 10 seconds (down to
   25 %). Stale tickets turn yellow and merge into case piles, and the rare «Sky-synk» pickup pulls every ticket on
   the map to you.
@@ -213,7 +218,7 @@ tools/                Balance simulator, weapon measurement, font generator
 | --- | --- |
 | `npm run simulate` | Bots play full runs in seconds and report survival times, plus determinism checks |
 | `npm run measure-weapons` | Measures help per second for every weapon at level 9, as its combination (level 10) and The Matrix |
-| `npm run bot-test` | The automatic test player plays 2 × 120 rounds with different run seeds and characters, and reports round length, combination timing, level pace, help per second per weapon, bosses' fire rates, capture points and card offer counts |
+| `npm run bot-test` | The automatic test player plays 2 × 120 rounds with different run seeds and characters, and reports round length, combination timing (earliest, mean, median), player level per minute, where the experience came from, per-character results, help per second per weapon, bosses' fire rates, capture points and card offer counts. `--nybegynner`, `--fokus` (all-in on one combination) and `--alle` add the other groups |
 | `npm run build-font` | Rebuilds `fonts/kontorpiksel.ttf` from the glyphs in `js/pixelfont.js` |
 
 On Windows without Node.js: `powershell -File tools/node.ps1 tools/simulate.js`.

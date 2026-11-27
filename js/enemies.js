@@ -85,7 +85,7 @@ function overtime(min) {
 export function frustrationFactor(t) {
   const sk = CONFIG.scaling;
   const min = t / 60;
-  return (1 + sk.frustrationPerMin * Math.max(0, min - sk.startAfterMin)) * overtime(min);
+  return sk.frustrationScale * (1 + sk.frustrationPerMin * Math.max(0, min - sk.startAfterMin)) * overtime(min);
 }
 /** Damage: increases steadily per minute. */
 export function damageFactor(t) {
@@ -425,7 +425,7 @@ export function fireEvent(s, id) {
   } else if (id === 'freeLunch') {
     for (let i = 0; i < k.tickets; i++) {
       const a = rng.next() * TAU, d = 30 + rng.next() * k.radius;
-      dropTicket(s, Math.min(INSIDE.x1 - 10, Math.max(INSIDE.x0 + 10, p.x + Math.cos(a) * d)), Math.min(INSIDE.y1 - 10, Math.max(INSIDE.y0 + 10, p.y + Math.sin(a) * d)), k.value);
+      dropTicket(s, Math.min(INSIDE.x1 - 10, Math.max(INSIDE.x0 + 10, p.x + Math.cos(a) * d)), Math.min(INSIDE.y1 - 10, Math.max(INSIDE.y0 + 10, p.y + Math.sin(a) * d)), k.value, 'lunch');
     }
   }
   s.stat.events++;
@@ -805,7 +805,7 @@ export function becomesHappy(s, e) {
     const n = D.ticketsMin + s.rng.drops.integer(D.ticketsMax - D.ticketsMin + 1);
     for (let i = 0; i < n; i++) {
       const a = (i / n) * TAU + e.phase;
-      dropTicket(s, e.x + (n > 1 ? Math.cos(a) * 10 : 0), e.y + (n > 1 ? Math.sin(a) * 8 : 0), Math.max(1, Math.round(e.points * D.ticketFraction)));
+      dropTicket(s, e.x + (n > 1 ? Math.cos(a) * 10 : 0), e.y + (n > 1 ? Math.sin(a) * 8 : 0), Math.max(1, Math.round(e.points * D.ticketFraction)), 'partner');
     }
     if (s.rng.drops.next() < CONFIG.package.eliteChance) dropPickup(s, 'package', e.x, e.y + 6, CONFIG.package.eliteCount);
     if (e.elite === ELITE.split) splitPartner(s, e);

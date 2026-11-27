@@ -92,7 +92,7 @@ export function spawnBoss(s, type) {
   e.returnNo = returnNo;
   e.r = k.radius;
   e.speed = k.speed;
-  e.hp = e.maxHp = k.frustration * Math.pow(R.frustration, returnNo);
+  e.hp = e.maxHp = k.frustration * B.frustrationScale * Math.pow(R.frustration, returnNo);
   // The bosses' damage grows a little with time, but not with the steep overtime curve (they are fair fights).
   e.damage = k.damage * Math.pow(R.damage, returnNo) * (1 + CONFIG.scaling.damagePerMin * (s.time / 60));
   e.points = Math.round(k.points * Math.pow(R.points, returnNo));

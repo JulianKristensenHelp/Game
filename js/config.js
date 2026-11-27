@@ -155,6 +155,11 @@ export const CONFIG = {
     ],
     /** After the last one, Johan comes back this often (seconds), stronger each time. */
     repeatEvery: 180,
+    /**
+     * Endringsprompt 7: one factor on every boss's frustration (on top of each boss's own number), lowered with the
+     * steeper level curve so the bosses are still helped in time with fewer cards.
+     */
+    frustrationScale: 0.7,
     /** The big clock turns yellow at 30 seconds left, and red (blinking and ticking) at 10. */
     warnYellow: 30, warnRed: 10,
     /** Seconds the game stays frozen with «DU HAR FÅTT SPARKEN!» before the end screen. */
@@ -248,7 +253,8 @@ export const CONFIG = {
   /**
    * The four playable characters (the IT department). Name and title are filled in by the client.
    * startWeapon = the weapon the character starts with (counts as one of four slots).
-   * bonus: maxEnergy (+energy), help (+fraction), speed (+fraction), pick (+fraction of the pickup radius for tickets).
+   * bonus: maxEnergy (+energy), help (+fraction), speed (+fraction), pick (+fraction of the pickup radius for tickets),
+   * xp (+fraction of the experience from tickets, added to the other experience bonuses under CONFIG.level.xpBonusCap).
    * sprite/portrait = the client's own pixel art (32 × 32 figure, 64 × 64 portrait), used exactly as it is.
    * The files are matched to the characters by their looks (person4 = Odyssefs, person3 = Johannes, person1 = Jin, person2 = Julian).
    */
@@ -256,20 +262,31 @@ export const CONFIG = {
     { id: 'k1', name: 'Odyssefs', title: 'IT-avdelingen', sprite: 'assets/karakterer/figur_person4.png', portrait: 'assets/karakterer/portrett_person4.png', startWeapon: 'powerCycle', bonus: { maxEnergy: 20 }, bonusText: '+20 maks energi' },
     { id: 'k2', name: 'Johannes', title: 'IT-avdelingen', sprite: 'assets/karakterer/figur_person3.png', portrait: 'assets/karakterer/portrett_person3.png', startWeapon: 'toner', bonus: { help: 0.10 }, bonusText: '+10 % hjelp' },
     { id: 'k3', name: 'Jin', title: 'IT-avdelingen', sprite: 'assets/karakterer/figur_person1.png', portrait: 'assets/karakterer/portrett_person1.png', startWeapon: 'hdmi', bonus: { speed: 0.10 }, bonusText: '+10 % bevegelseshastighet' },
-    { id: 'k4', name: 'Julian', title: 'IT-avdelingen', sprite: 'assets/karakterer/figur_person2.png', portrait: 'assets/karakterer/portrett_person2.png', startWeapon: 'mouse', bonus: { pick: 0.25 }, bonusText: '+25 % radius for å plukke opp ticket-lapper' },
+    // Endringsprompt 7: Julian's bonus is +6 % experience from tickets and case piles (also via Sky-synk), added into the
+    // shared experience bonus and its cap (CONFIG.level.xpBonusCap). Experience only, never points. Was +25 % pickup radius.
+    { id: 'k4', name: 'Julian', title: 'IT-avdelingen', sprite: 'assets/karakterer/figur_person2.png', portrait: 'assets/karakterer/portrett_person2.png', startWeapon: 'mouse', bonus: { xp: 0.06 }, bonusText: '+6 % erfaring fra ticket-lapper' },
   ],
+  /**
+   * Bumped whenever a character image is replaced. It is added to the image URLs (?v=…), so no browser or proxy
+   * keeps showing an old copy (version 7.3: Johannes got green eyes).
+   */
+  characterArtVersion: 3,
 
   /** The «Haster!» ("Urgent!") sender: keeps its distance and sends emails («Haster!!!») at the player. */
   sender: {
     name: '«Haster!»-avsender', from: 150, frustration: 50, speed: 40, radius: 7, damage: 9, points: 40,
     /** How often the type is chosen (fraction of the weight of a junior associate). */
     weight: 0.25,
-    /** Cap: max fraction of the active lawyers, and max number at the same time. */
-    maxFraction: 0.15, maxCount: 30,
+    /**
+     * Cap: max fraction of the active lawyers, and max number at the same time. Endringsprompt 7: 5 % and 8 (was 15 % and
+     * 30) – with fewer cards the player has little reach, and the emails from senders out of reach were what wore
+     * the bot down in the test.
+     */
+    maxFraction: 0.05, maxCount: 8,
     /** Tries to stay between these distances from the player. */
     distMin: 150, distMax: 200,
-    /** Seconds between each email (gets a bit faster over time, but never below the minimum). */
-    shotInterval: 3, shotFasterPerMin: 0.04, shotIntervalMin: 1.8,
+    /** Seconds between each email (gets a bit faster over time, but never below the minimum). Endringsprompt 7: 4.5 (was 3). */
+    shotInterval: 4.5, shotFasterPerMin: 0.04, shotIntervalMin: 1.8,
     /** Seconds of warning (the laptop lights up and a «!» over the head) before each email. */
     alert: 0.5,
   },
@@ -294,6 +311,12 @@ export const CONFIG = {
    * cap now, so the curve is a straight line until overtime: frustration = 1 + frustrationPerMin × (minutes − startAfterMin).
    */
   scaling: {
+    /**
+     * Endringsprompt 7: one factor on the frustration of every ordinary lawyer (all types, partners included), on top
+     * of the per-type numbers. Lowered when the level curve was made steeper: the player now has far fewer cards at
+     * any given minute, so the lawyers must need less help for the shift to last as long as before.
+     */
+    frustrationScale: 0.8,
     /** Extra frustration per minute after the calm start (0.2 = +20 percentage points per minute, linear). */
     frustrationPerMin: 0.10,
     /** The increase in frustration starts after this many minutes (calm start). */
@@ -313,8 +336,12 @@ export const CONFIG = {
   },
 
   spawn: {
-    /** Lawyers per second as [time in seconds, count per second]. Between the points the value glides smoothly. */
-    rate: [[0, 0.5], [30, 0.8], [90, 1.7], [300, 4.2], [600, 10.5], [900, 22]],
+    /**
+     * Lawyers per second as [time in seconds, count per second]. Between the points the value glides smoothly.
+     * Endringsprompt 7: halved (was 0.5, 0.8, 1.7, 4.2, 10.5, 22). With the steeper level curve the player has far
+     * fewer cards, and what kills is the number of lawyers (weapons reach too few), not how much help each one needs.
+     */
+    rate: [[0, 0.25], [30, 0.4], [90, 0.85], [300, 2.1], [600, 5.25], [900, 11]],
     /** Increase in lawyers per second for each minute after the last point. */
     overtimePerMin: 4,
     /** Max number of active lawyers (fixed and the same for everyone). */
@@ -336,11 +363,12 @@ export const CONFIG = {
   waves: {
     first: 45,
     intervalMin: 25, intervalMax: 40,
-    /** Flock: count = start + perMin × minutes (capped at max). */
-    flockStart: 10, flockPerMin: 4, flockMax: 60,
+    /** Flock: count = start + perMin × minutes (capped at max). Endringsprompt 7: × 0.6 (was 10 + 4/min). */
+    flockStart: 6, flockPerMin: 2.4, flockMax: 60,
     /** Ring: from this second at the earliest, and the chance that a wave becomes a ring. */
     ringFrom: 120, ringChance: 0.4,
-    ringStart: 20, ringPerMin: 3, ringMax: 60,
+    /** Endringsprompt 7: × 0.6 (was 20 + 3/min). */
+    ringStart: 12, ringPerMin: 1.8, ringMax: 60,
     ringRadius: 370,
     /** The opening in the ring, in radians (0.9 ≈ 50 degrees). */
     ringGap: 0.9,
@@ -368,8 +396,8 @@ export const CONFIG = {
     /** Scheduled events wait while a boss is out. */
     waitForBoss: true,
     defs: {
-      /** A flock of junior associates from one direction: count + perMin × minutes. */
-      lunchRush: { name: 'Lunsjrush!', text: 'Hele kantina kommer samtidig', type: 'junior', count: 24, perMin: 3, max: 70 },
+      /** A flock of junior associates from one direction: count + perMin × minutes. Endringsprompt 7: × 0.6 (was 24 + 3/min, max 70). */
+      lunchRush: { name: 'Lunsjrush!', text: 'Hele kantina kommer samtidig', type: 'junior', count: 14, perMin: 1.8, max: 42 },
       /** A flock of printer enthusiasts. */
       printerQueue: { name: 'Printerkø!', text: 'Printerentusiastene har funnet en ny printer', type: 'printer', count: 8, perMin: 1, max: 24 },
       /** A few partners (elites) at once, straight from the meeting room. */
@@ -395,12 +423,32 @@ export const CONFIG = {
     bossMargin: 60,
     /** Seconds the player has to take the point after the banner. */
     deadline: 45,
-    /** Radius of the circle on the floor (logical pixels). Endringsprompt 6: 70 (was 40), room to dodge inside it. */
-    radius: 70,
-    /** Seconds of standing in the circle to take the point. Only the player counts (Endringsprompt 6). */
-    holdTime: 8,
-    /** How fast the progress sinks while the player is outside (seconds of progress lost per second). */
-    drain: 0.5,
+    /**
+     * Radius of the circle on the floor (logical pixels). Endringsprompt 7: it starts at «radius» and shrinks evenly to
+     * «radiusEnd» as the progress nears full, so the last seconds are the hardest (was a fixed 70 in Endringsprompt 6).
+     */
+    radius: 55, radiusEnd: 30,
+    /**
+     * Seconds of standing in the circle to take the point. Only the player counts. Endringsprompt 7 asked for 12 (was
+     * 8); the bot test showed a good player then took about 3 of 4, above the 1/2–2/3 target, and more pressure
+     * around the point did not change that (the weapons clear it), so it is 15 (about 2 of 3 in the bot test).
+     */
+    holdTime: 15,
+    /** How fast the progress sinks while the player is outside: seconds of progress lost per second (2 = twice as fast as it fills). */
+    drain: 2,
+    /** Seconds in a row outside the circle before the progress is reset to zero. */
+    resetAfter: 4,
+    /**
+     * Endringsprompt 7: while the player stands in the circle, a ring of junior associates closes in around the point
+     * every «interval» seconds (of time inside), with an opening of «gap» radians. count + perMin × minutes, capped at max,
+     * «distance» pixels from the point; spots closer than «minFromPlayer» to the player are skipped (never on top of them).
+     */
+    ring: { interval: 4, count: 8, perMin: 1, max: 22, distance: 300, gap: 1.0, minFromPlayer: 180 },
+    /**
+     * Endringsprompt 7: from «from» seconds, «count» «Haster!» senders (from «lateFrom»: «lateCount») turn up around the
+     * point when the player first steps in, «distance» pixels from it, and send emails at whoever holds it.
+     */
+    senders: { from: 300, count: 2, lateFrom: 600, lateCount: 3, distance: 170 },
     /** Each event happens at most this many times per shift. */
     maxPerEvent: 2,
     /**
@@ -490,8 +538,11 @@ export const CONFIG = {
     pickText: 'Sky-synk! Alle lappene kommer til deg',
   },
 
-  /** Experience required for the next level = base + perLevel × level + square × level². */
-  level: { base: 15, perLevel: 6, square: 3.0 },
+  /**
+   * Experience required for the next level = base + perLevel × level + square × level².
+   * xpBonusCap (Endringsprompt 7) = the cap on the SUM of all experience bonuses (0.5 = +50 %).
+   */
+  level: { base: 50, perLevel: 20, square: 19, xpBonusCap: 0.5 },
   /** At every level-up (and package), tickets within this radius fly to the player, so the pause never costs them. */
   levelMagnet: 140,
 
@@ -523,11 +574,15 @@ export const CONFIG = {
    * numeric card gives. tierOdds = chance per tier; «Hesteskoen» (luck) multiplies the odds of everything above common.
    */
   upgrades: {
+    /**
+     * Endringsprompt 7: twice the growth steps per card (was 1 / 2 / 3 / 5). With the steeper level curve a shift has
+     * about 2.5 times fewer level-ups, so each card has to count for more for the build to keep up.
+     */
     tiers: [
-      { id: 'common', name: 'Vanlig', color: '#8a94a0', steps: 1 },
-      { id: 'uncommon', name: 'Uvanlig', color: '#2fd06a', steps: 2 },
-      { id: 'rare', name: 'Sjelden', color: '#3aa0ff', steps: 3 },
-      { id: 'legendary', name: 'Legendarisk', color: '#ff9f43', steps: 5 },
+      { id: 'common', name: 'Vanlig', color: '#8a94a0', steps: 2 },
+      { id: 'uncommon', name: 'Uvanlig', color: '#2fd06a', steps: 4 },
+      { id: 'rare', name: 'Sjelden', color: '#3aa0ff', steps: 6 },
+      { id: 'legendary', name: 'Legendarisk', color: '#ff9f43', steps: 10 },
     ],
     tierOdds: [0.68, 0.23, 0.07, 0.02],
     /**
@@ -535,6 +590,12 @@ export const CONFIG = {
      * here: it is always limits.weaponLevel − 1 (set at the bottom of this file), so the cap lives in one place.
      */
     combinationAfter: 0,
+    /**
+     * Endringsprompt 7 (safety net): no combination (and no «The Matrix») is offered before this many seconds into the
+     * shift, however fast the player has levelled. If the requirements are met earlier, it is offered at the first
+     * level-up after this time.
+     */
+    combinationEarliest: 420,
     /** Rerolls («Nytt utvalg») and banishes («Fjern kortet») per shift, and how many more each helped boss gives. */
     rerolls: 1, banishes: 1, perBoss: 1,
     /**
@@ -580,7 +641,8 @@ export const CONFIG = {
    */
   package: {
     name: 'Pakke fra leverandøren',
-    bossCount: 3, johanCount: 5, eliteCount: 1,
+    /** Endringsprompt 7: a boss package holds 6 increments (was 3), so the combinations come at 9–11 min with fewer levels. */
+    bossCount: 6, johanCount: 5, eliteCount: 1,
     /** Chance that a helped partner drops a package (drops stream). */
     eliteChance: 0.025,
     minTier: 1,
@@ -984,8 +1046,14 @@ export const CONFIG = {
    */
   botTest: {
     maxMinutes: 25, rounds: 120, browserRounds: 20,
-    /** How much the bot prefers its lowest-level weapon when it picks an upgrade (a balanced build; 0 = no preference). */
-    spreadUpgrades: 1.5,
+    /**
+     * How much the bot prefers its lowest-level weapon when it picks an upgrade (positive = an even build, 0 = no
+     * preference, negative = it builds up its strongest weapon first). Endringsprompt 7: −3 (was 1.5): it still fills
+     * all four slots and takes the passives, but levels one main weapon first, like a good player.
+     */
+    spreadUpgrades: -3,
+    /** Endringsprompt 7: the bot uses a reroll when no card on the table scores at least this (nothing for its build). */
+    rerollBelow: 35,
     usefulPassives: ['overtime', 'admin', 'paperTray', 'coffeeMachine', 'backup', 'ergonomicChair', 'standingDesk', 'biggerCan', 'grateful', 'sneakers', 'firewall', 'mechKeyboard'],
   },
 

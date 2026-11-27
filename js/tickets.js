@@ -16,9 +16,10 @@ const CS = CONFIG.cloudSync;
  * xp = full experience (a stale ticket or a pile pays CONFIG.tickets.staleXp of it), pts = the point base that the age factor is applied to,
  * age = seconds since it was dropped (for a pile: its point-weighted age), count = tickets in it (1 = a single ticket).
  * dragged = flying toward the player. sync = pulled in by «Sky-synk» (arrives within its pull time).
+ * src = where it came from, only for the debug log of experience sources: '' (an ordinary lawyer), 'partner' or 'lunch'.
  */
 export function makeTicket() {
-  return { x: 0, y: 0, xp: 0, pts: 0, age: 0, count: 1, dragged: false, sync: false };
+  return { x: 0, y: 0, xp: 0, pts: 0, age: 0, count: 1, dragged: false, sync: false, src: '' };
 }
 
 export function makePickup() {
@@ -36,8 +37,11 @@ export function pointFactor(age, fresh) {
   return Math.max(L.minValue, 1 - ((1 - L.minValue) * (age - fresh)) / L.decayTime);
 }
 
-/** Drops a ticket where the lawyer stood. At the cap it goes into the nearest pile instead. */
-export function dropTicket(s, x, y, value) {
+/**
+ * Drops a ticket where the lawyer stood. At the cap it goes into the nearest pile instead.
+ * @param {string} [src] '' (an ordinary lawyer), 'partner' or 'lunch' – only for the debug log of experience sources
+ */
+export function dropTicket(s, x, y, value, src = '') {
   const f = s.tickets;
   if (f.n >= L.max) {
     // The nearest pile or stale ticket within «capJoinRadius», otherwise simply the nearest ticket
@@ -65,6 +69,7 @@ export function dropTicket(s, x, y, value) {
   l.count = 1;
   l.dragged = false;
   l.sync = false;
+  l.src = src;
 }
 
 /**
@@ -231,7 +236,18 @@ export function updateTickets(s, dt) {
       const factor = pointFactor(l.age, fresh);
       givePoints(s, l.pts * factor);
       const stale = l.count > 1 || l.age > fresh;
-      s.xp += l.xp * (stale ? L.staleXp : 1) * p.mod.xp;
+      // Endringsprompt 7: p.mod.xp is ONE summed bonus (Shopkeeperen + the character), capped in computeBonuses()
+      const base = l.xp * (stale ? L.staleXp : 1);
+      const gained = base * p.mod.xp;
+      s.xp += gained;
+      // The debug log of experience sources (never read by the game)
+      const log = s.xpLog;
+      if (l.sync) log.cloud += base;
+      else if (l.count > 1) log.pile += base;
+      else if (l.src) log[l.src] += base;
+      else if (stale) log.stale += base;
+      else log.fresh += base;
+      log.bonus += gained - base;
       s.stat.ticketsPicked += l.count;
       if (l.count === 1 && l.age <= fresh) s.stat.ticketsFresh++;
       s.events.push('ticket');

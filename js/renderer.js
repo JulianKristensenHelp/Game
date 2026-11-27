@@ -14,6 +14,7 @@ import { makeCanvas, ctx2d } from './pixel.js';
 import { icon } from './icons.js';
 import { ELITE_TRAIT } from './enemies.js';
 import { freshTime } from './tickets.js';
+import { captureRadius } from './capture.js';
 
 const VB = CONFIG.view.width, VH = CONFIG.view.height;
 const KB = CONFIG.map.width, KH = CONFIG.map.height;
@@ -455,14 +456,20 @@ export class Renderer {
    */
   drawCapture(s, a, now) {
     const ctx = this.ctx, C = CONFIG.capture;
-    const R = C.radius;
+    // Endringsprompt 7: the circle shrinks with the progress. The starting size stays as a faint dotted outline
+    // and the end size as a small dotted target, so the player sees how far it has shrunk and how small it gets.
+    const R = Math.round(captureRadius(a));
+    ctx.globalAlpha = 0.45;
+    drawSprite(ctx, ring(C.radius, '#14b8a6', 1, 0, 3), a.x, a.y);
+    drawSprite(ctx, ring(C.radiusEnd, '#f5cf3a', 1, 0, 3), a.x, a.y);
     const color = a.inside ? '#f5cf3a' : '#14b8a6';
     ctx.globalAlpha = this.settings.fewerFlashes ? 0.85 : 0.7 + Math.sin(now * 4) * 0.15;
     drawSprite(ctx, ring(R, color, 2, 0.1, 6), a.x, a.y);
     ctx.globalAlpha = 1;
-    // the progress ring just inside the circle, clockwise from the top
+    // the progress ring just inside the circle, clockwise from the top: light yellow while it fills, orange-red while
+    // it sinks (the player is outside), so the player sees both how far it has come and that it is falling
     const fraction = Math.min(1, a.progress / C.holdTime);
-    ctx.fillStyle = '#fff6c8';
+    ctx.fillStyle = a.draining ? '#ff7a3a' : '#fff6c8';
     const r = R - 5;
     for (let t = 0; t < fraction * TAU; t += 0.07) ctx.fillRect(Math.round(a.x + Math.sin(t) * r) - 1, Math.round(a.y - Math.cos(t) * r) - 1, 2, 2);
   }
@@ -482,7 +489,7 @@ export class Renderer {
     const ctx = this.ctx;
     const bob = this.settings.fewerFlashes ? 0 : Math.round(Math.sin(now * 3) * 2);
     const ic = icon('capture:' + a.id);
-    ctx.drawImage(ic, Math.round(a.x - 8), Math.round(a.y - CONFIG.capture.radius - 20 + bob));
+    ctx.drawImage(ic, Math.round(a.x - 8), Math.round(a.y - captureRadius(a) - 20 + bob));
   }
 
   /** Happy animation: smile and thumbs up with a small hop and sparkles, then a small pixel cloud. */

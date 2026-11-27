@@ -1,5 +1,225 @@
 # Endringslogg
 
+## Versjon 7.3 – 27. november 2026 (endringsprompt 7)
+
+Bygget på versjon 7.2. Det den andre utvikleren har laget, er bare endret der endringsprompten krever det for å nå
+målene i seksjon 2 og 4. Hver slik endring står under «Konflikter».
+
+### 1. Grønne øyne på Johannes
+- `figur_person3.png` og `portrett_person3.png` er byttet med oppdragsgivers vedlagte filer, byte for byte (samme
+  filhash).
+- Kontrollert piksel for piksel mot de gamle filene. Bare øynene er endret: 4 piksler i figuren og 16 i portrettet,
+  fra blått (#344c66/#7096b8) til grønt (#2c5834/#649a5c). Ugla og alt annet er likt.
+- Gangsyklusen bygges fra den nye figuren når spillet lastes, etter de samme reglene: bare beina og føttene endres.
+  Kontrollert i nettleseren: alle fire gangbildene har grønne øyne, og ingen har blå.
+- Det fantes ingen lagrede kopier av spritene (ingen innebygde bilder og ingen lagring i nettleseren). For at ingen
+  nettleser eller proxy skal vise en gammel kopi, får bildeadressene et versjonsnummer
+  (`CONFIG.characterArtVersion`, `?v=3`).
+- Sjekket i karaktervalget, HUD-en og `?debug=karakterer`. Slutt-skjermen og topplisten bruker de samme bildene
+  (samme kilde).
+
+### 2. Levlingen gikk alt for fort
+**Årsaken.** Erfaringskurven var for slak tidlig i runden i forhold til hvor mye erfaring som kommer inn.
+- Kurven 15 + 6 × nivå + 3 × nivå² ga 24–60 erfaring for de første nivåene og 1 260 til sammen for nivå 1–10.
+- En god spiller fikk rundt 450 erfaring første minutt og 1 700 innen 2:00, det vil si nivå 6 etter 1:00 og nivå 11
+  etter 2:00 (målt med bot-testen).
+- Med 10 nivåopp innen 2:00 har en spiller som satser alt på ett våpen, nøyaktig de 9 kortene en kombinasjon krever,
+  hvis kortene faller riktig.
+
+Hvordan vi kom dit:
+- Kurven ble laget i versjon 6 for kort *uten* nivåtak, der mange små nivåer var meningen.
+- I versjon 7.2 kom taket tilbake (nivå 9, kombinasjon etter 8 kort), men kurven ble ikke tilpasset. Den ble tvert
+  imot gjort billigere tidlig (base 20 → 15, per nivå 10 → 6).
+- Lappene som aldri forsvinner (versjon 7.1), gir mer erfaring enn kurven var laget for. Det gjør også saksbunkene,
+  Sky-synk og partnerlappene.
+
+Det som *ikke* var årsaken (sjekket):
+- Advokatene gir akkurat det tabellen sier.
+- Ett nivåopp ga allerede ett kort (`giveCard`).
+- Det fantes bare én erfaringsbonus (Shopkeeperen), så ingen bonuser ble ganget med hverandre.
+
+**Debug-logg over erfaringen:** overlegget viser nå erfaring per kilde med andel og omtrent hvor mange nivåer hver
+kilde ga. Kildene er:
+- ferske lapper;
+- gamle lapper;
+- saksbunker;
+- Sky-synk;
+- partnerlapper;
+- Gratis lunsj;
+- erfaringsbonus;
+- debug.
+
+Overlegget viser også nivåopp fra erfaring og fra punkt-hendelser, og oppgraderinger fra kort og fra pakker.
+Bot-testen skriver det samme for alle rundene. Fordeling for en god spiller:
+
+| Kilde | Andel av erfaringen |
+| --- | --- |
+| Ferske lapper | 39 % |
+| Saksbunker | 31 % |
+| Partnerlapper | 20 % |
+| Sky-synk | 4 % |
+| Gamle lapper | 3 % |
+| Bonus | 2 % |
+
+Per runde gir det 16,3 nivåopp fra erfaring og 3,1 fra punkt-hendelser. Våpnene får 19,4 oppgraderinger fra kort og
+13,4 fra pakker per runde.
+
+**Endringer:**
+- **Ny kurve:** 50 + 20 × nivå + 19 × nivå². Nivå 1 → 2 koster 89, nivå 9 → 10 koster 1 769 og nivå 20 → 21
+  koster 8 050.
+- **Ett nivå om gangen:** erfaring utover det neste nivået koster, lagres og gir neste nivå først når kortet er valgt.
+  Hvert nivåopp gir nøyaktig ett kort. Det er testet med en stor erfaringsmengde på én gang og i 6 bot-runder, der
+  antall nivåopp var lik antall valgte kort.
+- **Erfaringsbonuser legges sammen** til én sum med tak på +50 % (`level.xpBonusCap`). Testet: Shopkeeperen 5 og
+  Julian gir +46 %, og over taket blir det +50 %.
+- Punkt-hendelsene gir fortsatt +1 nivå, og det flytter deg langs kurven som et vanlig nivå.
+- **Sikkerhetsnett:** ingen kombinasjon og ikke The Matrix før 7:00 (`upgrades.combinationEarliest: 420`). Testet:
+  ingen ved 6:59, tilbys ved 7:00.
+
+**Balanse.** Med den nye kurven alene døde boten etter ca. 4 minutter, fordi den nå har omtrent 2,5 ganger færre
+kort. Målingene viste:
+- Det var antall advokater som drepte boten, og hvor mye hjelp hver trengte betydde lite. På lave nivåer blir de
+  fleste hjulpet på ett treff, så det som teller er rekkevidde og antall prosjektiler.
+- Boten ble slitt ned av e-poster fra avsendere den ikke nådde. Ved døden var det ofte bare 2–4 advokater i nærheten,
+  men 5–58 e-poster i lufta.
+- Lunsjrush og partnermøte kommer samtidig ved 7:30, og det ga en topp i skaden.
+- Siden alle kort har lik sjanse (endringsprompt 6), er det tilbudene, ikke nivåene, som begrenser hvor fort et våpen
+  når nivå 9.
+
+| Endret | Nå | Før |
+| --- | --- | --- |
+| Steg per kort (vanlig / uvanlig / sjelden / legendarisk) | 2 / 4 / 6 / 10 | 1 / 2 / 3 / 5 |
+| Oppgraderinger i bosspakke | 6 | 3 |
+| Innrykk (`spawn.rate`) | 0,25 → 11 per sekund | 0,5 → 22 |
+| Flokker og ringbølger | 6 + 2,4/min og 12 + 1,8/min | 10 + 4/min og 20 + 3/min |
+| Lunsjrush | 14 + 1,8/min, maks 42 | 24 + 3/min, maks 70 |
+| «Haster!»-avsendere | maks 5 % / 8, e-post hvert 4,5 s | 15 % / 30, hvert 3 s |
+| Frustrasjon, vanlige advokater (ny `scaling.frustrationScale`) | 0,8 | 1 |
+| Frustrasjon, bosser (ny `bosses.frustrationScale`) | 0,7 | 1 |
+| Bot: «spre oppgraderinger» | −3 | 1,5 |
+
+Om tallene i tabellen:
+- Passivenes verdier er uendret. Tekstene deres har tallene skrevet inn, og flere av dem er den andre utviklerens
+  arbeid.
+- Kort-tekstene for våpen regnes ut av spillet, så de viser de nye stegene automatisk.
+- Boten bygger nå opp ett hovedvåpen først og bruker «Nytt utvalg» når ingen kort passer, slik en god spiller
+  gjør.
+
+### 3. Ny bonus for Julian
+- Karakteren med plukkeradius-bonusen heter Julian i koden også (`k4`, bildefil `person2`).
+- Den nye bonusen er **+6 % erfaring fra ticket-lapper** (`bonus: { xp: 0.06 }`). Den gjelder alle lapper og
+  saksbunker, også med Sky-synk, og legges i den felles summen under taket på +50 %. Bare erfaring, aldri poeng.
+  Testet: samme lapp gir like mange poeng for Julian og Odyssefs, og 6 % mer erfaring for Julian.
+- Teksten i karaktervalget er «+6 % erfaring fra ticket-lapper». Startvåpenet er uendret.
+- Bot-testen gir disse medianene (120 runder per gruppe):
+
+  | Karakter | God spiller: varighet / første kombinasjon | Ekspert: varighet / første kombinasjon |
+  | --- | --- | --- |
+  | Odyssefs | 14,2 / 11,3 | 14,2 / 10,8 |
+  | Johannes | 14,0 / 10,6 | 14,4 / 10,4 |
+  | Jin | 14,0 / 10,4 | 14,0 / 8,9 |
+  | Julian | 13,4 / 10,2 | 13,9 / 9,6 |
+
+  Julian er omtrent like sterk som de andre: litt tidligere kombinasjon og like lang runde innenfor støyen (30
+  runder per karakter og gruppe). 6 % er derfor beholdt.
+
+### 4. Vanskeligere capture-punkter
+- **Sirkelen krymper** jevnt fra 55 til 30 logiske piksler etter hvert som fremdriften går mot full
+  (`capture.radius`, `radiusEnd`).
+- **Fremdriften faller dobbelt så fort** som den fylles (`drain: 2`), og **nullstilles etter 4 sekunder** utenfor
+  (`resetAfter`).
+- **Ring av advokater:** hvert 4. sekund spilleren står inne kommer en ring av juniorer som lukker seg rundt punktet,
+  med en tydelig åpning. Det er 8 + 1 per minutt, maks 22, og de kommer i tillegg til den gamle ekstraflokken.
+  Åpningens retning trekkes fra rundens strøm for hendelsesdetaljer, ikke fra dagens punktstrøm, så strukturen i
+  «Dagens vakt» er uendret.
+- **Avsendere:** fra 5:00 står 2 «Haster!»-avsendere rundt punktet (3 fra 10:00) og sender e-poster mot den som
+  holder det.
+- **Fristen** er fortsatt 45 sekunder. Advokater i sirkelen påvirker fortsatt ikke fremdriften.
+- **Visning:**
+  - Startstørrelsen vises som en svak prikket ring og sluttstørrelsen som en liten gul prikket ring, så du ser at
+    sirkelen krymper.
+  - Fremdriftsringen og streken i boksen er lyse/gule mens fremdriften fylles, og oransje mens den synker.
+  - Kontrollert i nettleseren: oransje piksler bare mens fremdriften synker, og sirkel og ikon følger radiusen.
+- **Holdetid 15 sekunder, ikke 12.** Med 12 sekunder tok den gode boten 72–76 %, over målet på halvparten til to
+  tredeler. Mer press (ring hvert 3. sekund, flere avsendere, større flokk) endret det nesten ikke, fordi våpnene
+  rydder unna. Med 15 sekunder tar den gode boten 69 % og eksperten 75 %. Nybegynneren tar 0 %, fordi den sjelden
+  lever lenge nok til å rekke dem. Det er litt over to tredeler for den gode boten, men innenfor «omtrent». Vil dere
+  ha den lavere, er `capture.holdTime` 16 eller en litt mindre `radiusEnd` neste steg.
+
+### 5. Testrapport
+Kommandoen er `node tools/bot-test.js 120 --alle`: 120 runder per gruppe, med ulike rundeseeder og alle fire
+karakterene, dato 2026-11-27.
+
+| | Nybegynner (0,5) | God (0,9) | Ekspert (1,0) | Fokusert (1,0) |
+| --- | --- | --- | --- | --- |
+| Varighet snitt / median | 3,6 / 2,8 min | 12,5 / 13,8 | 13,0 / 14,1 | 7,3 / 5,0 |
+| Beste 10 % fra / lengste | 8,2 / 13,4 | 14,9 / 15,4 | 15,0 / 15,9 | 13,9 / 15,6 |
+| Første kombinasjon: runder | 2 av 120 | 89 av 120 | 94 av 120 | 29 av 120 |
+| Første kombinasjon: tidligst / snitt / median | 10,1 / 10,2 / 10,2 | 7,0 / 10,8 / 10,8 | 7,0 / 10,1 / 9,9 | 7,0 / 7,8 / 7,4 |
+| Andre kombinasjon, median | – | 12,9 | 12,6 | – |
+| Punkt-hendelser tatt | 0 % | 69 % | 75 % | 31 % |
+| Sparket (Nørdic / Printer / Anonymous / Johan) | 0/51 · 0/21 · 0/7 · 0/3 | 2/115 · 0/109 · 0/102 · 0/102 | 2/117 · 0/111 · 1/106 · 0/113 | 41/112 · 3/49 · 1/40 · 0/25 |
+
+Om tallene i testrapporten:
+- Den fokuserte boten tar bare startvåpenet og passiven det trenger. Uten sperren fikk den kombinasjonen tidligst
+  ved 4,0–7,4 minutter (de fleste 6–7). Med sperren kommer den ved 7:00. Med bare ett våpen klarer den ofte ikke den
+  første bossen i tide (sparket 41 av 112 ganger).
+- Nybegynneren går tilfeldig halve tiden og dør derfor tidlig (median 2,8 min). Den er med for å vise at
+  punktene og kombinasjonene krever innsats. Den er ikke et mål for hvor lenge en ny menneskelig spiller holder ut. Det er prisen for å satse alt på én ting.
+
+**Spillernivå ved hvert minutt** (god spiller):
+
+| Minutt | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Nå | 2,4 | 4,6 | 6,9 | 8,1 | 10,3 | 11,5 | 13,2 | 14,7 | 16,3 | 17,6 | 19,1 | 20,4 | 21,8 | 23,4 |
+| Før (7.2) | 6,2 | 11,0 | 15,8 | 18,6 | 22,4 | 25,3 | 27,6 | 31,0 | 34,8 | 36,6 | 39,6 | 42,7 | 44,6 | 49,2 |
+
+- Ekspertens nivå er nesten det samme, og 25,2 ved minutt 15.
+- **Avvik fra tabellen i prompten:** nivåene ligger ca. ett nivå over tabellen fra minutt 3. Prompten åpner for å
+  justere tabellen. Med en kurve som treffer tabellen nøyaktig, kom første kombinasjon for den gode spilleren først
+  etter 11,3–12,4 minutter, fordi kortene har lik sjanse og pakkene fordeles på alle våpen.
+- Vi valgte kombinasjonsmålet (9–11 min) og rundelengden framfor nivåtabellen.
+
+**Våpen og kombinasjoner med doble steg** (`tools/measure-weapons.js`, nivå 9 og kombinasjon mot 150 faste
+advokater):
+- Nivå 9 ligger fra 69 % til 138 % av snittet.
+- Kombinasjonene ligger fra 44 % til 136 %, The Matrix på 204 %.
+- Hver kombinasjon er fortsatt tydelig sterkere enn sitt eget våpen på nivå 9, fra 1,3 til 5 ganger.
+
+**Andre kontroller:**
+- Simulatoren er kjørt. Determinismesjekkene er OK:
+  - like runder gir samme resultat;
+  - Dobbel skjerm;
+  - utseendet påvirker ikke spillet;
+  - samme seed gir samme runde;
+  - to seeder gir ulike runder;
+  - dagens vakt er lik for alle.
+- Typesjekken har de samme 4 kjente advarslene i `input.js` som før.
+
+**Stresstest:** scenariet «Snacks på Jacobs + lunsjrush + partnermøte» (det med flest nye advokater fra
+endringene) er kjørt i 60 sekunder med `?debug&utenGPU`, 400 advokater og udødelighet. Resultat:
+- 120 FPS i snitt og laveste 120 FPS;
+- frametid 2,39 ms i snitt og 11,6 ms i verste bilde, 0 hakk over 16,7 ms;
+- minne 4,6 → maks 6,7 → 6,0 MB, altså flatt.
+
+Hele stresstest-serien (ca. 15 min) er ikke kjørt på nytt. Innrykket er halvert, så det er færre advokater enn
+før på alle tidspunkt utenom stresstesten, som fyller opp til taket på 400 uansett.
+
+### Konflikter med den andre utviklerens arbeid
+- **Kortsjeldenheten** (`upgrades.tiers`, den andre utviklerens kortsystem fra versjon 6): stegene er doblet. Det
+  var nødvendig for å nå målene i seksjon 2 med færre nivåopp. Sjansene og fargene er uendret.
+- **Hendelser og bølger** (lunsjrush, flokker og ringbølger) og **«Haster!»-avsenderen** er tonet ned av samme
+  grunn.
+- **Partnerne (eliter)** er bare berørt av den felles frustrasjonsfaktoren. Egenskapene og tallene deres er
+  uendret.
+- **Passivene** er ikke endret.
+
+### Filer
+`js/config.js`, `js/capture.js`, `js/game.js`, `js/upgrades.js`, `js/tickets.js`, `js/enemies.js`, `js/bosses.js`,
+`js/renderer.js`, `js/hud.js`, `js/figures.js`, `js/main.js`, `js/bot.js`, `tools/bot-test.js`,
+`assets/karakterer/figur_person3.png`, `assets/karakterer/portrett_person3.png`, `README.md`, `DOKUMENTASJON.md`,
+`ENDRINGSLOGG.md` og `package.json` (7.3.0).
+
 ## Versjon 7.2 – 27. november 2026 (Kristensens endringsprompt 6)
 
 Bygget på versjon 7.1. Det den andre utvikleren har laget, er bare endret der endringsprompten sier det (seksjon 1,

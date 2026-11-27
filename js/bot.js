@@ -9,6 +9,7 @@ import { Rng } from './utils.js';
 import { INSIDE } from './map.js';
 import { weaponStats } from './weapons.js';
 import { weaponMaxed } from './upgrades.js';
+import { captureRadius } from './capture.js';
 
 const B = CONFIG.botTest;
 
@@ -18,8 +19,10 @@ const B = CONFIG.botTest;
  * slots are full, upgrades to its weapons, the passives its combinations need, and useful passives.
  * @param {number} skill 0–1: how often it «pays attention» (1 = reacts every other tick, never wanders off)
  * @param {string} seed its own randomness (never the game's streams)
+ * @param {boolean} [focus] Endringsprompt 7: put every card into the starting weapon and its combination passive, to
+ *   find the earliest a combination can come (otherwise the balanced build of a sensible player)
  */
-export function makeBot(skill, seed) {
+export function makeBot(skill, seed, focus = false) {
   const rng = new Rng('bot|' + seed);
   let ix = 0, iy = 0, wait = 0;
   const useful = B.usefulPassives;
@@ -72,10 +75,10 @@ export function makeBot(skill, seed) {
         if (d < best) { best = d; tx = l.items[i].x - p.x; ty = l.items[i].y - p.y; }
       }
       const cap = s.capture.active;
-      if (cap && skill >= 0.8 && !needsDrink) {
-        // into the circle, and then keep moving inside it (it is big enough to dodge in)
+      if (cap && skill >= 0.5 && !needsDrink) {
+        // into the circle, and then keep moving inside it (it shrinks as the progress grows, Endringsprompt 7)
         const cx = cap.x - p.x, cy = cap.y - p.y;
-        if (Math.hypot(cx, cy) > CONFIG.capture.radius * 0.5) { tx = cx; ty = cy; best = 0; }
+        if (Math.hypot(cx, cy) > captureRadius(cap) * 0.5) { tx = cx; ty = cy; best = 0; }
       }
       if (best === 1e9) { tx = 1280 - p.x; ty = 740 - p.y; }
       // Like a human: when it is safe, close in on the nearest lawyer so the short weapons hit
@@ -130,9 +133,15 @@ export function makeBot(skill, seed) {
         if (k && !w.evo) needed.add(k.passive);
       }
       let pick = 0, bestV = -1;
+      const main = sp.weapons[0];
+      const mainPassive = main ? /** @type {any} */ (CONFIG.weapons[main.id]).combination?.passive : '';
       s.cards.forEach((c, i) => {
         let v = 1;
         if (c.kind === 'combination' || c.kind === 'matrix') v = 100;
+        // The focused bot: only the starting weapon and the passive its combination needs, then whatever is useful
+        else if (focus && c.kind === 'upgrade' && main && c.id === main.id && !weaponMaxed(main)) v = 90;
+        else if (focus && c.kind === 'passive' && c.id === mainPassive && !sp.passives.some((p) => p.id === c.id)) v = 85;
+        else if (focus && c.kind === 'weapon') v = sp.weapons.length < 1 ? 50 : 2;
         // A balanced build, like a sensible player: fill the weapon slots, and level the weapons evenly (the lowest first)
         else if (c.kind === 'weapon') v = sp.weapons.length < CONFIG.limits.weapons ? 55 : 0;
         else if (c.kind === 'upgrade') {
@@ -145,6 +154,9 @@ export function makeBot(skill, seed) {
         v += rng.next() * 3;
         if (v > bestV) { bestV = v; pick = i; }
       });
+      // Like a good player (Endringsprompt 7): nothing for the build on the table → use a reroll («Nytt utvalg») if
+      // there is one, and look again. Only through the game's own reroll, as a player would press it.
+      if (bestV < B.rerollBelow && !s.cards.some((c) => c.highlighted) && s.reroll()) return this.choose(s);
       return pick;
     },
   };
@@ -158,12 +170,14 @@ export function testSeed(i) {
 
 /**
  * Plays one round to the end (or maxMin minutes) and measures it.
- * @param {{date: string, character: number, runSeed: string, skill: number, maxMin?: number}} o
+ * @param {{date: string, character: number, runSeed: string, skill: number, maxMin?: number, focus?: boolean}} o
  */
 export function playBotRound(o) {
   const s = new Game(o.date, o.character, o.runSeed);
   s.offerLog = {};
-  const bot = makeBot(o.skill, o.runSeed);
+  const bot = makeBot(o.skill, o.runSeed, !!o.focus);
+  /** Endringsprompt 7: the player's level at the end of every whole minute. */
+  const levelAt = /** @type {number[]} */ ([]);
   const maxTicks = (o.maxMin ?? B.maxMinutes) * 60 * CONFIG.ticksPerSecond;
   /** Help given per weapon (as a combination: «evo:<id>») and the seconds it was held, sampled every second. */
   const help = /** @type {Record<string, number>} */ ({}), held = /** @type {Record<string, number>} */ ({});
@@ -181,6 +195,7 @@ export function playBotRound(o) {
       combosSeen++;
     }
     if (t % CONFIG.ticksPerSecond === 0) {
+      if (t > 0 && t % (60 * CONFIG.ticksPerSecond) === 0) levelAt.push(s.level);
       for (const w of s.player.weapons) {
         const src = w.id;
         const total = s.stat.helpPerWeapon[src] || 0;
@@ -199,6 +214,7 @@ export function playBotRound(o) {
     levelLog: s.levelLog.slice(), captures: s.stat.captures, captureEvents: s.stat.captureEvents,
     help, held, offers: s.offerLog, character: s.character,
     build: s.player.weapons.map((w) => (w.evo ? 'evo:' : '') + w.id),
+    levelAt, xpLog: { ...s.xpLog }, levelsBy: { ...s.levelsBy }, upgradesBy: { ...s.upgradesBy },
   };
 }
 
@@ -222,7 +238,32 @@ export function botReport(rounds, title = 'Bot-test') {
   out.push(`Varighet (min): snitt ${min(t.mean)} · median ${min(t.median)} · beste 10 % fra ${min(t.p90)} · lengste ${min(t.max)}`);
   const c1 = rounds.filter((r) => r.combos.length >= 1).map((r) => r.combos[0]);
   const c2 = rounds.filter((r) => r.combos.length >= 2).map((r) => r.combos[1]);
-  out.push(`Første kombinasjon: ${c1.length} av ${n} runder, median ${c1.length ? min(spread(c1).median) : '-'} min · andre: ${c2.length} runder, median ${c2.length ? min(spread(c2).median) : '-'} min`);
+  out.push(`Første kombinasjon: ${c1.length} av ${n} runder, tidligst ${c1.length ? min(Math.min(...c1)) : '-'} · snitt ${c1.length ? min(spread(c1).mean) : '-'} · median ${c1.length ? min(spread(c1).median) : '-'} min · andre: ${c2.length} runder, median ${c2.length ? min(spread(c2).median) : '-'} min`);
+  // Endringsprompt 7: the player's level at the end of each minute (mean of the rounds still going)
+  const lv = [];
+  for (let m = 1; m <= 16; m++) {
+    const alive = rounds.filter((r) => (r.levelAt ?? []).length >= m);
+    if (alive.length < Math.max(3, n * 0.1)) break;
+    lv.push(`${m}:${(alive.reduce((x, r) => x + r.levelAt[m - 1], 0) / alive.length).toFixed(1).replace('.', ',')}`);
+  }
+  out.push(`Spillernivå ved hvert minutt (minutt:nivå): ${lv.join(' ')}`);
+  // Endringsprompt 7: where the experience and the levels came from, summed over all rounds
+  const xs = /** @type {Record<string, number>} */ ({});
+  let byXp = 0, byCap = 0, byCard = 0, byPack = 0;
+  for (const r of rounds) {
+    for (const [k, v] of Object.entries(r.xpLog ?? {})) xs[k] = (xs[k] || 0) + v;
+    byXp += r.levelsBy?.xp ?? 0; byCap += r.levelsBy?.capture ?? 0;
+    byCard += r.upgradesBy?.card ?? 0; byPack += r.upgradesBy?.package ?? 0;
+  }
+  const xt = Object.values(xs).reduce((a, b) => a + b, 0) || 1;
+  out.push('Erfaring fra (andel): ' + Object.keys(xs).filter((k) => xs[k] > 0).map((k) => `${k} ${Math.round((xs[k] / xt) * 100)} %`).join(' · ') +
+    ` | nivåopp per runde: ${(byXp / n).toFixed(1)} fra erfaring, ${(byCap / n).toFixed(1)} fra punkt | oppgraderinger per runde: ${(byCard / n).toFixed(1)} kort, ${(byPack / n).toFixed(1)} fra pakker`);
+  // Endringsprompt 7: the characters side by side (median duration and median first combination)
+  out.push('Per karakter (median varighet / median første kombinasjon): ' + CONFIG.characters.map((k, i) => {
+    const mine = rounds.filter((r) => r.character === i);
+    const fc = mine.filter((r) => r.combos.length).map((r) => r.combos[0]);
+    return `${k.name} ${mine.length ? min(spread(mine.map((r) => r.time)).median) : '-'} / ${fc.length ? min(spread(fc).median) : '-'}`;
+  }).join(' · '));
   // Level-ups per minute, minute by minute (only the rounds still going)
   const per = [];
   for (let m = 0; m < 16; m++) {

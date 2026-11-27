@@ -25,7 +25,20 @@ export const CAPTURE_IDS = Object.keys(C.defs);
  * @property {boolean} started the player has stepped in at least once (the extra flock has been sent)
  * @property {boolean} inside the player stands in the circle right now
  * @property {number} angle the direction of the extra flock (drawn when the event starts, so the stream stays in step)
+ * @property {number} outside seconds in a row the player has been outside (after stepping in); resets the progress at CONFIG.capture.resetAfter
+ * @property {number} ringT seconds inside since the last closing ring (Endringsprompt 7)
+ * @property {boolean} draining the progress is sinking right now (drawn in red/orange)
  */
+
+/**
+ * The circle's radius right now (Endringsprompt 7): from CONFIG.capture.radius at no progress, shrinking evenly to
+ * radiusEnd at full. Used by the game, the drawing and the bot, so they always agree.
+ * @param {ActiveCapture} a
+ */
+export function captureRadius(a) {
+  const f = Math.min(1, a.progress / C.holdTime);
+  return C.radius + (C.radiusEnd - C.radius) * f;
+}
 
 /** @param {import('./utils.js').Rng} rng the capture stream */
 export function makeCaptureState(rng) {
@@ -50,7 +63,7 @@ export function startCapture(s, id) {
   const st = s.capture;
   const spot = HOTSPOTS[id];
   st.counts[id]++;
-  st.active = { id, x: spot.x, y: spot.y, left: C.deadline, progress: 0, started: false, inside: false, angle: s.rng.capture.next() * TAU };
+  st.active = { id, x: spot.x, y: spot.y, left: C.deadline, progress: 0, started: false, inside: false, angle: s.rng.capture.next() * TAU, outside: 0, ringT: 0, draining: false };
   s.stat.captureEvents++;
   s.events.push('captureStart:' + id);
 }
@@ -88,18 +101,30 @@ export function updateCapture(s, dt) {
 /** @param {ActiveCapture} a */
 function runCapture(s, a, dt) {
   const p = s.player;
-  const R2 = C.radius * C.radius;
+  const R = captureRadius(a);
   a.left -= dt;
   // Endringsprompt 6: only the player counts – lawyers in the circle do not stop the progress
-  a.inside = (p.x - a.x) ** 2 + (p.y - a.y) ** 2 < R2;
+  a.inside = (p.x - a.x) ** 2 + (p.y - a.y) ** 2 < R * R;
   if (a.inside) {
     if (!a.started) {
       a.started = true;
       sendFlock(s, a);
+      sendSenders(s, a);
     }
     a.progress += dt;
+    a.outside = 0;
+    a.draining = false;
+    // Endringsprompt 7: a closing ring around the point every few seconds while the player holds it
+    a.ringT += dt;
+    if (a.ringT >= C.ring.interval) {
+      a.ringT -= C.ring.interval;
+      sendRing(s, a);
+    }
   } else {
-    a.progress = Math.max(0, a.progress - C.drain * dt);
+    // Endringsprompt 7: the progress sinks twice as fast as it fills, and is lost after «resetAfter» seconds outside
+    a.draining = a.progress > 0;
+    if (a.started) a.outside += dt;
+    a.progress = a.outside >= C.resetAfter ? 0 : Math.max(0, a.progress - C.drain * dt);
   }
   if (a.progress >= C.holdTime) {
     complete(s, a);
@@ -123,6 +148,41 @@ function sendFlock(s, a) {
     const x = a.x + Math.cos(ang) * K.distance + Math.cos(aa) * rr;
     const y = a.y + Math.sin(ang) * K.distance + Math.sin(aa) * rr;
     trySpawn(s, 'junior', Math.min(INSIDE.x1 - 12, Math.max(INSIDE.x0 + 12, x)), Math.min(INSIDE.y1 - 12, Math.max(INSIDE.y0 + 12, y)));
+  }
+}
+
+/** Keeps a spawn spot inside the walls. */
+const clampX = (x) => Math.min(INSIDE.x1 - 12, Math.max(INSIDE.x0 + 12, x));
+const clampY = (y) => Math.min(INSIDE.y1 - 12, Math.max(INSIDE.y0 + 12, y));
+
+/**
+ * Endringsprompt 7: a ring of junior associates around the point with a clear opening; they walk in toward the
+ * player. The opening's direction comes from the run's event-details stream (never the day's capture stream, whose
+ * draws must not depend on how the player plays).
+ */
+function sendRing(s, a) {
+  const K = C.ring, p = s.player;
+  const n = Math.min(K.max, Math.round(K.count + K.perMin * (s.time / 60)));
+  const start = s.rng.eventDetails.next() * TAU;
+  const arc = TAU - K.gap;
+  for (let i = 0; i < n; i++) {
+    const ang = start + K.gap / 2 + (arc * (i + 0.5)) / n;
+    const x = clampX(a.x + Math.cos(ang) * K.distance), y = clampY(a.y + Math.sin(ang) * K.distance);
+    if ((x - p.x) ** 2 + (y - p.y) ** 2 < K.minFromPlayer ** 2) continue;
+    trySpawn(s, 'junior', x, y);
+  }
+  // (no banner: it would come every few seconds – the ring itself is visible on its way in)
+  s.events.push('captureRing');
+}
+
+/** Endringsprompt 7: from 5:00, a few «Haster!» senders around the point when the player first steps in. */
+function sendSenders(s, a) {
+  const K = C.senders;
+  if (s.time < K.from) return;
+  const n = s.time >= K.lateFrom ? K.lateCount : K.count;
+  for (let i = 0; i < n; i++) {
+    const ang = a.angle + Math.PI / n + (i * TAU) / n;
+    trySpawn(s, 'sender', clampX(a.x + Math.cos(ang) * K.distance), clampY(a.y + Math.sin(ang) * K.distance));
   }
 }
 

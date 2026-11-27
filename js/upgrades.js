@@ -79,7 +79,7 @@ export function computeBonuses(s) {
     else paperHelp += P.paperTray.value;
   }
   // The character's bonus (see CONFIG.characters)
-  const kb = s.characterBonus ?? { help: 0, speed: 0, pick: 0 };
+  const kb = s.characterBonus ?? { help: 0, speed: 0, pick: 0, xp: 0 };
   m.area = 1 + P.ram.value * passiveLevel(s, 'ram');
   m.help = (1 + P.admin.value * passiveLevel(s, 'admin')) * (1 + paperHelp) * (1 + (kb.help ?? 0));
   m.extraProj = extra;
@@ -91,7 +91,9 @@ export function computeBonuses(s) {
   m.dual = Math.min(0.25, P.dualMonitor.value * passiveLevel(s, 'dualMonitor'));
   m.projSpeed = 1 + P.shortcuts.value * passiveLevel(s, 'shortcuts');
   m.damageRed = Math.min(0.3, P.ergonomicChair.value * passiveLevel(s, 'ergonomicChair'));
-  m.xp = 1 + P.certification.value * passiveLevel(s, 'certification');
+  // Endringsprompt 7: every experience bonus is ADDED into one sum (+8 % and +10 % = +18 %), never multiplied, and the
+  // sum is capped at CONFIG.level.xpBonusCap. Today the sources are «Shopkeeperen» and the character's bonus (Julian).
+  m.xp = 1 + Math.min(CONFIG.level.xpBonusCap, P.certification.value * passiveLevel(s, 'certification') + (kb.xp ?? 0));
   // Version 5: the stat passives
   const overtime = passiveLevel(s, 'overtime');
   m.help *= 1 + P.overtime.value * overtime;
@@ -531,8 +533,9 @@ export function makeCards(s, count = 0, exclude = s.banished, rng = s.rng.cards,
   const sp = s.player;
   /** @type {Card[]} */
   const cards = [];
-  // An available combination is always shown as its own highlighted card.
-  if (opt.combination !== false) {
+  // An available combination is always shown as its own highlighted card – but never before
+  // CONFIG.upgrades.combinationEarliest (Endringsprompt 7); until then a weapon at max level just waits.
+  if (opt.combination !== false && s.time >= U.combinationEarliest) {
     const evo = availableCombinations(s).filter((w) => !exclude.has('evo:' + w.id));
     if (evo.length > 0) {
       const w = evo[rng.integer(evo.length)];

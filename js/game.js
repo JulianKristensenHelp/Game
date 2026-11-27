@@ -159,6 +159,16 @@ export class Game {
     this.freeLevels = 0;
     /** The shift time of every level-up (read by the debug overlay to measure the level pace; never by the game). @type {number[]} */
     this.levelLog = [];
+    /**
+     * Endringsprompt 7: where the experience came from (read by the debug overlay and the bot test; never by the game).
+     * Base experience per source (fresh tickets, stale tickets, case piles, tickets pulled in by «Sky-synk», partner
+     * tickets, «Gratis lunsj» tickets), «bonus» = the extra from the experience bonuses (Shopkeeperen, Julian), and
+     * «debug» = given by the debug tools. levelsBy = level-ups paid by experience, by capture-point events (free) and
+     * by debug; upgradesBy = weapon/passive increments from level-up cards and from supplier packages.
+     */
+    this.xpLog = { fresh: 0, stale: 0, pile: 0, cloud: 0, partner: 0, lunch: 0, bonus: 0, debug: 0 };
+    this.levelsBy = { xp: 0, capture: 0 };
+    this.upgradesBy = { card: 0, package: 0 };
     /** The cards shown at level-up. @type {import('./upgrades.js').Card[] | null} */
     this.cards = null;
     /** Rerolls and banishes left, and the banished card keys (never offered again this shift). */
@@ -192,7 +202,7 @@ export class Game {
 
     // The character's bonus and starting weapon
     const k = CONFIG.characters[this.character];
-    this.characterBonus = { help: 0, speed: 0, pick: 0, ...k.bonus };
+    this.characterBonus = { help: 0, speed: 0, pick: 0, xp: 0, ...k.bonus };
     if (k.bonus.maxEnergy) {
       this.player.maxEnergy += k.bonus.maxEnergy;
       this.player.energy = this.player.maxEnergy;
@@ -247,13 +257,21 @@ export class Game {
     this.checkLevel();
   }
 
-  /** Enough experience? Then the game pauses and the cards are shown. */
+  /**
+   * Enough experience? Then the game pauses and the cards are shown.
+   * Endringsprompt 7: never more than ONE level per call. Experience beyond it stays in this.xp and pays for the next
+   * level only after the player has chosen a card (chooseCard calls this again), and every level-up gives exactly one card.
+   */
   checkLevel() {
     if (this.status !== 'running') return;
-    // A free level (a capture-point event was taken) costs no experience
-    if (this.freeLevels > 0) this.freeLevels--;
-    else if (this.xp >= this.xpNeeded) this.xp -= this.xpNeeded;
-    else return;
+    // A free level (a capture-point event was taken) costs no experience, but it moves along the curve like any other
+    if (this.freeLevels > 0) {
+      this.freeLevels--;
+      this.levelsBy.capture++;
+    } else if (this.xp >= this.xpNeeded) {
+      this.xp -= this.xpNeeded;
+      this.levelsBy.xp++;
+    } else return;
     this.level++;
     this.levelLog.push(this.time);
     this.xpNeeded = xpNeeded(this.level);
@@ -291,6 +309,7 @@ export class Game {
     this.status = 'running';
     useCard(this, selectedCard);
     if (selectedCard.kind === 'upgrade') this.stat.upgrades++;
+    this.upgradesBy.card++;
     this.checkLevel();
   }
 
@@ -327,6 +346,7 @@ export class Game {
     this.stat.packages++;
     this.packageCards = openPackage(this, count);
     this.stat.upgrades += this.packageCards.length;
+    this.upgradesBy.package += this.packageCards.length;
     if (this.packageCards.length > 0) {
       this.status = 'package';
       this.magnet();
@@ -380,6 +400,7 @@ export class Game {
 
   debugLevelUp() {
     this.debug.used = true;
+    this.xpLog.debug += Math.max(0, this.xpNeeded - this.xp);
     this.xp = this.xpNeeded;
     this.checkLevel();
   }

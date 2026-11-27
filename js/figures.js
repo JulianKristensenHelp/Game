@@ -1000,7 +1000,7 @@ export class Figures {
       const im = new Image();
       im.onload = () => resolve(im);
       im.onerror = () => reject(new Error('Fant ikke ' + src));
-      im.src = src;
+      im.src = src + '?v=' + CONFIG.characterArtVersion;
     });
     this.images = await Promise.all(CONFIG.characters.map(async (k) => ({ sprite: await load(k.sprite), portrait: await load(k.portrait) })));
   }

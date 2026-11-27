@@ -925,6 +925,21 @@ function levelPace(s) {
   return n ? `nivåopp hvert ${Math.round((s.time - from) / n)}. s (siste 2 min)` : 'nivåopp: ingen siste 2 min';
 }
 
+/**
+ * Endringsprompt 7: where the experience and the levels came from (debug overlay). The level-ups paid by experience
+ * are shared out over the sources by their share of the experience, so «≈ n nivåer» is an estimate per source; the
+ * free levels from capture points and the increments from supplier packages are exact counts.
+ */
+function xpSourcesText(s) {
+  const L = s.xpLog;
+  const names = { fresh: 'ferske lapper', stale: 'gamle lapper', pile: 'saksbunker', cloud: 'Sky-synk', partner: 'partnerlapper', lunch: 'Gratis lunsj', bonus: 'erfaringsbonus', debug: 'debug' };
+  const total = Object.values(L).reduce((a, b) => a + b, 0) || 1;
+  const lines = Object.keys(names).filter((k) => L[k] > 0).map((k) =>
+    `  ${names[k]}: ${Math.round(L[k])} xp (${Math.round((L[k] / total) * 100)} %, ≈ ${((s.levelsBy.xp * L[k]) / total).toFixed(1).replace('.', ',')} nivåer)`);
+  return `erfaring (bonus ×${s.player.mod.xp.toFixed(2)}, tak +${Math.round(CONFIG.level.xpBonusCap * 100)} %):\n${lines.join('\n') || '  ingen ennå'}\n` +
+    `nivåopp: ${s.levelsBy.xp} fra erfaring, ${s.levelsBy.capture} fra punkt-hendelser  ·  oppgraderinger: ${s.upgradesBy.card} kort, ${s.upgradesBy.package} fra pakker`;
+}
+
 function showDebug() {
   const y = perf;
   const memory = heap();
@@ -940,6 +955,7 @@ function showDebug() {
       `mult x${multiplier(s).toFixed(1)}  hjulpne ${s.helped}  nivå ${s.level}\n` +
       `${levelPace(s)}  sky-synk ${s.stat.cloudSyncs}  punkt ${s.stat.captures}/${s.stat.captureEvents}\n` +
       `${checkCaps(s)}\n` +
+      `${xpSourcesText(s)}\n` +
       `udødelig: ${s.debug.immortal ? 'JA' : 'nei'}  dagens vakt: ${s.date}\nrundeseed: ${s.runSeed}  (spill av på nytt: ?debug&seed=${s.runSeed})`;
   }
   if (game) {
@@ -991,7 +1007,10 @@ if (DEBUG) {
     else if (d === 'level') game.debugLevelUp();
     else if (d === 'level10') {
       game.debug.used = true;
-      for (let n = game.level, i = 0; i < 10; i++) game.xp += xpNeeded(n + i);
+      for (let n = game.level, i = 0; i < 10; i++) {
+        game.xp += xpNeeded(n + i);
+        game.xpLog.debug += xpNeeded(n + i);
+      }
       game.checkLevel();
     } else if (d === 'max') game.debugMaxBuild();
     else if (d === 'matrixBuild') game.debugMatrixBuild();
